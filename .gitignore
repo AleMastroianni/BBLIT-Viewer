@@ -1,0 +1,31 @@
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# game data and what is extracted from it: never under version control
+extracted/
+*.bze
+*.xa
+*.obj
+*.mtl
+errors.txt
+
+# local Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+
+# a working copy's own game folder (tools/paths.py)
+tools/local_data.py
+
+# settings of a portable copy (portable.flag)
+userdata/
+portable.flag
+
+# the built executable (tools/build_exe.py) and the release (tools/make_release.py)
+/BBLIT Viewer.exe
+/_internal/
+/_internal_old/
+build/
+release/
