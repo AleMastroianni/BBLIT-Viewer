@@ -892,8 +892,9 @@ series and life counter cleared, Ombelll's finding 169) in 46 levels, 15
 teleport zones in 4, 9 damage zones (action `0x48`) in 3, 70 checkpoints in
 57. The largest death zones cover the whole level: the sea of `L03A` at
 Y −300, the abyss of `L05A5`. The viewer calls a zone covering at least half
-the terrain plan the **death floor** (flag Death floor, 23 zones); the other
-153 are death zones (flag Death zones). Rule conditions are not evaluated.
+the terrain plan the **death floor** (DEATH FLOOR in the Death and damage
+zones flag, 23 zones); the other 153 are death zones (DEATH). Rule conditions
+are not evaluated.
 
 ## 286 — What you see against what you stand on: invisible ground, landing pixels, fake walls
 

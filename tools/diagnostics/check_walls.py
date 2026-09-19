@@ -1,5 +1,5 @@
 """The overlays (the flags Invisible walls, No collision, Collision boxes,
-Death zones, Death floor and Damage zones) change nothing else.
+Death and damage zones, Teleport zones and the heightmap's) change nothing else.
 
     .venv/Scripts/python tools/diagnostics/check_walls.py [L03A ...]
 
@@ -30,7 +30,8 @@ original_judge = collision.no_collision_kind
 collision_box = montage.collision_box
 original_kind_of = zones.kind_of
 original_hurts = zones.hurts
-originals = (collision.surfaces, collision.hard_walls, collision.volumes)
+originals = (collision.surfaces, collision.hard_walls, collision.volumes, collision.area_walls, collision.jump_ceilings,
+             collision.step_walls)
 OVERLAYS = tuple(viewer.OVERLAYS)
 
 
@@ -63,6 +64,9 @@ for entry_name in name_list:
         collision.surfaces = lambda *a: ([], [], [])
         collision.hard_walls = lambda *a: []
         collision.volumes = lambda *a: []
+        collision.area_walls = lambda *a: []
+        collision.jump_ceilings = lambda *a: []
+        collision.step_walls = lambda *a: []
         bare = viewer.Level(file_path, "extracted", table, None, {})
     except Exception as e:  # noqa: BLE001
         broken.append(f"{entry_name} ({type(e).__name__})")
@@ -73,7 +77,8 @@ for entry_name in name_list:
         montage.collision_box = collision_box
         zones.kind_of = original_kind_of
         zones.hurts = original_hurts
-        collision.surfaces, collision.hard_walls, collision.volumes = originals
+        (collision.surfaces, collision.hard_walls, collision.volumes, collision.area_walls,
+         collision.jump_ceilings, collision.step_walls) = originals
     n = full.stat.get("walls_drawn", 0)
     walls_total += n
     levels_with_walls += n > 0
@@ -83,7 +88,7 @@ for entry_name in name_list:
     n_no_collision += full.stat.get("no_collision", 0)
     box += full.stat.get("collision_boxes", 0)
     zm += full.stat.get("death_zones", 0)
-    pm += full.stat.get("death_floor", 0)
+    pm += full.stat.get("teleport_zones", 0)
     mf += full.stat.get("invisible_walls", 0)
     ti += full.stat.get("invisible_ground", 0)
     px += full.stat.get("pixel", 0)
@@ -94,7 +99,7 @@ for entry_name in name_list:
         print(f"DIFFERENT: {entry_name}")
 print(f"{n_identical} levels with everything else identical, {len(different_levels)} different")
 print(f"drawn walls: {walls_total} in {levels_with_walls} levels; faces without collision: {n_no_collision}; "
-      f"collision boxes: {box}; death zones: {zm}; death floors: {pm}")
+      f"collision boxes: {box}; death and damage zones: {zm}; teleport zones: {pm}")
 print(f"invisible wall panels: {mf}; invisible ground rectangles: {ti}; pixels: {px}")
 print(f"not buildable: {', '.join(broken) or 'none'}")
 sys.exit(1 if different_levels else 0)

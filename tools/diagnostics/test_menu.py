@@ -68,14 +68,21 @@ probe("Flags is the first entry of Level options", labels[0] == "Flags")
 v.menu.stack[-1][2] = 0
 press(k.ENTER)
 flag = [x.label() for x in v.menu.stack[-1][1]]
-probe("Flags: the first six overlays, all off by default",
+probe("Flags: the first five overlays, all off by default",
       v.menu.stack[-1][0] == "flags"
-      and flag[:6] == ["Muri invisibili", "Senza collisione", "Box di collisione",
-                       "Zone di morte", "Pavimento della morte", "Zone di danno"]
+      and flag[:5] == ["Muri invisibili", "Senza collisione", "Box di collisione",
+                       "Zone di morte e danno", "Zone di teletrasporto"]
       and not (v.show_invisible_walls or v.show_no_collision or v.show_collision_boxes
-               or v.show_death_zones or v.show_death_floor or v.show_damage_zones))
-flag_attrs = ["show_invisible_walls", "show_no_collision", "show_collision_boxes", "show_death_zones", "show_death_floor",
-              "show_damage_zones"]
+               or v.show_death_zones or v.show_teleport_zones))
+i_outside = flag.index("Box delle aree: lato di fuori") if "Box delle aree: lato di fuori" in flag else None
+probe("Flags: the area boxes' outside side, on by default", i_outside is not None and v.show_area_outside)
+if i_outside is not None:
+    v.menu.stack[-1][2] = i_outside
+    press(k.ENTER)
+    probe("Enter hides the outside side", not v.show_area_outside)
+    press(k.ENTER)
+flag_attrs = ["show_invisible_walls", "show_no_collision", "show_collision_boxes", "show_death_zones",
+              "show_teleport_zones"]
 turned_on = []
 for i_f, attr in enumerate(flag_attrs):
     v.menu.stack[-1][2] = i_f
@@ -87,7 +94,7 @@ probe("Enter turns each flag on and off again", all(turned_on)
 probe("turning a flag on builds its family; off only hides it",
       v.current_level.families == set(viewer.FAMILIES)
       and {g.category for g in v.current_level.face_groups.values()} >= {
-          "invisible_walls", "no_collision", "collision_boxes", "death_floor"})   # L03A: sea only
+          "invisible_walls", "no_collision", "collision_boxes", "death_zones", "death_zones_label"})   # L03A: sea only
 press(k.BACKSPACE)
 probe("Backspace from Flags returns to Level options", v.menu.stack[-1][0] == "level")
 v.menu.hide()
@@ -476,3 +483,4 @@ probe("startup with a requested level: that one", w.current_level is not None an
 w.close()
 failed = [n for n, ok in results if not ok]
 print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")
+sys.exit(1 if failed else 0)

@@ -152,16 +152,18 @@ command-line options below. Background: findings 282-288.
 
 | flag | what it shows |
 |---|---|
-| Invisible walls | what stops you with nothing drawn: the collision heightmap's hard walls (`0x7F`) where there is no visible wall. Magenta |
-| No collision | walkable-looking faces with no collision: bright cyan where the fall lands you safely, dark cyan where it ends in a death, damage or teleport zone |
+| Invisible walls | what stops you with nothing drawn, in magenta: the collision heightmap's hard walls (`0x7F`) where there is no visible wall (INVISIBLE WALL, short INV) and the steps of more than 100 units (STEP WALL, short STP, finding 298) |
+| No collision | faces you see but cannot stand on, and the walls joined to them that let you through. White with black edges, written NO COLLISION; what is under them is told by the zone flags |
 | Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object). Orange |
-| Death zones | zones that kill you, with a respawn at the checkpoint (red), or respawn you directly at a fixed point (violet) |
-| Death floor | death zones at least half the size of the level: the sea, the abyss under the level. Not every level has one |
-| Damage zones | zones that hurt you without killing you (action `0x48`): they take health and give one second of invulnerability. Yellow |
+| Death and damage zones | zones that kill you, with a respawn at the checkpoint (DEATH; DEATH FLOOR for those at least half the size of the level: the sea, the abyss), and zones that hurt you without killing you (DAMAGE, action `0x48`). All red, the name on the top face |
+| Teleport zones | zones that put you straight back at a fixed point, without dying. Violet, written RESPAWN |
 | Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
-| Hard walls | the heightmap's `0x7F` walls, which stop you at any height. Blue, drawn 5 m tall |
-| Area boxes | the collision volume of each mini area (heightmap blocks, base to top); still to be checked in the game |
+| Hard walls | the heightmap's `0x7F` walls, which stop you at any height. Blue, drawn 5 m tall, written HARD WALL |
+| Area boxes | the collision volume of each mini area (heightmap blocks). Their sides stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you pass); a slab top stops the head of a jump (JUMP CEILING, from below; from above JUMP CEILING · OUTSIDE): Bugs's origin stops about 410 lower (findings 298, 299). The row below hides the OUTSIDE side |
+| Area boxes: outside side | the OUTSIDE side of the area boxes; on at every start. Off, from outside you see the areas without the box in front |
 | 0x1000 faces | faces of the `0x1000` terrain sectors: the game does not draw them and they do not stop you; maybe triggers or loading areas. Grey |
+
+Names on the overlays are always in English. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), INV (invisible wall), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), for example `DTH + DMG` on the lava of `L03D1`.
 
 ---
 
@@ -186,7 +188,8 @@ command-line options below. Background: findings 282-288.
 | `--scale-factor N` | upscale textures with scale2x/scale3x: 1, 2, 3, 4, 6 or 8 |
 | `--sky` | show the sky dome |
 | `--no-blend` | draw semi-transparent faces as opaque |
-| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--damagezones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | turn on the flag of the same name |
+| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--teleportzones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | turn on the flag of the same name |
+| `--no-area-outside` | the area boxes without their outside side |
 
 Example, a reproducible picture (take `x,y,z` from the "m" values of the
 status bar):

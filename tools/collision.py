@@ -78,6 +78,68 @@ def fetch(sec4: bytes, offset: int) -> list[HeightmapBlock]:
 TOLERANCE = 100
 
 
+def _subcell_byte(b: HeightmapBlock, x: float, z: float) -> int:
+    dx, dz = x - b.ox, z - b.oz
+    c = b.grid[int(dx // CELL_UNITS) + int(dz // CELL_UNITS) * b.width_units] & 0x0FFF
+    i = c * 64 + int((dz % CELL_UNITS) // SUBCELL) * 8 + int((dx % CELL_UNITS) // SUBCELL)
+    return b.tiles[i] if i < len(b.tiles) else NO_GROUND[0]
+
+
+def sweep_stops(grid_blocks, a, b, y) -> bool:
+    """Does the game's wall sweep stop a mover at height `y` going from the
+    point a = (x, z) to the next sub-cell b (finding 298, `0x434e40`)? It
+    stops on (1) a 0x7F sub-cell, (2) ground more than 100 units above the
+    mover (a 0x7E sub-cell counts as the slab's base), (3) a point in no
+    block at the mover's height. A mover outside every block is not checked:
+    it moves freely. The drawn terrain never counts."""
+    current = block_at(grid_blocks, a[0], y, a[1])
+    if current is None:
+        return False
+    x, z = b
+    if current.ox <= x < current.ox + current.ext_x and current.oz <= z < current.oz + current.ext_z:
+        target = current
+    else:
+        target = block_at(grid_blocks, x, y, z)
+        if target is None:
+            return True
+    v = _subcell_byte(target, x, z)
+    if v == 0x7F:
+        return True
+    if v == 0x7E:
+        ground = target.y_floor
+    else:
+        v = v - 256 if v > 127 else v
+        ground = target.y_floor + target.height_scale * -abs(v)
+    return ground - y < -TOLERANCE
+
+
+def wall_crossable(grid_blocks, corner_points) -> bool | None:
+    """A vertical face (normal within ~17 degrees of horizontal, at least 60
+    units tall): True if the sweep lets a mover through it at its centre, in
+    both directions, at its foot, middle and top (20 units in); None if the
+    face is not such a wall. Finding 298's own test missed its bars, so the
+    viewer only marks the walls joined to a face with no collision under it
+    (Level._terrain_overlays), not every wall this says True for."""
+    p = corner_points
+    u = [p[1][k] - p[0][k] for k in range(3)]
+    v = [p[2][k] - p[0][k] for k in range(3)]
+    n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+    ln = (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
+    horizontal = (n[0] ** 2 + n[2] ** 2) ** 0.5
+    if ln == 0 or horizontal == 0 or abs(n[1]) / ln > 0.3:
+        return None
+    ys = [q[1] for q in p]
+    top, foot = min(ys), max(ys)            # Y down
+    if foot - top < 60:
+        return None
+    step = (n[0] / horizontal * SUBCELL, n[2] / horizontal * SUBCELL)
+    cx = sum(q[0] for q in p) / len(p)
+    cz = sum(q[2] for q in p) / len(p)
+    side_a, side_b = (cx + step[0], cz + step[1]), (cx - step[0], cz - step[1])
+    return not any(sweep_stops(grid_blocks, side_a, side_b, y) or sweep_stops(grid_blocks, side_b, side_a, y)
+                   for y in (foot - 20, (top + foot) / 2, top + 20))
+
+
 def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_zones=()) -> str | None:
     """A walkable face with no collision under it that you fall through
     safely. `corner_points`: the face's vertices in game coordinates (Y down).
@@ -392,6 +454,170 @@ def hard_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
                             run = (j, [yb], vis)
                         else:
                             run[1].append(yb)
+    return out
+
+
+def step_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
+    """The steps that stop you (finding 298: the wall sweep stops a mover
+    whose next sub-cell has ground more than 100 units above it): the
+    40-unit sub-cell edges, inside a block, between two ground sub-cells
+    (not 0x7E, not 0x7F) whose heights differ by more than TOLERANCE,
+    merged into runs along the edge as the hard walls are.
+
+    Returns (xa, za, xb, zb, y_high, y_low, visible): the panel from the
+    lowest lower ground to the highest higher ground of the run (Y down:
+    y_high < y_low). `visible` as for the hard walls: a visible
+    near-vertical face (raster_vertical, +-2 sub-cells) passes between the
+    two grounds. Left out: the edges next to a 0x7E hole (a ledge you fall
+    from) and the block sides (area_walls)."""
+    out = []
+    for b in grid_blocks:
+        w, h, m = subcell_map(b)
+
+        def seen(cells, low, high):
+            if vertical_heights is None:
+                return False
+            for gx, gz in cells:
+                kx = int((b.ox + gx * SUBCELL) // SUBCELL)
+                kz = int((b.oz + gz * SUBCELL) // SUBCELL)
+                for dx in range(-2, 3):
+                    for dz in range(-2, 3):
+                        if any(high <= yv <= low for yv in vertical_heights.get((kx + dx, kz + dz), ())):
+                            return True
+            return False
+
+        for axis in ("x", "z"):
+            outer, inner = (w, h) if axis == "x" else (h, w)
+            for i in range(1, outer):
+                run = None                    # [j0, high, low, visible]
+                for j in range(inner + 1):
+                    step = None
+                    if j < inner:
+                        if axis == "x":
+                            a, c, cells = m[j * w + i - 1], m[j * w + i], ((i - 1, j), (i, j))
+                        else:
+                            a, c, cells = m[(i - 1) * w + j], m[i * w + j], ((j, i - 1), (j, i))
+                        if a not in NO_GROUND and c not in NO_GROUND:
+                            ya, yc = height_units(b, a), height_units(b, c)
+                            if abs(ya - yc) > TOLERANCE:
+                                high, low = min(ya, yc), max(ya, yc)
+                                step = (high, low, seen(cells, low, high))
+                    if run is not None and (step is None or step[2] != run[3]):
+                        j0, high, low, vis = run
+                        if axis == "x":
+                            out.append((b.ox + i * SUBCELL, b.oz + j0 * SUBCELL, b.ox + i * SUBCELL,
+                                        b.oz + j * SUBCELL, high, low, vis))
+                        else:
+                            out.append((b.ox + j0 * SUBCELL, b.oz + i * SUBCELL, b.ox + j * SUBCELL,
+                                        b.oz + i * SUBCELL, high, low, vis))
+                        run = None
+                    if step is not None:
+                        if run is None:
+                            run = [j, step[0], step[1], step[2]]
+                        else:
+                            run[1], run[2] = min(run[1], step[0]), max(run[2], step[1])
+    return out
+
+
+def area_walls(grid_blocks: list[HeightmapBlock]):
+    """The sides of the blocks that stop a mover inside them (finding 298:
+    the sweep stops when the next point is in no block at the mover's
+    height): each side of each slab, sub-cell by sub-cell, minus the heights
+    where another block continues it just outside. Only from inside: a
+    mover outside every block is not checked at all.
+
+    Returns (xa, za, xb, zb, y_top, y_base, inside) panels, runs merged along
+    the side; `inside` is the unit (dx, dz) pointing into the block."""
+    out = []
+    for b in grid_blocks:
+        x0, z0, x1, z1 = b.ox, b.oz, b.ox + b.ext_x, b.oz + b.ext_z
+        # (fixed coordinate, outside offset, along from, along to, axis, inside)
+        for fixed, outside, a0, a1, axis, inside in ((x0, -1, z0, z1, "x", (1, 0)), (x1, 0, z0, z1, "x", (-1, 0)),
+                                                     (z0, -1, x0, x1, "z", (0, 1)), (z1, 0, x0, x1, "z", (0, -1))):
+            run = None                      # (start, intervals)
+            pos = a0
+            while True:
+                intervals = None
+                if pos < a1:
+                    mid = pos + SUBCELL // 2
+                    px, pz = (fixed + outside, mid) if axis == "x" else (mid, fixed + outside)
+                    # the heights of b's slab that no other block holds just outside
+                    free = [(b.y_ceiling, b.y_floor)]
+                    for c in grid_blocks:
+                        if c is b or not (c.ox <= px < c.ox + c.ext_x and c.oz <= pz < c.oz + c.ext_z):
+                            continue
+                        cut = []
+                        for top, base in free:
+                            if c.y_floor <= top or c.y_ceiling >= base:
+                                cut.append((top, base))
+                                continue
+                            if c.y_ceiling > top:
+                                cut.append((top, c.y_ceiling))
+                            if c.y_floor < base:
+                                cut.append((c.y_floor, base))
+                        free = cut
+                    intervals = tuple(free)
+                if run is not None and intervals != run[1]:
+                    for top, base in run[1]:
+                        if axis == "x":
+                            out.append((fixed, run[0], fixed, pos, top, base, inside))
+                        else:
+                            out.append((run[0], fixed, pos, fixed, top, base, inside))
+                    run = None
+                if pos >= a1:
+                    break
+                if run is None and intervals:
+                    run = (pos, intervals)
+                pos += SUBCELL
+    return out
+
+
+def jump_ceilings(grid_blocks: list[HeightmapBlock]):
+    """Where a jump stops (finding 299, `0x437360`): the top of every slab,
+    where the head of a jumping Bugs stops (his origin about 410 lower),
+    except the sub-cells where the block just above has no ground (0x7E or
+    0x7F: the ground asked for just above the top is not there, and the jump
+    goes on into that block). Returns (x0, z0, x1, z1, y) rectangles, the
+    sub-cells merged in rows and the equal rows merged."""
+    out = []
+    for b in grid_blocks:
+        w, h = b.ext_x // SUBCELL, b.ext_z // SUBCELL
+        above = [c for c in grid_blocks if c is not b and c.y_ceiling < b.y_ceiling <= c.y_floor
+                 and c.ox < b.ox + b.ext_x and b.ox < c.ox + c.ext_x
+                 and c.oz < b.oz + b.ext_z and b.oz < c.oz + c.ext_z]
+        maps = [(c, subcell_map(c)) for c in above]
+
+        def stops(ix, iz):
+            x, z = b.ox + ix * SUBCELL + SUBCELL // 2, b.oz + iz * SUBCELL + SUBCELL // 2
+            for c, (cw, _ch, m) in maps:
+                if c.ox <= x < c.ox + c.ext_x and c.oz <= z < c.oz + c.ext_z:
+                    v = m[int((z - c.oz) // SUBCELL) * cw + int((x - c.ox) // SUBCELL)]
+                    return v not in NO_GROUND
+            return True
+
+        open_rows = {}                      # (x run) -> (z start, last z)
+        for iz in range(h + 1):
+            runs = set()
+            if iz < h:
+                ix = 0
+                while ix < w:
+                    if stops(ix, iz):
+                        start = ix
+                        while ix < w and stops(ix, iz):
+                            ix += 1
+                        runs.add((start, ix))
+                    else:
+                        ix += 1
+            for key in list(open_rows):
+                if key not in runs:
+                    zs, ze = open_rows.pop(key)
+                    out.append((b.ox + key[0] * SUBCELL, b.oz + zs * SUBCELL,
+                                b.ox + key[1] * SUBCELL, b.oz + (ze + 1) * SUBCELL, b.y_ceiling))
+            for key in runs:
+                if key in open_rows:
+                    open_rows[key] = (open_rows[key][0], iz)
+                else:
+                    open_rows[key] = (iz, iz)
     return out
 
 

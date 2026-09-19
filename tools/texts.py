@@ -102,14 +102,16 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.no_collision": ("Senza collisione", "No collision"),
     "level.collision_boxes": ("Box di collisione", "Collision boxes"),
     "level.flags": ("Flags", "Flags"),
-    "level.death_zones": ("Zone di morte", "Death zones"),
-    "level.death_floor": ("Pavimento della morte", "Death floor"),
-    "level.damage_zones": ("Zone di danno", "Damage zones"),
+    "level.death_zones": ("Zone di morte e danno", "Death and damage zones"),
+    "level.teleport_zones": ("Zone di teletrasporto", "Teleport zones"),
     "level.ground": ("Terreno di collisione", "Ground"),
     "level.hard_walls": ("Muri duri", "Hard walls"),
     "level.sky": ("Cielo", "Sky"),
     "level.blending": ("Fusioni semitrasparenti", "Semi-transparency"),
     "level.wireframe": ("Wireframe", "Wireframe"),
+    "level.wire.off": ("Spento", "Off"),
+    "level.wire.skeleton": ("Scheletro", "Skeleton"),
+    "level.wire.grid": ("Griglia", "Grid"),
     "level.entities": ("Entità", "Entities"),
     "level.animations": ("Animazioni", "Animations"),
     "level.anim.playing": ("In movimento", "Playing"),
@@ -128,29 +130,41 @@ TEXTS: dict[str, tuple[str, str]] = {
     "desc.texture": ("Mostra le texture o solo il colore dei vertici. Tasto [[textures]].",
                      "Show textures or vertex colours only. Key [[textures]]."),
     "desc.props": ("Oggetti piazzati e animati. Tasto [[props]].", "Placed and animated objects. Key [[props]]."),
-    "desc.invisible_walls": ("Cio' che ti ferma senza niente di disegnato: i muri duri 0x7F della "
-                  "heightmap dove non c'e' una parete visibile (terreno o oggetto). In magenta. "
-                  "I box degli oggetti sono a parte (Box di collisione).",
-                  "What stops you with nothing drawn: the heightmap's 0x7F hard walls where "
-                  "there is no visible wall (terrain or object). In magenta. Object boxes are "
-                  "separate (Collision boxes)."),
+    "desc.invisible_walls": ("Cio' che ti ferma senza niente di disegnato, in magenta: i muri duri 0x7F "
+                             "della heightmap dove non c'e' una parete visibile (INVISIBLE WALL, sigla "
+                             "INV) e i gradini di piu' di 100 unita' (STEP WALL, sigla STP). I box "
+                             "degli oggetti sono a parte (Box di collisione).",
+                             "What stops you with nothing drawn, in magenta: the heightmap's 0x7F hard "
+                             "walls where there is no visible wall (INVISIBLE WALL, short INV) and the "
+                             "steps of more than 100 units (STEP WALL, short STP). Object boxes are "
+                             "separate (Collision boxes)."),
     "level.area_boxes": ("Box delle aree", "Area boxes"),
-    "desc.area_boxes": ("Il volume di collisione di ogni mini area (i blocchi della heightmap, "
-                    "dalla base alla cima): forse il box che ti chiude. Da verificare nel gioco.",
-                    "The collision volume of each mini area (the heightmap blocks, base to "
-                    "top): maybe the box that closes you in. To be checked in the game."),
+    "desc.area_boxes": ("Il volume di collisione di ogni mini area (i blocchi della heightmap). "
+                        "I lati fermano solo chi e' dentro (AREA WALL; da fuori AREA WALL · OUTSIDE: "
+                        "si passa). La cima ferma la testa di un salto (JUMP CEILING, da sotto): "
+                        "l'origine di Bugs si ferma circa 410 piu' in basso.",
+                        "The collision volume of each mini area (the heightmap blocks). The sides "
+                        "stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you "
+                        "pass). The top stops the head of a jump (JUMP CEILING, from below): Bugs's "
+                        "origin stops about 410 lower."),
+    "level.area_outside": ("Box delle aree: lato di fuori", "Area boxes: outside side"),
+    "desc.area_outside": ("Il lato di fuori dei box delle aree (le scritte OUTSIDE). Spento, da "
+                          "fuori si vedono le aree senza il box davanti.",
+                          "The outside side of the area boxes (the OUTSIDE names). Off, from "
+                          "outside you see the areas without the box in front."),
     "level.faces_1000": ("Facce 0x1000", "0x1000 faces"),
     "desc.faces_1000": ("Le facce dei settori 0x1000 del terreno: il gioco non le disegna, ma "
                         "non sono muri (non fermano). Forse trigger o aree di caricamento.",
                         "The faces of the 0x1000 terrain sectors: the game does not draw them, "
                         "but they are not walls (they do not stop you). Maybe triggers or "
                         "loading areas."),
-    "desc.no_collision": ("Le facce calpestabili senza collisione: in ciano acceso dove, cadendo, "
-                        "si atterra sani e salvi; in ciano scuro dove si finisce in una zona di "
-                        "morte, danno o teletrasporto (la lava, i pit).",
-                        "Walkable faces with no collision: bright cyan where the fall lands you "
-                        "safely; dark cyan where it ends in a death, damage or teleport zone "
-                        "(lava, pits)."),
+    "desc.no_collision": ("Cio' che si attraversa, in bianco con gli spigoli neri: le facce "
+                          "calpestabili senza suolo di collisione sotto e le loro pareti che lo sweep "
+                          "del gioco lascia passare (NO COLLISION, sigla NOC). Cosa c'e' sotto lo "
+                          "dicono le flag delle zone.",
+                          "What you go through, in white with black edges: the walkable faces with no "
+                          "collision ground under them and their walls the game's sweep lets through "
+                          "(NO COLLISION, short NOC). What is under them is told by the zone flags."),
     "desc.collision_boxes": ("Il box di collisione di ogni oggetto, come lo prova il gioco (puo' "
                       "essere molto piu' grande dell'oggetto). In arancione.",
                       "Each object's collision box, as the game tests it (it can be much "
@@ -162,28 +176,37 @@ TEXTS: dict[str, tuple[str, str]] = {
                      "you see, bright green where nothing is drawn (invisible ground), white "
                      "with beams the isolated 40-unit spots."),
     "desc.hard_walls": ("I muri 0x7F della heightmap: fermano a qualunque altezza, anche dove "
-                       "non si vede niente. In blu, alti 5 m.",
-                       "The heightmap's 0x7F walls: they stop you at any height, even where "
-                       "nothing is drawn. In blue, 5 m tall."),
-    "desc.flags": ("Sovrapposizioni per il glitch hunting: muri, collisioni, zone di morte.",
-                   "Overlays for glitch hunting: walls, collisions, death zones."),
-    "desc.death_zones": ("Le zone che ti uccidono, con respawn al checkpoint (rosso), o che "
-                        "ti fanno fare un respawn diretto in un punto fisso (viola).",
-                        "Zones that kill you, with a respawn at the checkpoint (red), or that "
-                        "respawn you directly at a fixed point (violet)."),
-    "desc.damage_zones": ("Le zone che ti feriscono senza ucciderti (azione 0x48): tolgono vita "
-                          "e danno un secondo di invulnerabilita'. In giallo.",
-                          "Zones that hurt you without killing you (action 0x48): they take health "
-                          "and give one second of invulnerability. In yellow."),
-    "desc.death_floor": ("Le zone di morte grandi almeno meta' del livello: il mare, l'abisso "
-                         "sotto il livello. Non tutti i livelli ne hanno.",
-                         "Death zones at least half the size of the level: the sea, the abyss "
-                         "under the level. Not every level has one."),
+                        "non si vede niente (HARD WALL, sigla HRD). In blu, alti 5 m.",
+                        "The heightmap's 0x7F walls: they stop you at any height, even where "
+                        "nothing is drawn (HARD WALL, short HRD). In blue, 5 m tall."),
+    "desc.flags": ("Sovrapposizioni per il glitch hunting: muri, collisioni, zone di morte. Ogni "
+                   "cosa ha scritto cio' che fa: un nome intero, o piu' sigle se fa piu' cose o e' "
+                   "in piu' flag accese (per esempio DTH + DMG).",
+                   "Overlays for glitch hunting: walls, collisions, death zones. Each thing is "
+                   "named with what it does: a full name, or short names when it does more or is "
+                   "in more flags that are on (for example DTH + DMG)."),
+    "desc.death_zones": ("Le zone che ti uccidono (DEATH, sigla DTH; DEATH FLOOR, DFL, quelle grandi "
+                         "almeno meta' del livello: il mare, l'abisso), con respawn al checkpoint, e "
+                         "quelle che ti feriscono (DAMAGE, DMG, azione 0x48). Tutte in rosso; sulla "
+                         "faccia in alto tutto cio' che la zona fa, anche il respawn (RSP).",
+                         "Zones that kill you (DEATH, short DTH; DEATH FLOOR, DFL, for those at "
+                         "least half the size of the level: the sea, the abyss), with a respawn at "
+                         "the checkpoint, and zones that hurt you (DAMAGE, DMG, action 0x48). All "
+                         "red; on the top face all the zone does, the respawn (RSP) too."),
+    "desc.teleport_zones": ("Le zone che ti rimettono subito in un punto fisso (RESPAWN, sigla RSP). "
+                            "In viola. Una zona che anche uccide sta in tutte e due le flag, con un "
+                            "nome solo (DTH + RSP).",
+                            "Zones that put you straight back at a fixed point (RESPAWN, short RSP). "
+                            "In violet. A zone that also kills is in both flags, with one name "
+                            "(DTH + RSP)."),
     "desc.sky": ("La cupola del cielo, che segue la camera. Tasto [[sky]].",
                    "The sky dome, which follows the camera. Key [[sky]]."),
     "desc.blending": ("Le quattro fusioni della PlayStation: ombre, acqua, bagliori. Tasto [[blending]].",
                      "The four PlayStation blend modes: shadows, water, glows. Key [[blending]]."),
-    "desc.wireframe": ("Solo gli spigoli dei triangoli. Tasto [[wireframe]].", "Triangle edges only. Key [[wireframe]]."),
+    "desc.wireframe": ("Scheletro: solo gli spigoli dei triangoli. Griglia: le texture normali e gli "
+                       "spigoli sopra, scuri, come nel CTR viewer. Tasto [[wireframe]].",
+                       "Skeleton: triangle edges only. Grid: normal textures with the edges over "
+                       "them, dark, as in the CTR viewer. Key [[wireframe]]."),
     "desc.animations": ("Ferme: tutto si blocca dov'è (tasto [[pause]]). Posa iniziale: il primo "
                         "fotogramma di ogni animazione.",
                         "Paused: everything stops where it is (key [[pause]]). Starting pose: "

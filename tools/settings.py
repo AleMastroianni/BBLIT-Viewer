@@ -25,7 +25,8 @@ DEFAULTS = {
     "props": True,
     "sky": True,
     "blending": True,
-    "wireframe": False,
+    # 0 off, 1 Skeleton, 2 Grid (an old True/False reads as 1/0)
+    "wireframe": 0,
     "animated_textures": True,
     "clones": 0,
     "ticks_per_second": 15.0,

@@ -85,13 +85,13 @@ with what is drawn: they are a guide to where to look, not a proof.
 | Hard walls | the heightmap's `0x7F` walls: they stop you at any height | read |
 | Ground | the ground you really stand on (the heightmap) | read |
 | Collision boxes | each object's collision box, as the game tests it | read |
-| Death zones | zones that kill you (respawn at the checkpoint) or respawn you directly at a fixed point, turned as the game turns them | read |
-| Damage zones | zones that hurt you without killing you | read |
+| Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named DEATH, DEATH FLOOR or DAMAGE on top | read |
+| Teleport zones | zones that respawn you directly at a fixed point (RESPAWN) | read |
 | 0x1000 faces | the terrain faces the game never draws; they are not walls | read |
-| Invisible walls | hard walls where nothing visible stands | deduced |
-| No collision | faces you see but cannot stand on: where the fall lands you safely, and where it ends in a death zone | deduced |
-| Death floor | death zones at least half the size of the level (sea, abyss) | deduced |
-| Area boxes | each heightmap block as a box, base to top | deduced, not checked in the game |
+| Invisible walls | hard walls where nothing visible stands, and steps of more than 100 units | deduced |
+| No collision | faces you see but cannot stand on, and the walls joined to them that let you through | deduced |
+| DEATH FLOOR | in Death and damage zones: the death zones at least half the size of the level (sea, abyss) | deduced |
+| Area boxes | each heightmap block as a box: sides that stop you from inside, the jump ceiling on top | read in the code, not checked in the game |
 
 <p align="center">
   <img src="docs/images/collision_boxes_L03D1.png" alt="Collision boxes in L03D1" width="49%">

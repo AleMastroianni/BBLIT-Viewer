@@ -916,10 +916,9 @@ animazioni e contatore delle vite azzerato, finding 169 di Ombelll) in 46
 livelli, 15 zone di teletrasporto in 4, 9 zone di danno (azione `0x48`) in 3,
 70 checkpoint in 57. Le zone di morte piu' grandi coprono tutto il livello:
 il mare di `L03A` a Y −300, l'abisso di `L05A5`. Il viewer chiama **pavimento
-della morte** una zona che copre almeno meta' della pianta del terreno (flag
-Pavimento della morte, Death floor, 23 zone); le altre 153 sono zone di morte
-(flag Zone di morte, Death zones). Le condizioni delle regole non si
-valutano.
+della morte** una zona che copre almeno meta' della pianta del terreno
+(DEATH FLOOR nella flag Zone di morte e danno, 23 zone); le altre 153 sono
+zone di morte (DEATH). Le condizioni delle regole non si valutano.
 
 ## 286 — Quello che si vede contro quello su cui si sta: terreno invisibile, pixel, muri finti
 

@@ -73,6 +73,7 @@ import settings as settings_mod  # noqa: E402
 import levels  # noqa: E402
 import menu as menumod  # noqa: E402
 import keybinds  # noqa: E402
+import flag_labels  # noqa: E402
 import keys_page  # noqa: E402
 import gamepad as gamepadmod  # noqa: E402
 import texts  # noqa: E402
@@ -85,16 +86,16 @@ except ImportError:
 
 import pyglet  # noqa: E402
 from pyglet.gl import (  # noqa: E402
-    GL_ARRAY_BUFFER, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_CULL_FACE,
+    GL_ARRAY_BUFFER, GL_BACK, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_CULL_FACE,
     GL_DEPTH_BUFFER_BIT, GL_DEPTH_TEST, GL_FILL, GL_FLOAT, GL_FRONT_AND_BACK, GL_LINE,
     GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR_MIPMAP_NEAREST, GL_NEAREST, GL_ONE_MINUS_SRC_ALPHA, GL_RGBA, GL_SRC_ALPHA,
     GL_DYNAMIC_DRAW, GL_FALSE, GL_FUNC_ADD, GL_FUNC_REVERSE_SUBTRACT, GL_ONE, GL_STATIC_DRAW, GL_TRUE,
-    GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
+    GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_POLYGON_OFFSET_FILL, GL_POLYGON_OFFSET_LINE, glPolygonOffset,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, glBindBuffer,
     glBindTexture, glBindVertexArray, glBlendFunc, glBufferData, glBufferSubData, glClear, glClearColor,
     glDisable, glDrawArrays, glEnable, glEnableVertexAttribArray, glGenBuffers, glGenTextures,
     glBlendEquation, glDeleteBuffers, glDeleteTextures, glDeleteVertexArrays, glDepthMask,
-    glGenVertexArrays, glGenerateMipmap, glPolygonMode,
+    glCullFace, glGenVertexArrays, glGenerateMipmap, glPolygonMode,
     glTexImage2D, glTexParameteri,
     glVertexAttribPointer,
 )
@@ -120,19 +121,47 @@ RULE_PASSES_PER_TICK = 2
 # the invisible walls (0x1000 sectors), when shown: a magenta the game
 # does not use, at half transparency (blend 0)
 COLOR_INVISIBLE_WALLS = (255, 40, 200)
-# the faces without collision (flag No collision): a cyan, like the second overlay
-# of the CTR viewer, also at half transparency
-COLOR_NO_COLLISION = (40, 230, 255)
-# no collision, but the fall ends in a death/damage/teleport zone: faint
-COLOR_NO_COLLISION_TRAP = (0, 120, 160)
+# what you go through (flag No collision): white covering about 75%, with
+# the triangle edges in black over it, so it stands out on light textures
+COLOR_NO_COLLISION = (255, 255, 255)
+COLOR_NO_COLLISION_EDGES = (0, 0, 0)
+# Level options -> Wireframe: off, Skeleton (lines only), Grid (textures and
+# the triangle edges over them, as in the CTR viewer)
+WIRE_OFF, WIRE_SKELETON, WIRE_GRID = 0, 1, 2
+GRID_COLOR = (0.0, 0.0, 0.0, 0.7)
+# the blend code of an overlay covering 75% (Viewer.on_draw, set_blend)
+OVERLAY_BLEND = 4
+# overlays drawn on the terrain face itself, pulled forward in the depth
+# test: the edges more than the fill, so they stay over it
+PULLED_FORWARD = {"no_collision": (-1.0, -4.0), "no_collision_label": (-2.0, -8.0),
+                  "no_collision_lines": (-2.0, -8.0),
+                  # the names on the zone boxes' tops, over the box's own fill
+                  "death_zones_label": (-2.0, -8.0), "teleport_zones_label": (-2.0, -8.0),
+                  # and on the heightmap's wall panels
+                  "hard_walls_label": (-2.0, -8.0), "hard_walls_label_unseen": (-2.0, -8.0),
+                  "invisible_walls_label": (-2.0, -8.0), "invisible_hard_walls_label": (-2.0, -8.0),
+                  "step_walls_label": (-2.0, -8.0), "shared_zones_label": (-2.0, -8.0)}
+# the texture with a flag's name, painted inside its faces (flag_labels.py):
+# a texture id of its own; the names are always in English
+LABEL_NO_COLLISION = "label:NO COLLISION"
+LABEL_HARD_WALL = "label:HARD WALL"
+LABEL_INVISIBLE_WALL = "label:INVISIBLE WALL"
+LABEL_INVISIBLE_HARD_WALL = "label:" + flag_labels.combined(("INVISIBLE WALL", "HARD WALL"))
+LABEL_STEP_WALL = "label:STEP WALL"
+LABEL_AREA_WALL = "label:AREA WALL"
+LABEL_AREA_WALL_OUTSIDE = "label:AREA WALL · OUTSIDE"
+LABEL_JUMP_CEILING = "label:JUMP CEILING"
+LABEL_JUMP_CEILING_OUTSIDE = "label:JUMP CEILING · OUTSIDE"
+# the area boxes are large: their names no taller than this (game units, 2 m)
+AREA_LABEL_HEIGHT = 256
 # the objects' collision boxes (flag Collision boxes): orange, at half transparency
 COLOR_COLLISION_BOXES = (255, 150, 20)
-# the zones (flags Death zones, Death floor): red where you die, purple where you respawn directly
-# and put back at a fixed point (teleport)
+# the zones (flag Death zones): all red, where you die, where the death
+# floor is and where you get hurt (action 0x48), told apart by the name on
+# the top of each box; purple where you are put back at a fixed point
+# (flag Teleport zones)
 COLOR_DEATH = (235, 25, 25)
 COLOR_TELEPORT = (170, 70, 255)
-# the zones that hurt (flag Damage zones, action 0x48)
-COLOR_DAMAGE = (255, 225, 40)
 # the heightmap (flags Ground, Hard walls) and the fake walls (Fake walls)
 COLOR_GROUND = (60, 170, 80)              # covered by a visible face
 COLOR_INVISIBLE_GROUND = (140, 255, 60)  # no visible face above
@@ -140,21 +169,32 @@ COLOR_PIXEL = (255, 255, 255)              # isolated sub-cells, with the ray
 COLOR_HARD_WALLS = (60, 120, 255)
 # the collision volume of each mini area (flag Area boxes)
 COLOR_AREA_BOXES = (255, 170, 60)
+# their sides and tops, seen from both sides: half as bright, the layers add up
+COLOR_AREA_FILL = (128, 85, 30)
 # the 0x1000 terrain faces (flag 0x1000 faces): not walls (tested in the game)
 COLOR_FACES_1000 = (150, 150, 150)
 # group -> viewer attribute that turns it on (the menu flags)
 OVERLAYS = {
     "faces_1000": "show_faces_1000", "invisible_walls": "show_invisible_walls",
+    "invisible_walls_label": "show_invisible_walls",
+    "step_walls": "show_invisible_walls", "step_walls_label": "show_invisible_walls",
     "no_collision": "show_no_collision",
-    "no_collision_trap": "show_no_collision",
+    "no_collision_lines": "show_no_collision",
+    "no_collision_label": "show_no_collision",
     "area_boxes": "show_area_boxes", "area_boxes_lines": "show_area_boxes",
+    "area_walls": "show_area_boxes", "area_walls_label": "show_area_boxes",
+    "jump_ceilings": "show_area_boxes", "jump_ceilings_label": "show_area_boxes",
+    "area_walls_outside": "show_area_boxes", "area_walls_outside_label": "show_area_boxes",
+    "jump_ceilings_outside": "show_area_boxes", "jump_ceilings_outside_label": "show_area_boxes",
     "collision_boxes": "show_collision_boxes", "collision_boxes_lines": "show_collision_boxes",
     "death_zones": "show_death_zones", "death_zones_lines": "show_death_zones",
-    "death_floor": "show_death_floor", "death_floor_lines": "show_death_floor",
-    "damage_zones": "show_damage_zones", "damage_zones_lines": "show_damage_zones",
+    "death_zones_label": "show_death_zones",
+    "teleport_zones": "show_teleport_zones", "teleport_zones_lines": "show_teleport_zones",
+    "teleport_zones_label": "show_teleport_zones", "shared_zones_label": "show_death_zones",
     "covered_ground": "show_ground", "invisible_ground": "show_ground",
     "pixel": "show_ground", "pixel_beam": "show_ground",
-    "hard_walls": "show_hard_walls",
+    "hard_walls": "show_hard_walls", "hard_walls_label": "show_hard_walls",
+    "hard_walls_label_unseen": "show_hard_walls", "invisible_hard_walls_label": "show_hard_walls",
 }
 # the overlay families: each is built, as pieces of its own, only when one of
 # its flags is on, so a level opened with the flags off skips them all (the
@@ -162,10 +202,36 @@ OVERLAYS = {
 FAMILIES = {
     "terrain_overlays": ("show_faces_1000", "show_no_collision"),
     "heightmap": ("show_ground", "show_hard_walls", "show_invisible_walls", "show_area_boxes"),
-    "zones": ("show_death_zones", "show_death_floor", "show_damage_zones"),
+    "zones": ("show_death_zones", "show_teleport_zones"),
     "collision_boxes": ("show_collision_boxes",),
 }
 assert set(OVERLAYS.values()) == {a for flags in FAMILIES.values() for a in flags}
+# groups whose visibility depends on more than their own flag:
+# (all of these on, at least one of these on, none of these on). Written for
+# the flag names that merge (the user's rules): the same place in two flags
+# gets one name, "INV + HRD", instead of two texts over each other
+SHOWN_WHEN = {
+    # an invisible wall is a hard wall too: HARD WALL, INVISIBLE WALL, or both
+    "hard_walls_label_unseen": (("show_hard_walls",), (), ("show_invisible_walls",)),
+    "invisible_walls_label": (("show_invisible_walls",), (), ("show_hard_walls",)),
+    "invisible_hard_walls_label": (("show_invisible_walls", "show_hard_walls"), (), ()),
+    # a zone that kills and teleports is in both zone flags: one name
+    "shared_zones_label": ((), ("show_death_zones", "show_teleport_zones"), ()),
+}
+# names written on both sides of a wall, each drawn only from its own side,
+# so neither reads mirrored
+ONE_SIDED = {"hard_walls_label", "hard_walls_label_unseen", "invisible_walls_label",
+             "invisible_hard_walls_label", "step_walls_label",
+             # the area walls stop you only from inside, a jump ceiling only from below:
+             # each is drawn only from the side where it acts
+             "area_walls", "area_walls_label", "jump_ceilings", "jump_ceilings_label",
+             "area_walls_outside", "area_walls_outside_label", "jump_ceilings_outside",
+             "jump_ceilings_outside_label"}
+# groups that also need a second setting on: the outside side of the area
+# boxes (Flags -> Area boxes: outside side, on at every start)
+for _c in ("area_walls_outside", "area_walls_outside_label", "jump_ceilings_outside",
+           "jump_ceilings_outside_label"):
+    SHOWN_WHEN[_c] = (("show_area_boxes", "show_area_outside"), (), ())
 
 # on the main menu background (like "ctrviewer by DCxDemo")
 SIGNATURE = "BBLIT Viewer by AleMastroianni"
@@ -193,8 +259,14 @@ uniform int show_textures;
 uniform float alpha;
 uniform float blend_scale;
 uniform float albedo;
+uniform vec4 override;
 out vec4 color_out;
 void main() {
+    // Wireframe -> Grid: the triangle edges in one dark colour
+    if (override.a > 0.0) {
+        color_out = override;
+        return;
+    }
     // the original has no lights: the vertex color is baked lighting.
     // On the PC the factor is 1, not the PlayStation's 2 (128 = neutral):
     // measured on the L03A sea, (0,0,63) in the game and (0,0,63) here with 1,
@@ -515,14 +587,18 @@ class Level:
         center. A PSX quad is Z-ordered, not a fan: (0,1,2) and (1,3,2)."""
         output = []
         for vl in faces:
-            tex_id = vl.tex_id if vl.tex_id in self.sizes else None
+            label = isinstance(vl.tex_id, str)      # a flag's name (flag_labels): uvs already 0..1
+            tex_id = vl.tex_id if label or vl.tex_id in self.sizes else None
             bare = vl.tex_id is not None and tex_id is None
             uvs = None if bare else vl.uvs
-            measure = self.sizes[tex_id] if uvs else None
+            measure = self.sizes[tex_id] if uvs and not label else None
             vertex_attrs = []
             for i in range(len(vl.corners)):
                 r, g, b = vl.colors[i]
-                u, v = geo.uv_to_texture(uvs[i][0], uvs[i][1], measure) if uvs else (0.0, 0.0)
+                if label:
+                    u, v = uvs[i]
+                else:
+                    u, v = geo.uv_to_texture(uvs[i][0], uvs[i][1], measure) if uvs else (0.0, 0.0)
                 vertex_attrs.append((r / 255.0, g / 255.0, b / 255.0, u, v))
             tri_vertices = [(vl.corners[i], vertex_attrs[i]) for d in geo.triangles(len(vl.corners)) for i in d]
             output.append((tex_id, vl.blend, bare, tri_vertices))
@@ -588,29 +664,61 @@ class Level:
                 face_list.append(geo.Face((a, c, d), None, None, [COLOR_FACES_1000] * 3, 0))
             self._add_faces(vertices, face_list, "faces_1000", pos=tuple(t["translation"]), counted=False)
             self.stat["walls_drawn"] = self.stat.get("walls_drawn", 0) + len(invisible_walls)
-        # walkable faces with no collision terrain below (flag No
-        # collision): a cyan copy, raised by 4 units so it does not flicker
-        # on the texture (collision.no_collision_kind)
+        # what you go through (flag No collision): the walkable faces with
+        # no collision ground under them and the walls joined to them that
+        # the sweep lets through, in white, 4 units up, with their triangle
+        # edges in black over it. What is under them (death, damage, death
+        # floor) is told by the zone flags, not here
         if self.collision_blocks:
-            # no collision: bright cyan where you land safely, a faint
-            # dark cyan where the fall ends in a death/damage zone
             sp = t["translation"]
-            kinds = {"safe": [], "trap": []}
-            for vl in faces:
-                kind = collision.no_collision_kind(
-                    self.collision_blocks,
-                    [tuple(vertices[h][k] + sp[k] for k in range(3)) for h in vl.corners],
-                    self.trap_zones)
-                if kind:
-                    kinds[kind].append(vl)
-            for kind, category, draw_color, blend in (
-                    ("safe", "no_collision", COLOR_NO_COLLISION, 0),
-                    ("trap", "no_collision_trap", COLOR_NO_COLLISION_TRAP, 3)):
-                face_list = [geo.Face(vl.corners, None, None, [draw_color] * len(vl.corners), blend)
-                         for vl in kinds[kind]]
-                if face_list:
+            corners_of = [[tuple(vertices[h][k] + sp[k] for k in range(3)) for h in vl.corners] for vl in faces]
+            through = {i for i in range(len(faces))
+                       if collision.no_collision_kind(self.collision_blocks, corners_of[i])}
+            # the walls of such a piece (finding 298: the sweep stops only on
+            # 0x7F, ground over 100 units higher, or leaving every block): a
+            # vertical face the sweep lets through, joined face to face to a
+            # top without collision. Only joined walls: the rule alone
+            # missed its bars on the whole disc (298)
+            by_vertex = {}
+            for i, vl in enumerate(faces):
+                for h in vl.corners:
+                    by_vertex.setdefault(h, []).append(i)
+            crossable = {}
+            queue = sorted(through)
+            while queue:
+                i = queue.pop()
+                for h in faces[i].corners:
+                    for j in by_vertex[h]:
+                        if j in through:
+                            continue
+                        if j not in crossable:
+                            crossable[j] = collision.wall_crossable(self.collision_blocks, corners_of[j])
+                        if crossable[j]:
+                            through.add(j)
+                            queue.append(j)
+            if through:
+                chosen = [faces[i] for i in sorted(through)]
+                for category, draw_color, blend in (("no_collision", COLOR_NO_COLLISION, OVERLAY_BLEND),
+                                                    ("no_collision_lines", COLOR_NO_COLLISION_EDGES, None)):
+                    face_list = [geo.Face(vl.corners, None, None, [draw_color] * len(vl.corners), blend)
+                                 for vl in chosen]
                     self._add_faces(vertices, face_list, category, pos=(sp[0], sp[1] - 4, sp[2]), counted=False)
-                    self.stat[category] = self.stat.get(category, 0) + len(face_list)
+                # the flag's name inside each face large enough to read it
+                # (a face the block holds twice, 478 in L03A2: named once)
+                labels, named = [], set()
+                for i in sorted(through):
+                    place = frozenset(corners_of[i])
+                    if place in named:
+                        continue
+                    named.add(place)
+                    uvs = flag_labels.label_uvs(corners_of[i])
+                    if uvs is not None:
+                        labels.append(geo.Face(faces[i].corners, LABEL_NO_COLLISION, uvs,
+                                               [(255, 255, 255)] * len(uvs), None))
+                if labels:
+                    self._add_faces(vertices, labels, "no_collision_label", pos=(sp[0], sp[1] - 4, sp[2]),
+                                    counted=False)
+                self.stat["no_collision"] = self.stat.get("no_collision", 0) + len(chosen)
 
     def _object_collision_box(self, o, role, diagonal):
         """A placed object's collision box (one piece, family collision_boxes)."""
@@ -786,7 +894,8 @@ class Level:
         lo, hi = self.terrain_lo, self.terrain_hi
         diagonal = max(h - l for h, l in zip(hi, lo)) or 1.0
         vertical_heights = collision.raster_vertical(face_list + self._object_faces(diagonal))
-        panels = collision.hard_walls(self.collision_blocks, vertical_heights)
+        # the same panel from two blocks that share the edge: drawn and named once
+        panels = list(dict.fromkeys(collision.hard_walls(self.collision_blocks, vertical_heights)))
         for category, draw_color, keep_fn in (("hard_walls", COLOR_HARD_WALLS, lambda v: True),
                                       ("invisible_walls", COLOR_INVISIBLE_WALLS, lambda v: not v)):
             corner_points, vl = [], []
@@ -800,22 +909,109 @@ class Level:
             if vl:
                 self._add_faces(corner_points, vl, category, counted=False)
             self.stat[category] = len(vl)
+        # the steps of more than 100 units with nothing drawn (flag
+        # Invisible walls, magenta): drawn from both sides for now, which
+        # side they stop (only going up) waits for the reverse
+        steps = [s for s in collision.step_walls(self.collision_blocks, vertical_heights) if not s[6]]
+        corner_points, vl = [], []
+        for xa, za, xb, zb, high, low, _visible in steps:
+            first_idx = len(corner_points)
+            corner_points += [(xa, low, za), (xb, low, zb), (xa, high, za), (xb, high, zb)]
+            vl.append(geo.Face((first_idx, first_idx + 1, first_idx + 2, first_idx + 3), None, None,
+                               [COLOR_INVISIBLE_WALLS] * 4, 0))
+        if vl:
+            self._add_faces(corner_points, vl, "step_walls", counted=False)
+        self.stat["step_walls"] = len(vl)
+        # the flag's name on each panel tall and long enough to read it; a
+        # hard wall with nothing drawn is in both wall flags: HARD WALL,
+        # INVISIBLE WALL or "INV + HRD", by which flags are on (SHOWN_WHEN).
+        # The steps (STEP WALL) never share a panel with them
+        step_panels = [(xa, za, xb, zb, low, high, False) for xa, za, xb, zb, high, low, _v in steps]
+        for category, label, source in (
+                ("hard_walls_label", LABEL_HARD_WALL, [p for p in panels if p[6]]),
+                ("hard_walls_label_unseen", LABEL_HARD_WALL, [p for p in panels if not p[6]]),
+                ("invisible_walls_label", LABEL_INVISIBLE_WALL, [p for p in panels if not p[6]]),
+                ("invisible_hard_walls_label", LABEL_INVISIBLE_HARD_WALL, [p for p in panels if not p[6]]),
+                ("step_walls_label", LABEL_STEP_WALL, step_panels)):
+            corner_points, vl = [], []
+            for xa, za, xb, zb, base, top, visible in source:
+                # one face per side: the same quad with its corners swapped
+                # in pairs faces the other way (ONE_SIDED)
+                for quad in ([(xa, base, za), (xb, base, zb), (xa, top, za), (xb, top, zb)],
+                             [(xb, base, zb), (xa, base, za), (xb, top, zb), (xa, top, za)]):
+                    uvs = flag_labels.label_uvs(quad)
+                    if uvs is None:
+                        break
+                    first_idx = len(corner_points)
+                    corner_points += quad
+                    vl.append(geo.Face((first_idx, first_idx + 1, first_idx + 2, first_idx + 3), label, uvs,
+                                       [(255, 255, 255)] * 4, None))
+            if vl:
+                self._add_faces(corner_points, vl, category, counted=False)
         # the collision volume of each mini area, as a box
         volumes = collision.volumes(self.collision_blocks)
         for x0, y0, z0, x1, y1, z1 in volumes:
             # edges only: a filled box this large would tint the whole view
             self._add_box((x0, y0, z0, x1, y1, z1), "area_boxes", COLOR_AREA_BOXES, filled=False)
         self.stat["area_boxes"] = len(volumes)
+        # where the box stops you and where it does not: each side and each
+        # slab top twice, one-sided. Seen from where it acts (a side from
+        # inside, a top from below) it says AREA WALL / JUMP CEILING; from
+        # the other side, where you pass, the same with OUTSIDE (the
+        # "_outside" groups, hidden by Area boxes: outside side = no)
+        def add_both_sides(quad, facing, inside_label, outside_label, from_below):
+            for side, label, below in ((1, inside_label, from_below), (-1, outside_label, not from_below)):
+                look = tuple(side * f for f in facing)
+                q = quad
+                # a Z-ordered quad is drawn from the side opposite to
+                # (p1 - p0) x (p2 - p0) (ONE_SIDED): turn it to face `look`
+                n = flag_labels._cross(flag_labels._sub(q[1], q[0]), flag_labels._sub(q[2], q[0]))
+                if flag_labels._dot(n, look) > 0:
+                    q = [q[1], q[0], q[3], q[2]]
+                points, fills, labels = parts[side]
+                first_idx = len(points)
+                points.extend(q)
+                corners = (first_idx, first_idx + 1, first_idx + 2, first_idx + 3)
+                fills.append(geo.Face(corners, None, None, [COLOR_AREA_FILL] * 4, 3))
+                uvs = flag_labels.label_uvs(q, from_below=below and facing[1] != 0, max_height=AREA_LABEL_HEIGHT)
+                if uvs is not None:
+                    labels.append(geo.Face(corners, label, uvs, [(255, 255, 255)] * 4, None))
+
+        def mount(name):
+            for side, suffix in ((1, ""), (-1, "_outside")):
+                points, fills, labels = parts[side]
+                if fills:
+                    self._add_faces(points, fills, name + suffix, counted=False)
+                if labels:
+                    self._add_faces(points, labels, name + suffix + "_label", counted=False)
+
+        parts = {1: ([], [], []), -1: ([], [], [])}
+        walls = list(dict.fromkeys(collision.area_walls(self.collision_blocks)))
+        for xa, za, xb, zb, top, base, (dx, dz) in walls:
+            add_both_sides([(xa, base, za), (xb, base, zb), (xa, top, za), (xb, top, zb)], (dx, 0, dz),
+                           LABEL_AREA_WALL, LABEL_AREA_WALL_OUTSIDE, False)
+        mount("area_walls")
+        self.stat["area_walls"] = len(walls)
+        parts = {1: ([], [], []), -1: ([], [], [])}
+        ceilings = list(dict.fromkeys(collision.jump_ceilings(self.collision_blocks)))
+        for x0, z0, x1, z1, y in ceilings:
+            # Y down: "below" is +Y
+            add_both_sides([(x0, y, z0), (x0, y, z1), (x1, y, z0), (x1, y, z1)], (0, 1, 0),
+                           LABEL_JUMP_CEILING, LABEL_JUMP_CEILING_OUTSIDE, True)
+        mount("jump_ceilings")
+        self.stat["jump_ceilings"] = len(ceilings)
         self.stat["invisible_ground"] = len(invisible)
         self.stat["pixel"] = len(pixel)
 
     def _death_zones(self):
-        """The zones that kill the player or respawn them directly (zones.py): red for
-        death, purple for teleport. Those at least half the size of the terrain
-        footprint are the "death floor" (flag Death floor), the others the
-        death zones (flag Death zones). The zones that only hurt (action 0x48)
-        in yellow (flag Damage zones). Each with its rotation, as the game
-        tests it (zones.ZoneShape)."""
+        """The zones (zones.py), each a box with its rotation, as the game
+        tests it (zones.ZoneShape), and on its top face the names of all it
+        does, from all its rules: DEATH (DEATH FLOOR when at least half the
+        size of the terrain footprint: the sea, the abyss), DAMAGE (action
+        0x48), RESPAWN (teleport to a fixed point); several as "DTH + DMG"
+        (flag_labels.combined). Flag Death and damage zones, red: the zones
+        that kill or hurt; flag Teleport zones, purple: those that respawn
+        you. A zone that does both is in both flags, with one name."""
         lo, hi = self.terrain_lo, self.terrain_hi
         footprint = (hi[0] - lo[0]) * (hi[2] - lo[2]) * geo.UNITS_PER_METER ** 2
         for z in self.lvl["zones"]:
@@ -825,14 +1021,31 @@ class Level:
             shape = zones.shape_of(z)
             if shape is None:
                 continue
-            if kind_of is None:
-                category, draw_color = "damage_zones", COLOR_DAMAGE
-            else:
-                category = ("death_floor" if footprint and shape.area >= zones.FLOOR_FRACTION * footprint
-                            else "death_zones")
-                draw_color = COLOR_DEATH if kind_of == "death" else COLOR_TELEPORT
-            self._add_hexahedron(shape.corners(), category, draw_color)
-            self.stat[category] = self.stat.get(category, 0) + 1
+            names = []
+            if zones.kills(z):
+                floor = footprint and shape.area >= zones.FLOOR_FRACTION * footprint
+                names.append("DEATH FLOOR" if floor else "DEATH")
+            if zones.hurts(z):
+                names.append("DAMAGE")
+            if zones.teleports(z):
+                names.append("RESPAWN")
+            corners = shape.corners()
+            categories = []
+            if "RESPAWN" not in names or len(names) > 1:
+                categories.append(("death_zones", COLOR_DEATH))
+            if "RESPAWN" in names:
+                categories.append(("teleport_zones", COLOR_TELEPORT))
+            for category, draw_color in categories:
+                self._add_hexahedron(corners, category, draw_color)
+                self.stat[category] = self.stat.get(category, 0) + 1
+            # the top face (Y down: the corners with iy = 0), in Z order
+            top = (0, 1, 4, 5)
+            uvs = flag_labels.label_uvs([corners[i] for i in top])
+            if uvs is not None:
+                label_category = categories[0][0] + "_label" if len(categories) == 1 else "shared_zones_label"
+                self._add_faces(corners, [geo.Face(top, "label:" + flag_labels.combined(names), uvs,
+                                                   [(255, 255, 255)] * 4, None)],
+                                label_category, counted=False)
 
     def _build_clones(self, models):
         """The templates that the objects' rules make appear.
@@ -1065,6 +1278,8 @@ class Viewer(pyglet.window.Window):
         # the glitch-hunting flags: always off at every start, never saved
         for attr in set(OVERLAYS.values()):
             setattr(self, attr, False)
+        # Area boxes: their outside side shown, at every start
+        self.show_area_outside = True
         # Camera and points: the shadow circle is off at every start, like the flags
         self.show_camera_shadow = False
         self._shadow_area = None      # the area of the last shadow query (the game's hint)
@@ -1080,7 +1295,8 @@ class Viewer(pyglet.window.Window):
         # templates that the rules make appear (key G):
         # 0 off, 1 those appearing at startup, 2 all possible ones
         self.show_clones = user_settings["clones"]
-        self.wireframe = user_settings["wireframe"]
+        # an old settings file has True/False: Skeleton/off
+        self.wireframe = max(WIRE_OFF, min(WIRE_GRID, int(user_settings["wireframe"])))
         self.fov = user_settings["field_of_view"]
         self.show_status_bar = user_settings["status_bar"]
         self.speed = 20.0
@@ -1228,7 +1444,7 @@ class Viewer(pyglet.window.Window):
         user_settings = self.user_settings
         user_settings["language"] = texts.language()
         user_settings["texture"], user_settings["props"], user_settings["sky"] = self.show_textures, self.show_props, self.show_sky
-        user_settings["blending"], user_settings["wireframe"] = self.show_blending, self.wireframe
+        user_settings["blending"], user_settings["wireframe"] = self.show_blending, int(self.wireframe)
         user_settings["animated_textures"], user_settings["clones"] = self.animated_textures, self.show_clones
         user_settings["ticks_per_second"] = float(self.tps)
         user_settings["fullscreen"], user_settings["bilinear_filter"] = self.fullscreen, self.bilinear
@@ -1579,11 +1795,12 @@ class Viewer(pyglet.window.Window):
                     item("level.no_collision", "show_no_collision", "desc.no_collision"),
                     item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
                     item("level.death_zones", "show_death_zones", "desc.death_zones"),
-                    item("level.death_floor", "show_death_floor", "desc.death_floor"),
-                    item("level.damage_zones", "show_damage_zones", "desc.damage_zones"),
+                    item("level.teleport_zones", "show_teleport_zones", "desc.teleport_zones"),
                     item("level.ground", "show_ground", "desc.ground"),
                     item("level.hard_walls", "show_hard_walls", "desc.hard_walls"),
                     item("level.area_boxes", "show_area_boxes", "desc.area_boxes"),
+                    M.YesNo("level.area_outside", lambda: self.show_area_outside,
+                            lambda v: setattr(self, "show_area_outside", v), "desc.area_outside"),
                     item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
                     M.Back()]
 
@@ -1660,8 +1877,10 @@ class Viewer(pyglet.window.Window):
                            lambda v: setattr(self, "show_sky", v), "desc.sky"),
                     M.YesNo("level.blending", lambda: self.show_blending,
                            lambda v: setattr(self, "show_blending", v), "desc.blending"),
-                    M.YesNo("level.wireframe", lambda: self.wireframe,
-                           lambda v: setattr(self, "wireframe", v), "desc.wireframe"),
+                    M.Choice("level.wireframe",
+                             [(WIRE_OFF, "level.wire.off"), (WIRE_SKELETON, "level.wire.skeleton"),
+                              (WIRE_GRID, "level.wire.grid")],
+                             lambda: self.wireframe, lambda v: setattr(self, "wireframe", v), "desc.wireframe"),
                     M.Section("level.entities"),
                     M.Choice("level.animations",
                              [("playing", "level.anim.playing"), ("paused", "level.anim.paused"),
@@ -1773,6 +1992,8 @@ class Viewer(pyglet.window.Window):
         return int(self.anim_time * self.tps)
 
     def _gl_texture(self, tid):
+        if isinstance(tid, str):
+            return self._label_texture(tid)
         table = self.current_level.table
         # an animated slot (finding 275) changes frame over time
         source = table.bitmap(tid, self.tick()) if table and self.animated_textures else None
@@ -1810,6 +2031,25 @@ class Viewer(pyglet.window.Window):
         glGenerateMipmap(GL_TEXTURE_2D)
         self.textures[lookup_key] = name.value
         return name.value
+
+    def _label_texture(self, tid):
+        """A flag's name as a texture (flag_labels), always in English."""
+        text = tid.split(":", 1)[1]
+        lookup_key = ("label", text)
+        if lookup_key not in self.textures:
+            width, height, rgba = flag_labels.texture_rgba(text)
+            name = ctypes.c_uint()
+            glGenTextures(1, ctypes.byref(name))
+            glBindTexture(GL_TEXTURE_2D, name.value)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            buf = (ctypes.c_ubyte * len(rgba)).from_buffer_copy(rgba)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf)
+            glGenerateMipmap(GL_TEXTURE_2D)
+            self.textures[lookup_key] = name.value
+        return self.textures[lookup_key]
 
     def _upload(self, face_group: FaceGroup):
         """A group goes to the graphics card in a single buffer. For an animated
@@ -1931,6 +2171,14 @@ class Viewer(pyglet.window.Window):
               f"{len(self.current_level.sizes)} texture, "
               f"{hi[0]-lo[0]:.0f} x {hi[1]-lo[1]:.0f} x {hi[2]-lo[2]:.0f} m")
 
+    def _overlay_shown(self, category):
+        rule = SHOWN_WHEN.get(category)
+        if rule is None:
+            return getattr(self, OVERLAYS[category])
+        all_of, any_of, none_of = rule
+        return (all(getattr(self, a) for a in all_of) and (not any_of or any(getattr(self, a) for a in any_of))
+                and not any(getattr(self, a) for a in none_of))
+
     def _families_on(self):
         """The overlay families with at least one flag on."""
         return {family for family, flags in FAMILIES.items()
@@ -2012,7 +2260,7 @@ class Viewer(pyglet.window.Window):
         if action == "textures":
             self.show_textures = not self.show_textures
         elif action == "wireframe":
-            self.wireframe = not self.wireframe
+            self.wireframe = (self.wireframe + 1) % 3      # off, Skeleton, Grid
         elif action == "props":
             self.show_props = not self.show_props
         elif action == "sky":
@@ -2177,7 +2425,7 @@ class Viewer(pyglet.window.Window):
         # the plants' shadows were black squares (finding 273)
         glEnable(GL_BLEND)
         glEnable(GL_DEPTH_TEST)
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe == WIRE_SKELETON else GL_FILL)
 
         j, p = math.radians(self.yaw), math.radians(self.pitch)
         forward = Vec3(math.cos(j) * math.cos(p), math.sin(p), math.sin(j) * math.cos(p))
@@ -2198,7 +2446,9 @@ class Viewer(pyglet.window.Window):
 
         visible_groups = [g for g in self.current_level.face_groups.values()
                      if not (g.category == "props" and not self.show_props)
-                     and not (g.category in OVERLAYS and not getattr(self, OVERLAYS[g.category]))
+                     and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
+                     # the flag names are textures: without textures they would be black quads
+                     and not (g.category.endswith("_label") and not self.show_textures)
                      and not (g.category == "clones" and self.show_clones < 2)
                      and not (g.category == "clones_at_start" and self.show_clones < 1)
                      and g.category != "sky_dome"]
@@ -2221,12 +2471,30 @@ class Viewer(pyglet.window.Window):
                                        @ Mat4.from_rotation(angle, Vec3(0.0, 1.0, 0.0))
                                        @ Mat4.from_translation(-p))
             glBindVertexArray(vao)
+            one_sided = face_group.category in ONE_SIDED
+            if one_sided:
+                glEnable(GL_CULL_FACE)
+                glCullFace(GL_BACK)
+            pulled = PULLED_FORWARD.get(face_group.category)
+            if pulled:
+                # drawn on the terrain face itself (the walls of a piece
+                # without collision): pulled toward the camera in the depth
+                # test, or it would flicker against the face under it; the
+                # edges and the name further, so the fill does not cover them
+                glEnable(GL_POLYGON_OFFSET_LINE if face_group.category.endswith("_lines")
+                         else GL_POLYGON_OFFSET_FILL)
+                glPolygonOffset(*pulled)
             if face_group.category.endswith("_lines"):
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
                 glDrawArrays(GL_TRIANGLES, first_idx, item_count)
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe == WIRE_SKELETON else GL_FILL)
             else:
                 glDrawArrays(GL_TRIANGLES, first_idx, item_count)
+            if pulled:
+                glDisable(GL_POLYGON_OFFSET_FILL)
+                glDisable(GL_POLYGON_OFFSET_LINE)
+            if one_sided:
+                glDisable(GL_CULL_FACE)
             if face_group.spin:
                 self.program["mvp"] = proj @ view
             return item_count // 3
@@ -2253,6 +2521,10 @@ class Viewer(pyglet.window.Window):
                 glBlendEquation(GL_FUNC_REVERSE_SUBTRACT)
                 glBlendFunc(GL_ONE, GL_ONE)
                 self.program["alpha"], self.program["blend_scale"] = 1.0, 2.0
+            elif blend == OVERLAY_BLEND:     # the viewer's own: 75% cover
+                glBlendEquation(GL_FUNC_ADD)
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+                self.program["alpha"], self.program["blend_scale"] = 0.75, 1.0
             else:                # B + F/4
                 glBlendEquation(GL_FUNC_ADD)
                 glBlendFunc(GL_ONE, GL_ONE)
@@ -2309,6 +2581,23 @@ class Viewer(pyglet.window.Window):
             for face_group in visible_groups:
                 if face_group.blend is not None:
                     drawn_triangles += draw_face_group(face_group)
+
+        if self.wireframe == WIRE_GRID:
+            # Grid: the edges of every triangle drawn, in one dark colour, on
+            # the surface (pulled a little toward the camera, no flicker)
+            set_blend(None)
+            self.program["override"] = GRID_COLOR
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            glEnable(GL_POLYGON_OFFSET_LINE)
+            glPolygonOffset(-1.0, -2.0)
+            glDepthMask(GL_FALSE)
+            for face_group in visible_groups:
+                if face_group.category not in OVERLAYS:
+                    draw_face_group(face_group)
+            glDepthMask(GL_TRUE)
+            glDisable(GL_POLYGON_OFFSET_LINE)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+            self.program["override"] = (0.0, 0.0, 0.0, 0.0)
 
         if self.show_camera_shadow:
             self._draw_camera_shadow()
@@ -2424,7 +2713,7 @@ class Viewer(pyglet.window.Window):
         glEnable(GL_DEPTH_TEST)
         glDepthMask(GL_TRUE)
         self.program["alpha"] = 1.0
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe == WIRE_SKELETON else GL_FILL)
 
     def _draw_sprites(self, forward, set_blend):
         """The sprites (torch flames, ...) as squares facing the camera."""
@@ -2495,14 +2784,18 @@ def main() -> None:
     p.add_argument("--nocollision", action="store_true",
                    help="show the faces without collision")
     p.add_argument("--boxes", action="store_true", help="show the collision boxes")
-    p.add_argument("--deathzones", action="store_true", help="show the death zones")
-    p.add_argument("--damagezones", action="store_true", help="show the zones that hurt")
-    p.add_argument("--deathfloor", action="store_true", help="show the death floor")
+    p.add_argument("--deathzones", action="store_true",
+                   help="show the zones that kill or hurt, the death floor included")
+    # the three flags before they became one: the same flag
+    p.add_argument("--damagezones", "--deathfloor", dest="deathzones", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--teleportzones", action="store_true", help="show the zones that respawn you at a fixed point")
     p.add_argument("--ground", action="store_true", help="show the collision ground")
     p.add_argument("--hardwalls", action="store_true", help="show the heightmap's hard walls")
     p.add_argument("--areaboxes", action="store_true", help="show the area boxes")
     p.add_argument("--faces1000", action="store_true", help="show the 0x1000 terrain faces")
+    p.add_argument("--no-area-outside", action="store_true", help="area boxes: hide their outside side")
     p.add_argument("--camera-shadow", action="store_true", help="show the shadow point under the camera")
+    p.add_argument("--wireframe", type=int, choices=(0, 1, 2), help="0 off, 1 skeleton, 2 grid")
     p.add_argument("--clones", type=int, choices=(0, 1, 2),
                    help="cloned templates: 0 off, 1 at startup, 2 all (key G)")
     p.add_argument("--albedo", type=float, help="texture x vertex color factor (default 1; 2 is the PlayStation)")
@@ -2546,10 +2839,8 @@ def main() -> None:
         v.show_collision_boxes = True
     if args.deathzones:
         v.show_death_zones = True
-    if args.damagezones:
-        v.show_damage_zones = True
-    if args.deathfloor:
-        v.show_death_floor = True
+    if args.teleportzones:
+        v.show_teleport_zones = True
     if args.ground:
         v.show_ground = True
     if args.hardwalls:
@@ -2558,8 +2849,12 @@ def main() -> None:
         v.show_area_boxes = True
     if args.faces1000:
         v.show_faces_1000 = True
+    if args.no_area_outside:
+        v.show_area_outside = False
     if args.camera_shadow:
         v.show_camera_shadow = True
+    if args.wireframe is not None:
+        v.wireframe = args.wireframe
     v.ensure_overlays()
     if args.clones is not None:
         v.show_clones = args.clones

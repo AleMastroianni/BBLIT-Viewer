@@ -155,16 +155,18 @@ Flags**, o con le opzioni da riga di comando qui sotto. Contesto: scoperte
 
 | flag | cosa mostra |
 |---|---|
-| Muri invisibili | ciò che ti ferma senza niente di disegnato: i muri duri (`0x7F`) della heightmap di collisione dove non c'è una parete visibile. In magenta |
-| Senza collisione | facce che sembrano calpestabili ma non hanno collisione: ciano acceso dove, cadendo, si atterra sani e salvi; ciano scuro dove si finisce in una zona di morte, danno o teletrasporto |
+| Muri invisibili | ciò che ti ferma senza niente di disegnato, in magenta: i muri duri (`0x7F`) della heightmap di collisione dove non c'è una parete visibile (INVISIBLE WALL, sigla INV) e i gradini di più di 100 unità (STEP WALL, sigla STP, scoperta 298) |
+| Senza collisione | facce che si vedono ma su cui non si sta, e le pareti collegate che si attraversano. In bianco con gli spigoli neri, con la scritta NO COLLISION; cosa c'è sotto lo dicono le flag delle zone |
 | Box di collisione | il box di collisione di ogni oggetto, come lo prova il gioco (può essere molto più grande dell'oggetto). In arancione |
-| Zone di morte | le zone che ti uccidono, con respawn al checkpoint (rosso), o ti fanno fare un respawn diretto in un punto fisso (viola) |
-| Pavimento della morte | le zone di morte grandi almeno metà del livello: il mare, l'abisso sotto il livello. Non tutti i livelli ne hanno |
-| Zone di danno | le zone che ti feriscono senza ucciderti (azione `0x48`): tolgono vita e danno un secondo di invulnerabilità. In giallo |
+| Zone di morte e danno | le zone che ti uccidono, con respawn al checkpoint (DEATH; DEATH FLOOR quelle grandi almeno metà del livello: il mare, l'abisso), e quelle che ti feriscono senza ucciderti (DAMAGE, azione `0x48`). Tutte in rosso, col nome sulla faccia in alto |
+| Zone di teletrasporto | le zone che ti rimettono subito in un punto fisso, senza morire. In viola, con la scritta RESPAWN |
 | Terreno di collisione | il terreno su cui si sta davvero (la heightmap): verde tenue sotto le facce visibili, verde acceso dove non c'è niente di disegnato, bianco coi raggi i punti isolati da 40 unità |
-| Muri duri | i muri `0x7F` della heightmap, che fermano a qualunque altezza. In blu, disegnati alti 5 m |
-| Box delle aree | il volume di collisione di ogni mini area (i blocchi della heightmap, dalla base alla cima); ancora da verificare nel gioco |
+| Muri duri | i muri `0x7F` della heightmap, che fermano a qualunque altezza. In blu, disegnati alti 5 m, con la scritta HARD WALL |
+| Box delle aree | il volume di collisione di ogni mini area (i blocchi della heightmap). I lati fermano solo chi è dentro (AREA WALL; da fuori AREA WALL · OUTSIDE: si passa); la cima di una lastra ferma la testa di un salto (JUMP CEILING, da sotto; da sopra JUMP CEILING · OUTSIDE): l'origine di Bugs si ferma circa 410 più in basso (scoperte 298, 299). La riga sotto nasconde il lato OUTSIDE |
+| Box delle aree: lato di fuori | il lato OUTSIDE dei box delle aree; acceso a ogni avvio. Spento, da fuori si vedono le aree senza il box davanti |
 | Facce 0x1000 | le facce dei settori `0x1000` del terreno: il gioco non le disegna e non fermano; forse trigger o aree di caricamento. In grigio |
+
+Le scritte sulle sovrapposizioni sono sempre in inglese. Una cosa che fa più cose, o che sta in due flag accese, ha le sigle: NOC (senza collisione), INV (muro invisibile), HRD (muro duro), DTH (morte), DFL (pavimento della morte), DMG (danno), RSP (respawn), STP (gradino), per esempio `DTH + DMG` sulla lava di `L03D1`.
 
 ---
 
@@ -189,7 +191,8 @@ Flags**, o con le opzioni da riga di comando qui sotto. Contesto: scoperte
 | `--scale-factor N` | ingrandisce le texture con scale2x/scale3x: 1, 2, 3, 4, 6 o 8 |
 | `--sky` | mostra la cupola del cielo |
 | `--no-blend` | disegna opache le facce semitrasparenti |
-| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--damagezones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | accendono la flag corrispondente |
+| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--teleportzones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | accendono la flag corrispondente |
+| `--no-area-outside` | i box delle aree senza il lato di fuori |
 
 Esempio, una foto riproducibile (`x,y,z` si prendono dai valori "m" della
 barra di stato):

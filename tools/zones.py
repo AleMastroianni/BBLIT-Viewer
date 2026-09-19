@@ -1,5 +1,6 @@
-"""The zones (load script block 0x09) that kill the player or respawn
-them directly: for the viewer's "Death zones" and "Death floor" flags.
+"""The zones (load script block 0x09) that kill the player, hurt them or
+respawn them directly: for the viewer's "Death and damage zones" and
+"Teleport zones" flags.
 
 A zone is a box (finding 103): origin (x, y, z), extent
 in X and in Z, and in Y from its floor up to "Y limit" higher up (the game's
@@ -48,6 +49,24 @@ def kind_of(z: dict) -> str | None:
     if effects & TELEPORT:
         return "teleport"
     return None
+
+
+def _effects(z: dict) -> int:
+    effects = 0
+    for r in z.get("rules", []):
+        effects |= r["effect"]
+    return effects
+
+
+def kills(z: dict) -> bool:
+    """Whether a rule of the zone carries the death effect (0x200000)."""
+    return bool(_effects(z) & DEATH)
+
+
+def teleports(z: dict) -> bool:
+    """Whether a rule of the zone carries the teleport effect (0x40000000):
+    a zone can do it as well as kill (the floor of L04A2)."""
+    return bool(_effects(z) & TELEPORT)
 
 
 DAMAGE = 0x48      # action: damage (finding 158)
