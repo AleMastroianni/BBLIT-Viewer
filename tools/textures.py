@@ -29,24 +29,48 @@ import bze  # noqa: E402
 import loadscript  # noqa: E402
 
 
+SECTIONS_SIGNATURE = "sections.json"
+
+
 def sections(bze_path: str, cache: str, ids=(1, 3, 4)) -> dict[int, bytes]:
-    """Decompresses the requested sections, with an on-disk cache."""
+    """Decompresses the requested sections, with an on-disk cache.
+
+    Each cached section (`<cache>/<LEVEL>/<LEVEL>_idNN.bin`) carries the
+    signature of the `.bze` it came from, size and date, in
+    `sections.json`: if the file changes, the section is ignored and written
+    again, and its signature is recorded only after it, so an interrupted
+    write is never taken for a good one. Test:
+    `tools/diagnostics/check_section_cache.py`."""
     stem = os.path.splitext(os.path.basename(bze_path))[0]
     cache_dir = os.path.join(cache, stem)
     os.makedirs(cache_dir, exist_ok=True)
+    st = os.stat(bze_path)
+    expected = f"1|{st.st_size}|{st.st_mtime_ns}"
+    signature_path = os.path.join(cache_dir, SECTIONS_SIGNATURE)
+    try:
+        with open(signature_path, encoding="utf-8") as f:
+            signatures = json.load(f)
+    except (OSError, ValueError):
+        signatures = {}
     output = {}
+    changed = False
     entries, data = bze.open_bze(bze_path)
     for s in entries:
         if s.id not in ids:
             continue
         file_path = os.path.join(cache_dir, f"{stem}_id{s.id:02d}.bin")
-        if os.path.exists(file_path):
+        if signatures.get(str(s.id)) == expected and os.path.exists(file_path):
             with open(file_path, "rb") as f:
                 output[s.id] = f.read()
         else:
             output[s.id] = bze.section_bytes(data, s)
             with open(file_path, "wb") as f:
                 f.write(output[s.id])
+            signatures[str(s.id)] = expected
+            changed = True
+    if changed:
+        with open(signature_path, "w", encoding="utf-8") as f:
+            json.dump(signatures, f)
     return output
 
 

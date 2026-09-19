@@ -229,9 +229,9 @@ accende una loro flag (la heightmap richiede qualche secondo nei livelli
 grandi); da lì in poi stanno anche loro in cache, e spegnere la flag le
 nasconde soltanto.
 
-Le sezioni decompresse si riusano finché esistono. Se si sostituisce un file
-di livello con uno diverso con lo stesso nome, si cancella la cartella di quel
-livello in `extracted/` (cancellare tutta la cartella è sempre sicuro).
+Le sezioni decompresse portano dimensione e data del `.bze` da cui vengono
+(`sections.json`): se si sostituisce un file di livello, si decomprimono di
+nuovo da sole. Cancellare `extracted/` è sempre sicuro: si ricostruisce.
 
 Un errore all'avvio viene aggiunto a `errors.txt` accanto al viewer;
 l'eseguibile lo mostra anche in una finestra di messaggio.

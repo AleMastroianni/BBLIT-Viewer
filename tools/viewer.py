@@ -199,24 +199,9 @@ void main() {
 # --------------------------------------------------------------- loading
 
 def sections(bze_path: str, cache: str) -> dict[int, bytes]:
-    """Decompresses sections 1, 3 and 4, with an on-disk cache."""
-    stem = os.path.splitext(os.path.basename(bze_path))[0]
-    cache_dir = os.path.join(cache, stem)
-    os.makedirs(cache_dir, exist_ok=True)
-    output = {}
-    entries, data = bze.open_bze(bze_path)
-    for s in entries:
-        if s.id not in (1, 3, 4):
-            continue
-        file_path = os.path.join(cache_dir, f"{stem}_id{s.id:02d}.bin")
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                output[s.id] = f.read()
-        else:
-            output[s.id] = bze.section_bytes(data, s)
-            with open(file_path, "wb") as f:
-                f.write(output[s.id])
-    return output
+    """Decompresses sections 1, 3 and 4, with an on-disk cache that follows
+    the `.bze` (textures.sections)."""
+    return texmod.sections(bze_path, cache, ids=(1, 3, 4))
 
 
 class FaceGroup:

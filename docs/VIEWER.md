@@ -224,9 +224,9 @@ The glitch-hunting overlays are built only when one of their flags is
 turned on (the heightmap takes a few seconds on large levels); after that
 they are in the cache too, and turning the flag off only hides them.
 
-The decompressed sections are reused as long as they exist. If you replace a
-level file with a different one of the same name, delete that level's folder
-in `extracted/` (deleting the whole folder is always safe).
+The decompressed sections carry the size and date of the `.bze` they come
+from (`sections.json`): if you replace a level file, they are decompressed
+again by themselves. Deleting `extracted/` is always safe: it is rebuilt.
 
 An error at startup is appended to `errors.txt` next to the viewer; the
 executable also shows it in a message box.
