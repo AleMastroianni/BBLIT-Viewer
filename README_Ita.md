@@ -87,7 +87,8 @@ sono una prova.
 | Hard walls | i muri `0x7F` della heightmap: fermano a qualunque altezza | letta |
 | Ground | il terreno su cui si sta davvero (la heightmap) | letta |
 | Collision boxes | il box di collisione di ogni oggetto, come lo prova il gioco | letta |
-| Death zones | le zone che uccidono (respawn al checkpoint) o fanno fare un respawn diretto in un punto fisso | letta |
+| Death zones | le zone che uccidono (respawn al checkpoint) o fanno fare un respawn diretto in un punto fisso, ruotate come le ruota il gioco | letta |
+| Damage zones | le zone che feriscono senza uccidere | letta |
 | 0x1000 faces | le facce del terreno che il gioco non disegna mai; non sono muri | letta |
 | Invisible walls | i muri duri dove non c'è niente di visibile | dedotta |
 | No collision | le facce che si vedono ma su cui non si sta: dove la caduta atterra sani e salvi, e dove finisce in una zona di morte | dedotta |
@@ -124,7 +125,8 @@ progetto; `make_release.py` li mette, con questo README, la licenza, le
 licenze di terze parti (`THIRD_PARTY_LICENSES.txt`) e una `bze_levels\` vuota, in `release\BBLIT Viewer\` e in uno zip, e stampa lo SHA-256
 dello zip per le note della release (l'eseguibile non è firmato). La release è
 portatile: le impostazioni restano in `userdata\` accanto a lei. I pezzi di un
-livello finiscono in cache in `extracted\` dopo la prima apertura.
+livello finiscono in cache in `extracted\` (circa 2 MB ciascuno), riempita in
+sottofondo all'avvio.
 
 ## Note sul formato
 

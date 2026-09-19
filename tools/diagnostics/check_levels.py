@@ -61,6 +61,7 @@ def main():
     menu_items = list(levels.all_entries())
     for levid, file, _era, title_text, _part, note, extra in menu_items:
         title_text = extra.get("sheet_name", title_text)
+        note = extra.get("sheet_note", note)
         if levid is None:
             continue
         if exe is not None and exe[levid] != file.upper():
@@ -69,7 +70,7 @@ def main():
         if lines is not None:
             row = lines[levid - 1].lower() if levid >= 1 else lines[0].lower()
             words = [title_text] if levid >= 1 else ["main menu"]
-            if note:
+            if note and isinstance(note, str):     # a game name with no spreadsheet note: nothing to compare
                 words.append(note)
             for p in words:
                 if p.lower() not in row:

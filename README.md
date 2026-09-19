@@ -85,7 +85,8 @@ with what is drawn: they are a guide to where to look, not a proof.
 | Hard walls | the heightmap's `0x7F` walls: they stop you at any height | read |
 | Ground | the ground you really stand on (the heightmap) | read |
 | Collision boxes | each object's collision box, as the game tests it | read |
-| Death zones | zones that kill you (respawn at the checkpoint) or respawn you directly at a fixed point | read |
+| Death zones | zones that kill you (respawn at the checkpoint) or respawn you directly at a fixed point, turned as the game turns them | read |
+| Damage zones | zones that hurt you without killing you | read |
 | 0x1000 faces | the terrain faces the game never draws; they are not walls | read |
 | Invisible walls | hard walls where nothing visible stands | deduced |
 | No collision | faces you see but cannot stand on: where the fall lands you safely, and where it ends in a death zone | deduced |
@@ -121,7 +122,7 @@ folder; `make_release.py` puts them, with this README, the licence, the
 third-party licences (`THIRD_PARTY_LICENSES.txt`) and an empty `bze_levels\`, into `release\BBLIT Viewer\` and a zip, and prints the zip's SHA-256
 for the release notes (the executable is not signed). The release is portable:
 its settings stay in `userdata\` next to it. A level's pieces are cached in
-`extracted\` after the first opening.
+`extracted\` (about 2 MB each), filled in the background at launch.
 
 ## Notes on the format
 

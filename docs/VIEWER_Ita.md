@@ -160,6 +160,7 @@ Flags**, o con le opzioni da riga di comando qui sotto. Contesto: scoperte
 | Box di collisione | il box di collisione di ogni oggetto, come lo prova il gioco (può essere molto più grande dell'oggetto). In arancione |
 | Zone di morte | le zone che ti uccidono, con respawn al checkpoint (rosso), o ti fanno fare un respawn diretto in un punto fisso (viola) |
 | Pavimento della morte | le zone di morte grandi almeno metà del livello: il mare, l'abisso sotto il livello. Non tutti i livelli ne hanno |
+| Zone di danno | le zone che ti feriscono senza ucciderti (azione `0x48`): tolgono vita e danno un secondo di invulnerabilità. In giallo |
 | Terreno di collisione | il terreno su cui si sta davvero (la heightmap): verde tenue sotto le facce visibili, verde acceso dove non c'è niente di disegnato, bianco coi raggi i punti isolati da 40 unità |
 | Muri duri | i muri `0x7F` della heightmap, che fermano a qualunque altezza. In blu, disegnati alti 5 m |
 | Box delle aree | il volume di collisione di ogni mini area (i blocchi della heightmap, dalla base alla cima); ancora da verificare nel gioco |
@@ -188,7 +189,7 @@ Flags**, o con le opzioni da riga di comando qui sotto. Contesto: scoperte
 | `--scale-factor N` | ingrandisce le texture con scale2x/scale3x: 1, 2, 3, 4, 6 o 8 |
 | `--sky` | mostra la cupola del cielo |
 | `--no-blend` | disegna opache le facce semitrasparenti |
-| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | accendono la flag corrispondente |
+| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--damagezones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | accendono la flag corrispondente |
 
 Esempio, una foto riproducibile (`x,y,z` si prendono dai valori "m" della
 barra di stato):
@@ -223,6 +224,10 @@ malformata viene ignorata.
   un'impronta dei sorgenti di `tools/`, o di quelli da cui è stato costruito
   l'eseguibile) e si ricostruisce da solo quando cambiano il codice o il file
   del livello. Un livello già visto si riapre in una frazione di secondo.
+  All'avvio un processo in sottofondo (bassa priorità, senza finestra)
+  costruisce quelli non ancora visti, così ogni livello si apre così in
+  fretta; si ferma quando si chiude il viewer. Compressa, circa 2 MB a
+  livello.
 
 Le sovrapposizioni per il glitch hunting si costruiscono solo quando si
 accende una loro flag (la heightmap richiede qualche secondo nei livelli
@@ -284,6 +289,7 @@ bootloader di PyInstaller, contenuti nell'eseguibile) e
 | `levels.py` | i livelli per era, con LevID e titoli, per il menu |
 | `preferences.py` | stati predefiniti scelti per alcuni livelli (non sono letture del formato) e gli `entity_groups` che il menu lascia cambiare |
 | `level_cache.py` | la cache dei pezzi su disco |
+| `cache_warmer.py` | riempie la cache dei pezzi in sottofondo all'avvio |
 | `menu.py`, `texts.py`, `settings.py`, `paths.py` | motore dei menu, testi dell'interfaccia (inglese e italiano), impostazioni salvate, cartelle dei dati |
 
 Tutti gli strumenti scrivono i PNG a mano con `zlib`: non serve nessuna

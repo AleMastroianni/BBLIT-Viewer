@@ -40,7 +40,9 @@ import argparse
 import ctypes
 import math
 import os
+import re
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from array import array  # noqa: E402
@@ -58,6 +60,7 @@ import bze  # noqa: E402
 import export_obj as geo  # noqa: E402
 import collision  # noqa: E402
 import zones  # noqa: E402
+import cache_warmer  # noqa: E402
 import level_cache  # noqa: E402
 import loadscript  # noqa: E402
 import montage  # noqa: E402
@@ -69,8 +72,16 @@ import upscale  # noqa: E402
 import settings as settings_mod  # noqa: E402
 import levels  # noqa: E402
 import menu as menumod  # noqa: E402
+import keybinds  # noqa: E402
+import keys_page  # noqa: E402
+import gamepad as gamepadmod  # noqa: E402
 import texts  # noqa: E402
 from texts import t  # noqa: E402
+try:
+    import private_export  # noqa: E402  (private copies only: left out of the public version)
+    texts.TEXTS.update(private_export.TEXTS)
+except ImportError:
+    private_export = None
 
 import pyglet  # noqa: E402
 from pyglet.gl import (  # noqa: E402
@@ -80,7 +91,7 @@ from pyglet.gl import (  # noqa: E402
     GL_DYNAMIC_DRAW, GL_FALSE, GL_FUNC_ADD, GL_FUNC_REVERSE_SUBTRACT, GL_ONE, GL_STATIC_DRAW, GL_TRUE,
     GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, glBindBuffer,
-    glBindTexture, glBindVertexArray, glBlendFunc, glBufferData, glClear, glClearColor,
+    glBindTexture, glBindVertexArray, glBlendFunc, glBufferData, glBufferSubData, glClear, glClearColor,
     glDisable, glDrawArrays, glEnable, glEnableVertexAttribArray, glGenBuffers, glGenTextures,
     glBlendEquation, glDeleteBuffers, glDeleteTextures, glDeleteVertexArrays, glDepthMask,
     glGenVertexArrays, glGenerateMipmap, glPolygonMode,
@@ -120,6 +131,8 @@ COLOR_COLLISION_BOXES = (255, 150, 20)
 # and put back at a fixed point (teleport)
 COLOR_DEATH = (235, 25, 25)
 COLOR_TELEPORT = (170, 70, 255)
+# the zones that hurt (flag Damage zones, action 0x48)
+COLOR_DAMAGE = (255, 225, 40)
 # the heightmap (flags Ground, Hard walls) and the fake walls (Fake walls)
 COLOR_GROUND = (60, 170, 80)              # covered by a visible face
 COLOR_INVISIBLE_GROUND = (140, 255, 60)  # no visible face above
@@ -138,6 +151,7 @@ OVERLAYS = {
     "collision_boxes": "show_collision_boxes", "collision_boxes_lines": "show_collision_boxes",
     "death_zones": "show_death_zones", "death_zones_lines": "show_death_zones",
     "death_floor": "show_death_floor", "death_floor_lines": "show_death_floor",
+    "damage_zones": "show_damage_zones", "damage_zones_lines": "show_damage_zones",
     "covered_ground": "show_ground", "invisible_ground": "show_ground",
     "pixel": "show_ground", "pixel_beam": "show_ground",
     "hard_walls": "show_hard_walls",
@@ -148,7 +162,7 @@ OVERLAYS = {
 FAMILIES = {
     "terrain_overlays": ("show_faces_1000", "show_no_collision"),
     "heightmap": ("show_ground", "show_hard_walls", "show_invisible_walls", "show_area_boxes"),
-    "zones": ("show_death_zones", "show_death_floor"),
+    "zones": ("show_death_zones", "show_death_floor", "show_damage_zones"),
     "collision_boxes": ("show_collision_boxes",),
 }
 assert set(OVERLAYS.values()) == {a for flags in FAMILIES.values() for a in flags}
@@ -208,7 +222,7 @@ class FaceGroup:
     """A group of triangles sharing texture and blending."""
 
     __slots__ = ("tex_id", "data", "vao", "vbo", "item_count", "category", "blend", "frames", "vaos",
-                 "spin")
+                 "spin", "sorted")
 
     def __init__(self, tex_id, category, blend=None, n_frames=0, spin=None):
         self.tex_id = tex_id
@@ -226,6 +240,70 @@ class FaceGroup:
         # rotating objects (action 0x26, finding 280): (pivot, units per
         # rule pass), with 4096 = one turn around the vertical axis
         self.spin = spin
+        # semi-transparent and still: drawn from BlendSorter, back to front
+        self.sorted = False
+
+
+class BlendSorter:
+    """The still semi-transparent triangles of the scene, drawn back to front
+    like the PlayStation's ordering table (sorted by depth): with "half"
+    blending (mode 0, B/2 + F/2) the order changes the result, and drawn
+    group by group a face behind could come out over one in front (water,
+    glass, halos). The additive and subtractive modes go in the same order:
+    for them it changes nothing.
+
+    One buffer for all of them; it is sorted again only when the camera
+    moves, by the depth of each triangle's centre along the view direction,
+    and drawn in runs of consecutive triangles of the same group (texture
+    and mode). Left out, and drawn as before after these: animated and
+    rotating objects (their geometry changes with the tick), the sky and
+    the flags' overlays."""
+
+    def __init__(self):
+        self.centres = []        # (x, y, z) per triangle
+        self.owner = []          # the group of each triangle
+        self.chunks = []         # the triangle's 3 vertices, as bytes
+        self.order = None
+        self.runs = []           # [group, first vertex, vertex count]
+        self.camera = None
+        self.vao = self.vbo = None
+
+    def add(self, face_group, data):
+        for k in range(0, len(data) - 23, 24):
+            self.centres.append(((data[k] + data[k + 8] + data[k + 16]) / 3.0,
+                                 (data[k + 1] + data[k + 9] + data[k + 17]) / 3.0,
+                                 (data[k + 2] + data[k + 10] + data[k + 18]) / 3.0))
+            self.owner.append(face_group)
+            self.chunks.append(data[k:k + 24].tobytes())
+
+    def back_to_front(self, pos, forward):
+        """The triangle indices, the farthest first."""
+        px, py, pz = pos
+        fx, fy, fz = forward
+        c = self.centres
+        return sorted(range(len(c)), key=lambda i: -((c[i][0] - px) * fx + (c[i][1] - py) * fy
+                                                      + (c[i][2] - pz) * fz))
+
+    def update(self, pos, forward):
+        """Sorts again if the camera moved; uploads only if the order changed."""
+        camera = (tuple(pos), tuple(forward))
+        if camera == self.camera or not self.chunks:
+            return
+        self.camera = camera
+        order = self.back_to_front(pos, forward)
+        if order == self.order:
+            return
+        self.order = order
+        data = b"".join(self.chunks[i] for i in order)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, len(data), data)
+        runs, owner = [], self.owner
+        for n, i in enumerate(order):
+            if runs and runs[-1][0] is owner[i]:
+                runs[-1][2] += 3
+            else:
+                runs.append([owner[i], n * 3, 3])
+        self.runs = runs
 
 
 # conditions that can be evaluated at level start, when table 1
@@ -315,7 +393,7 @@ class Level:
         except Exception:  # noqa: BLE001
             self.collision_blocks = []     # without a heightmap no face is judged
         # zones that kill, hurt or teleport: a fall into one is not a safe fall
-        self.trap_boxes = [b for z in self.lvl["zones"] if (b := zones.trap_box(z))]
+        self.trap_zones = [s for z in self.lvl["zones"] if (s := zones.trap_shape(z))]
         self.face_groups: dict[tuple, FaceGroup] = {}
         self.stat = {"terrain": 0, "props": 0, "sky_dome": 0, "triangles": 0, "untextured": 0,
                      "from_game": 0, "fallback": 0, "clones": 0, "clones_at_start": 0,
@@ -522,7 +600,7 @@ class Level:
                 kind = collision.no_collision_kind(
                     self.collision_blocks,
                     [tuple(vertices[h][k] + sp[k] for k in range(3)) for h in vl.corners],
-                    self.trap_boxes)
+                    self.trap_zones)
                 if kind:
                     kinds[kind].append(vl)
             for kind, category, draw_color, blend in (
@@ -607,7 +685,12 @@ class Level:
         diagonals). Touches neither bounds nor counters."""
         x0, y0, z0, x1, y1, z1 = box
         box_corners = [(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
-        # index = 4*ix + 2*iy + iz; each face with its 4 corners in Z order
+        self._add_hexahedron(box_corners, category, draw_color, rot, scale_factor, pos, filled)
+
+    def _add_hexahedron(self, box_corners, category, draw_color, rot=None, scale_factor=1.0, pos=(0, 0, 0),
+                        filled=True):
+        """As _add_box, from 8 corners (a turned zone): index = 4*ix + 2*iy + iz."""
+        # each face with its 4 corners in Z order
         face_list = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 4, 5), (2, 3, 6, 7), (0, 2, 4, 6), (1, 3, 5, 7)]
         if filled:
             faces = [geo.Face(f, None, None, [draw_color] * 4, 3) for f in face_list]
@@ -730,17 +813,25 @@ class Level:
         """The zones that kill the player or respawn them directly (zones.py): red for
         death, purple for teleport. Those at least half the size of the terrain
         footprint are the "death floor" (flag Death floor), the others the
-        death zones (flag Death zones)."""
+        death zones (flag Death zones). The zones that only hurt (action 0x48)
+        in yellow (flag Damage zones). Each with its rotation, as the game
+        tests it (zones.ZoneShape)."""
         lo, hi = self.terrain_lo, self.terrain_hi
         footprint = (hi[0] - lo[0]) * (hi[2] - lo[2]) * geo.UNITS_PER_METER ** 2
         for z in self.lvl["zones"]:
             kind_of = zones.kind_of(z)
-            box = zones.zone_box(z) if kind_of else None
-            if box is None:
+            if kind_of is None and not zones.hurts(z):
                 continue
-            area = (box[3] - box[0]) * (box[5] - box[2])
-            category = "death_floor" if footprint and area >= zones.FLOOR_FRACTION * footprint else "death_zones"
-            self._add_box(box, category, COLOR_DEATH if kind_of == "death" else COLOR_TELEPORT)
+            shape = zones.shape_of(z)
+            if shape is None:
+                continue
+            if kind_of is None:
+                category, draw_color = "damage_zones", COLOR_DAMAGE
+            else:
+                category = ("death_floor" if footprint and shape.area >= zones.FLOOR_FRACTION * footprint
+                            else "death_zones")
+                draw_color = COLOR_DEATH if kind_of == "death" else COLOR_TELEPORT
+            self._add_hexahedron(shape.corners(), category, draw_color)
             self.stat[category] = self.stat.get(category, 0) + 1
 
     def _build_clones(self, models):
@@ -954,7 +1045,11 @@ class Viewer(pyglet.window.Window):
         self.level_files = level_files
         self.cache = cache
         self.index = index
+        # the background filling of the piece cache: turned on by main()
+        self.warm_cache = False
+        self._warmer = None
         self.current_level = None
+        self._blend_sorter = None       # the still semi-transparent faces, back to front
         self.screenshot = screenshot
         self.scale_factor = scale_factor if scale_factor is not None else user_settings["texture_scale"]
 
@@ -970,6 +1065,15 @@ class Viewer(pyglet.window.Window):
         # the glitch-hunting flags: always off at every start, never saved
         for attr in set(OVERLAYS.values()):
             setattr(self, attr, False)
+        # Camera and points: the shadow circle is off at every start, like the flags
+        self.show_camera_shadow = False
+        self._shadow_area = None      # the area of the last shadow query (the game's hint)
+        self._shadow_vao = self._shadow_vbo = None
+        self._feedback = None         # (menu item, text key, time): "copied ✓" for a moment
+        self._bookmark_i = 0          # the bookmark whose page is open
+        self._delete_armed = False    # the first Enter on Delete
+        # F1: interface hidden; the menu stays where it is but takes no input
+        self.ui_hidden = False
         self.show_sky = user_settings["sky"]
         self.albedo = user_settings["albedo"]   # factor on the vertex color of textured faces
         self.show_blending = user_settings["blending"]
@@ -999,7 +1103,18 @@ class Viewer(pyglet.window.Window):
         self.signature = pyglet.text.Label(SIGNATURE, font_name=menumod.FONT, font_size=14,
                                        color=(235, 238, 245, 210),
                                        anchor_x="right", anchor_y="bottom")
+        # keys (Help -> Keyboard) and gamepad (Help -> Gamepad), as in the CTR viewer
+        self.bindings = keybinds.Bindings(user_settings["key_bindings"])
+        texts.key_of_action = lambda action: keybinds.key_name(self.bindings.key(action), t)
+        self.gamepad_enabled = user_settings["gamepad"]
+        self.focused = True
+        self.gamepad = None if screenshot else gamepadmod.Gamepad(self._on_pad_button)
+        self.keyboard_page = keys_page.KeyboardPage(self.bindings, self._save_bindings)
+        self.gamepad_page = keys_page.GamepadPage(
+            lambda: (self.gamepad is not None and self.gamepad.connected,
+                     self.gamepad.name if self.gamepad is not None else ""))
         self.menu = menumod.Menu(self._build_pages())
+        self.menu.back_keys = lambda: (self.bindings.key("menu_back"), self.bindings.key("menu_back_alt"))
         self._load_icon()
         self._background = self._load_background()
         if self.level_files and self.index is not None:
@@ -1053,6 +1168,7 @@ class Viewer(pyglet.window.Window):
         current = (os.path.basename(self.level_files[self.index]).lower()
                    if self.current_level is not None and self.level_files else None)
         self.level_files = levels_in(folder)
+        self.start_warmer()
         names = [os.path.basename(p).lower() for p in self.level_files]
         if current in names:
             self.index = names.index(current)
@@ -1062,6 +1178,14 @@ class Viewer(pyglet.window.Window):
         self.current_level = None
         self.index = 0
         self.menu.show(self._start_page())
+
+    def start_warmer(self):
+        """Starts cache_warmer.py on the levels folder. One started earlier on
+        another folder is not killed (it could be saving a level): it ends
+        by itself, like all of them when the viewer closes."""
+        if not self.warm_cache or not self.level_files:
+            return
+        self._warmer = cache_warmer.start(self.folder, self.cache)
 
     def _choose_levels_dir(self):
         """The Windows dialog to choose the folder; the choice is kept
@@ -1110,7 +1234,18 @@ class Viewer(pyglet.window.Window):
         user_settings["fullscreen"], user_settings["bilinear_filter"] = self.fullscreen, self.bilinear
         user_settings["texture_scale"], user_settings["albedo"] = self.scale_factor, float(self.albedo)
         user_settings["field_of_view"], user_settings["status_bar"] = self.fov, self.show_status_bar
+        user_settings["key_bindings"], user_settings["gamepad"] = self.bindings.stored(), self.gamepad_enabled
         user_settings.persist()
+
+    def _save_bindings(self):
+        """Help -> Keyboard: a complete set of keys is saved at once."""
+        self.user_settings["key_bindings"] = self.bindings.stored()
+        self.user_settings.persist()
+
+    def _set_gamepad(self, on):
+        self.gamepad_enabled = on
+        if self.gamepad is not None:
+            self.gamepad.release()
 
     def on_close(self):
         self._save_settings()
@@ -1171,6 +1306,151 @@ class Viewer(pyglet.window.Window):
             self.pos, self.yaw, self.pitch = Vec3(x, y, z), yaw, pitch
         self.menu.hide()
 
+    # -------------------------------------------------- camera and points
+
+    SHADOW_RADIUS = 32      # game units (25 cm): a marker, not the game's shadow size
+    FEEDBACK_SECONDS = 2.0
+
+    @staticmethod
+    def _game_point(pos):
+        """A viewer position (metres, axes x, -y, -z) in integer game units."""
+        u = geo.UNITS_PER_METER
+        return round(pos.x * u), round(-pos.y * u), round(-pos.z * u)
+
+    def _shadow_of(self, pos):
+        """The shadow point under a camera position: the point in game units
+        and the collision block it lands on (collision.ground_below: the
+        game's ground query, falling straight down), or the camera point and
+        None when nothing is under it."""
+        gx, gy, gz = self._game_point(pos)
+        found = collision.ground_below(self.current_level.collision_blocks, gx, gy, gz)
+        if found is None:
+            return (gx, gy, gz), None
+        ground, grid_block = found
+        return (gx, ground, gz), grid_block
+
+    @staticmethod
+    def _coords_text(point):
+        return ", ".join(str(round(w)) for w in point)
+
+    def _shadow_text(self, pos):
+        point, grid_block = self._shadow_of(pos)
+        if grid_block is None:
+            return t("camera.no_ground")
+        return f"{self._coords_text(point)}   ·   {t('camera.area', area=grid_block.area)}"
+
+    def _bookmarks(self):
+        """The bookmarks of the open level, only the well-formed ones (the
+        settings file can be edited by hand)."""
+        if self.current_level is None:
+            return []
+        marks = self.user_settings["bookmarks"].get(self.current_level.name, [])
+        keys = ("x", "y", "z", "yaw", "pitch")
+        return [m for m in marks if isinstance(m, dict) and isinstance(m.get("n"), int)
+                and all(isinstance(m.get(k), (int, float)) and not isinstance(m.get(k), bool) for k in keys)] \
+            if isinstance(marks, list) else []
+
+    def _store_bookmarks(self, marks):
+        all_marks = dict(self.user_settings["bookmarks"])     # never the DEFAULTS dict
+        if marks:
+            all_marks[self.current_level.name] = marks
+        else:
+            all_marks.pop(self.current_level.name, None)
+        self.user_settings["bookmarks"] = all_marks
+        self.user_settings.persist()
+
+    def _camera_mark(self, n):
+        u = geo.UNITS_PER_METER
+        return {"n": n, "x": round(self.pos.x * u, 2), "y": round(-self.pos.y * u, 2),
+                "z": round(-self.pos.z * u, 2), "yaw": round(self.yaw, 2), "pitch": round(self.pitch, 2)}
+
+    @staticmethod
+    def _mark_pos(mark):
+        u = geo.UNITS_PER_METER
+        return Vec3(mark["x"] / u, -mark["y"] / u, -mark["z"] / u)
+
+    @staticmethod
+    def _mark_name(mark):
+        name = mark.get("name")
+        return name if isinstance(name, str) and name.strip() else t("camera.bookmark", n=mark["n"])
+
+    def _add_bookmark(self):
+        marks = self._bookmarks()
+        marks.append(self._camera_mark(max((m["n"] for m in marks), default=0) + 1))
+        self._store_bookmarks(marks)
+        self.menu.rebuild()
+
+    def _open_bookmark(self, i):
+        self._bookmark_i = i
+        self._delete_armed = False
+        self.menu.open_page("bookmark")
+
+    def _go_to_bookmark(self):
+        marks = self._bookmarks()
+        if 0 <= self._bookmark_i < len(marks):
+            mark = marks[self._bookmark_i]
+            self.pos, self.yaw, self.pitch = self._mark_pos(mark), float(mark["yaw"]), float(mark["pitch"])
+            self.menu.hide()
+
+    def _replace_bookmark(self, item_key):
+        marks = self._bookmarks()
+        if 0 <= self._bookmark_i < len(marks):
+            old = marks[self._bookmark_i]
+            new = self._camera_mark(old["n"])
+            if "name" in old:
+                new["name"] = old["name"]
+            marks[self._bookmark_i] = new
+            self._store_bookmarks(marks)
+            self._delete_armed = False
+            self._feedback = (item_key, time.monotonic())
+            self.menu.rebuild()
+
+    def _delete_bookmark(self):
+        marks = self._bookmarks()
+        if not self._delete_armed:
+            self._delete_armed = True
+            return
+        if 0 <= self._bookmark_i < len(marks):
+            del marks[self._bookmark_i]
+            self._store_bookmarks(marks)
+        self._delete_armed = False
+        self.menu.go_back()
+        self.menu.rebuild()
+
+    def _point_text(self, kind, pos, label):
+        """One point for the clipboard. `kind` "lua": a table entry like the
+        waypoints of BBLIT_Tasing.lua; "private": the line of private_export.
+        The shadow point in game units; with nothing under the camera, the
+        camera point, said in the comment."""
+        (x, y, z), grid_block = self._shadow_of(pos)
+        note = t("export.shadow") if grid_block is not None else t("export.camera_no_ground")
+        level = self.current_level.name
+        if kind == "private":
+            return private_export.line(level, (x, y, z), label, note)
+        return f"{{ X = {x}, Y = {y}, Z = {z} }}, -- BBLIT {level}, {label}, {note}"
+
+    def _all_bookmarks_lua(self):
+        level = self.current_level.name
+        table_name = re.sub(r"\W", "_", f"{t('export.table_name')}_{level}")
+        lines = [f"-- BBLIT {level}: {t('export.table_comment')}", f"local {table_name} = {{"]
+        lines += ["  " + self._point_text("lua", self._mark_pos(m), self._mark_name(m)) for m in self._bookmarks()]
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    def _copy(self, item_key, text):
+        try:
+            self.set_clipboard_text(text)
+        except Exception as e:  # noqa: BLE001
+            print(f"clipboard not available: {e}")
+            return
+        self._delete_armed = False
+        self._feedback = (item_key, time.monotonic())
+
+    def _feedback_text(self, item_key, text_key="camera.copied"):
+        fresh = (self._feedback is not None and self._feedback[0] == item_key
+                 and time.monotonic() - self._feedback[1] < self.FEEDBACK_SECONDS)
+        return t(text_key) if fresh else ""
+
     def _build_pages(self):
         M = menumod
 
@@ -1196,23 +1476,34 @@ class Viewer(pyglet.window.Window):
             return {os.path.splitext(os.path.basename(p))[0].upper(): i
                     for i, p in enumerate(self.level_files)}
 
-        def level_item(title_text, levid, file, part_label, note, single_part, available_files, extra):
+        def level_item(title_text, levid, file, part_label, note, single_part, available_files, extra,
+                       under_title=False):
             """A menu row for a level: the part (or the title, if the
             level is in a single piece), the file on the right, the LevID below. If
-            the file is not in the levels folder the row is grayed out."""
+            the file is not in the levels folder the row is grayed out. Under its
+            own title row (`under_title`) a single level shows the part, the
+            note or, with neither, the title again. The game's own names follow
+            the interface language (levels.name), read when drawn."""
             i = available_files.get(file.upper())
+            ti_of = lambda ti=title_text: levels.name(ti)
+            note_of = lambda n=note: levels.name(n)
             if part_label is not None:
-                label_text = lambda p=part_label, n=note: t("load.part", n=p) + (f" — {n}" if n else "")
+                label_text = lambda p=part_label: t("load.part", n=p) + (f" — {note_of()}" if note_of() else "")
+            elif under_title:
+                label_text = lambda: note_of() or ti_of()
             else:
-                label_text = lambda ti=title_text, n=note: ti + (f" ({n})" if n else "")
+                label_text = lambda: ti_of() + (f" ({note_of()})" if note_of() else "")
             if single_part and part_label is not None:
-                label_text = lambda ti=title_text, p=part_label: f"{ti} — {t('load.part', n=p)}"
+                label_text = lambda p=part_label: f"{ti_of()} — {t('load.part', n=p)}"
             if extra.get("label"):
                 label_text = lambda e=extra["label"]: t(e)
-            # the full name in the description: the label may be shortened
-            entry_name = lambda ti=title_text, p=part_label, n=note, e=extra.get("label"): " — ".join(
-                x for x in (ti, t(e) if e else "", t("load.part", n=p) if p is not None else "", n)
-                if x)
+            # the full name in the description: the label may be shortened.
+            # The Debug build adds the level's old note from the LevID
+            # spreadsheet, for now
+            old_note = extra.get("sheet_note") if self.build == "Debug" else None
+            entry_name = lambda p=part_label, e=extra.get("label"), o=old_note: " — ".join(
+                x for x in (ti_of(), t(e) if e else "", t("load.part", n=p) if p is not None else "", note_of())
+                if x) + (f" · {o}" if o else "")
             if levid is None:
                 desc = lambda f=file, nm=entry_name: t("load.desc_variant", entry_name=nm(), file=f)
             else:
@@ -1226,15 +1517,20 @@ class Viewer(pyglet.window.Window):
             item.disabled = i is None
             return item
 
-        def level_list(titles):
+        def level_list(titles, every_title=False):
+            """The rows of a list of titles. A title with several levels gets
+            a title row above its parts; with `every_title` (the eras, Extra)
+            also a title with a single level, so that it does not look like
+            one more part of the title above."""
             menu_items, available_files = [], per_file()
             for title_text, title_entries in titles:
                 single_part = len(title_entries) == 1
-                if not single_part:
-                    menu_items.append(M.Section(None, label_text=lambda ti=title_text: ti))
+                under_title = not single_part or every_title
+                if under_title:
+                    menu_items.append(M.Section(None, label_text=lambda ti=title_text: levels.name(ti)))
                 for v in title_entries:
-                    menu_items.append(level_item(title_text, v[0], v[1], v[2], v[3], single_part, available_files,
-                                             levels.extra_of(v)))
+                    menu_items.append(level_item(title_text, v[0], v[1], v[2], v[3], single_part and not under_title,
+                                             available_files, levels.extra_of(v), under_title))
             return menu_items
 
         def load_items():
@@ -1249,7 +1545,7 @@ class Viewer(pyglet.window.Window):
 
         def era_page(titles, bonus):
             def build_items():
-                menu_items = level_list(titles)
+                menu_items = level_list(titles, every_title=True)
                 if bonus:
                     menu_items += [M.Section("load.bonus")] + level_list(bonus)
                 return menu_items + [M.Back()]
@@ -1263,7 +1559,7 @@ class Viewer(pyglet.window.Window):
                     # selector): the title only once
                     if not (len(titles) == 1 and titles[0][0] == t(section)):
                         menu_items.append(M.Section(section))
-                    menu_items += level_list(titles)
+                    menu_items += level_list(titles, every_title=section_list is levels.EXTRA)
                 if section_list is levels.EXTRA and self.build == "Debug":
                     # only in the Debug build, for now
                     menu_items += [M.Section(None, label_text=lambda: ""),
@@ -1284,16 +1580,77 @@ class Viewer(pyglet.window.Window):
                     item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
                     item("level.death_zones", "show_death_zones", "desc.death_zones"),
                     item("level.death_floor", "show_death_floor", "desc.death_floor"),
+                    item("level.damage_zones", "show_damage_zones", "desc.damage_zones"),
                     item("level.ground", "show_ground", "desc.ground"),
                     item("level.hard_walls", "show_hard_walls", "desc.hard_walls"),
                     item("level.area_boxes", "show_area_boxes", "desc.area_boxes"),
                     item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
                     M.Back()]
 
+        def copy_item(item_key, desc, make_text, disabled=False):
+            """An Action that copies to the clipboard and says "copied ✓"."""
+            item = M.Action(item_key, lambda: self._copy(item_key, make_text()), desc=desc,
+                            right_text=lambda: self._feedback_text(item_key))
+            item.disabled = disabled
+            return item
+
+        def camera():
+            if self.current_level is None:
+                return [M.Info(lambda: t("level.no_level")), M.Back()]
+            marks = self._bookmarks()
+            menu_items = [M.Info(lambda: t("camera.now"), lambda: self._coords_text(self._game_point(self.pos))),
+                          M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(self.pos)),
+                          M.YesNo("camera.show_shadow", lambda: self.show_camera_shadow,
+                                  lambda v: setattr(self, "show_camera_shadow", v), "desc.show_shadow"),
+                          M.Action("camera.add", self._add_bookmark, desc="desc.camera_add"),
+                          *([copy_item("camera.copy_ce", "desc.copy_ce",
+                                       lambda: self._point_text("private", self.pos, t("camera.now")))]
+                            if private_export else []),
+                          copy_item("camera.copy_lua", "desc.copy_lua",
+                                    lambda: self._point_text("lua", self.pos, t("camera.now"))),
+                          copy_item("camera.copy_all_lua", "desc.copy_all_lua", self._all_bookmarks_lua,
+                                    disabled=not marks),
+                          M.Section("camera.bookmarks")]
+            for i, mark in enumerate(marks):
+                menu_items.append(M.Action(None, lambda i=i: self._open_bookmark(i), desc="desc.bookmark",
+                                           label_text=lambda m=mark: self._mark_name(m),
+                                           right_text=lambda m=mark: self._coords_text(
+                                               (m["x"], m["y"], m["z"])) + "   ›"))
+            if not marks:
+                menu_items.append(M.Info(lambda: t("camera.no_bookmarks")))
+            menu_items.append(M.Back())
+            return menu_items
+
+        def bookmark():
+            marks = self._bookmarks()
+            if not (self.current_level is not None and 0 <= self._bookmark_i < len(marks)):
+                return [M.Info(lambda: t("camera.no_bookmarks")), M.Back()]
+            mark = marks[self._bookmark_i]
+            pos = self._mark_pos(mark)
+            name = self._mark_name(mark)
+            return [M.Info(lambda: t("camera.now"), lambda: self._coords_text((mark["x"], mark["y"], mark["z"]))),
+                    M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(pos)),
+                    M.Action("bookmark.go", self._go_to_bookmark, desc="desc.bookmark_go"),
+                    M.Action("bookmark.replace", lambda: self._replace_bookmark("bookmark.replace"),
+                             right_text=lambda: self._feedback_text("bookmark.replace", "bookmark.replaced")),
+                    *([copy_item("camera.copy_ce", "desc.copy_ce", lambda: self._point_text("private", pos, name))]
+                      if private_export else []),
+                    copy_item("camera.copy_lua", "desc.copy_lua", lambda: self._point_text("lua", pos, name)),
+                    M.Action(None, self._delete_bookmark, desc="desc.bookmark_delete",
+                             label_text=lambda: t("bookmark.confirm_delete" if self._delete_armed
+                                                  else "bookmark.delete")),
+                    M.Back()]
+
+        def bookmark_title():
+            marks = self._bookmarks()
+            name = self._mark_name(marks[self._bookmark_i]) if 0 <= self._bookmark_i < len(marks) else "—"
+            return t("bookmark.title", name=name, level=self.current_level.name if self.current_level else "—")
+
         def level():
             if self.current_level is None:
                 return [M.Info(lambda: t("level.no_level")), M.Back()]
             menu_items = [M.Submenu("level.flags", "flags", desc="desc.flags"),
+                    M.Submenu("level.camera", "camera", desc="desc.camera"),
                     M.Section("level.rendering"),
                     M.YesNo("level.texture", lambda: self.show_textures,
                            lambda v: setattr(self, "show_textures", v), "desc.texture"),
@@ -1348,6 +1705,9 @@ class Viewer(pyglet.window.Window):
                              texts.language, self._set_language, "desc.language"),
                     M.YesNo("general.status_bar", lambda: self.show_status_bar,
                            lambda v: setattr(self, "show_status_bar", v), "desc.status_bar"),
+                    M.Submenu("general.keys", "help", desc="desc.general_keys"),
+                    M.YesNo("general.gamepad", lambda: self.gamepad_enabled, self._set_gamepad,
+                            "desc.general_gamepad"),
                     M.Action("general.folder", self._choose_levels_dir,
                              desc=lambda: t("general.desc_folder", c=self.folder or "—"),
                              right_text=lambda: os.path.basename(self.folder or "") or "—"),
@@ -1368,19 +1728,10 @@ class Viewer(pyglet.window.Window):
                     M.Action("menu.quit", self.close)]
 
         def help_items():
-            # (key, or text key of its name; text key of the function)
-            lines = [("W A S D", "help.move"), ("Q / E", "help.up_down"),
-                     ("help.k.mouse", "help.look"), ("help.k.wheel", "help.wheel"),
-                     ("Shift / Ctrl", "help.shift"), ("Esc", "help.menu"),
-                     ("help.k.nav", "help.menu_nav"), ("Backspace / M", "help.back"),
-                     ("[  ]", "help.levels"), ("R", "help.reset"),
-                     ("T", "level.texture"), ("O", "level.props"), ("H", "level.sky"),
-                     ("M", "level.blending"), ("F", "level.wireframe"),
-                     ("N", "level.texanim"), ("G", "level.clones"), ("P", "help.pause"),
-                     ("- / +", "help.tps"), ("L", "video.filter"), ("help.k.alt", "help.fullscreen")]
-            return ([M.Info(lambda k=k: t(k), lambda c=c: t(c)) for k, c in lines]
-                    + [M.Back()])
-
+            # as in the CTR viewer: Help -> Keyboard / Gamepad (drawn pages)
+            return [M.Submenu("help.keyboard", "keyboard", desc="desc.help_keyboard"),
+                    M.Submenu("help.gamepad", "gamepad", desc="desc.help_gamepad"),
+                    M.Back()]
 
         return {
             # as in the CTR viewer: name and author on the main page
@@ -1393,10 +1744,15 @@ class Viewer(pyglet.window.Window):
             "level": M.Page(lambda: t("level.title",
                                           n=self.current_level.name if self.current_level else "—"), level),
             "flags": M.Page(lambda: t("level.flags"), flags, 440),
+            "camera": M.Page(lambda: t("camera.title", level=self.current_level.name if self.current_level else "—"),
+                             camera, 600),
+            "bookmark": M.Page(bookmark_title, bookmark, 600),
             "missing_data": M.Page(lambda: t("data.title"), data_items, 640),
             "video": M.Page(lambda: t("video.title"), video),
             "general": M.Page(lambda: t("general.title"), general_items),
-            "help": M.Page(lambda: t("help.title"), help_items, 520),
+            "help": M.Page(lambda: t("help.title"), help_items),
+            "keyboard": M.Page(lambda: t("help.keyboard"), lambda: [], custom=self.keyboard_page),
+            "gamepad": M.Page(lambda: t("help.gamepad"), lambda: [], custom=self.gamepad_page),
         }
 
     def _toggle_vsync(self, v):
@@ -1491,6 +1847,24 @@ class Viewer(pyglet.window.Window):
         face_group.vao, face_group.vbo, face_group.item_count = vao.value, vbo.value, len(face_group.data) // 8
         face_group.data = array("f")
 
+    def _upload_sorter(self, sorter):
+        """The buffer of the sorted semi-transparent triangles, filled in the
+        order of the first frame (BlendSorter.update)."""
+        if not sorter.chunks:
+            return
+        vao, vbo = ctypes.c_uint(), ctypes.c_uint()
+        glGenVertexArrays(1, ctypes.byref(vao))
+        glGenBuffers(1, ctypes.byref(vbo))
+        glBindVertexArray(vao.value)
+        glBindBuffer(GL_ARRAY_BUFFER, vbo.value)
+        glBufferData(GL_ARRAY_BUFFER, sum(len(c) for c in sorter.chunks), None, GL_DYNAMIC_DRAW)
+        for name, measure, offset in (("position", 3, 0), ("color", 3, 12), ("uv", 2, 24)):
+            place = self.program.attributes[name]["location"]
+            glEnableVertexAttribArray(place)
+            glVertexAttribPointer(place, measure, GL_FLOAT, False, 8 * 4, ctypes.c_void_p(offset))
+        glBindVertexArray(0)
+        sorter.vao, sorter.vbo = vao.value, vbo.value
+
     # -------------------------------------------------- level
 
     def _free_gpu(self, texture=True):
@@ -1504,6 +1878,11 @@ class Viewer(pyglet.window.Window):
             if face_group.vao:
                 vaos.add(face_group.vao)
                 vbos.add(face_group.vbo)
+        sorter = getattr(self, "_blend_sorter", None)
+        if sorter is not None and sorter.vao:
+            vaos.add(sorter.vao)
+            vbos.add(sorter.vbo)
+        self._blend_sorter = None
         if vaos:
             glDeleteVertexArrays(len(vaos), (ctypes.c_uint * len(vaos))(*vaos))
             glDeleteBuffers(len(vbos), (ctypes.c_uint * len(vbos))(*vbos))
@@ -1534,8 +1913,14 @@ class Viewer(pyglet.window.Window):
                                    families=families)
         if len(self._pieces) > n_known:
             level_cache.store(self.cache, name, self._signature, self._pieces)
+        self._blend_sorter = BlendSorter()
         for face_group in self.current_level.face_groups.values():
+            if (face_group.blend is not None and not face_group.frames and not face_group.spin
+                    and face_group.category not in OVERLAYS and face_group.category != "sky_dome"):
+                face_group.sorted = True
+                self._blend_sorter.add(face_group, face_group.data)
             self._upload(face_group)
+        self._upload_sorter(self._blend_sorter)
         self.lo, self.hi = self.current_level.bounds()
         lo, hi = self.current_level.terrain_lo, self.current_level.terrain_hi
         if camera:
@@ -1579,61 +1964,108 @@ class Viewer(pyglet.window.Window):
         if self.screenshot:
             return      # screenshot mode: see update
         k = pyglet.window.key
+        if self.menu.capturing():
+            # Help -> Keyboard waits for a key: every key goes there, Esc too
+            self.menu.press(symbol, modifiers)
+            return pyglet.event.EVENT_HANDLED
+        if symbol == self.bindings.key("hide_ui") and self.current_level is not None:
+            # the interface covered: nothing drawn over the scene, and the
+            # menu (even if open) takes no keys, mouse or wheel until F1 again
+            self.ui_hidden = not self.ui_hidden
+            return pyglet.event.EVENT_HANDLED
+        if self.ui_hidden and symbol == k.ESCAPE:
+            self.ui_hidden = False      # Esc uncovers, and does nothing else
+            return pyglet.event.EVENT_HANDLED
         if symbol == k.ESCAPE:
-            # as in the CTR viewer: Esc opens and closes the menu, Exit quits
-            if self.current_level is None:
-                self.menu.show(self._start_page())    # without a level the menu stays
-            elif self.menu.is_open:
-                self.menu.hide()
-                self._save_settings()
-            else:
-                self.held_keys.clear()
-                if self.menu.stack and self.menu.stack[0][0] == "missing_data":
-                    self.menu.show()      # from the no-levels screen to the main page
-                else:
-                    self.menu.reopen()      # where it was left
+            self._toggle_menu()
             return pyglet.event.EVENT_HANDLED    # pyglet would close the window
         if symbol in (k.ENTER, k.NUM_ENTER) and modifiers & k.MOD_ALT:
             self.set_fullscreen(not self.fullscreen)
             return
-        if self.menu.press(symbol, modifiers) or self.current_level is None:
+        if (not self.ui_hidden and self.menu.press(symbol, modifiers)) or self.current_level is None:
             return
-        if symbol == k.T:
+        actions = self.bindings.actions_for(symbol, "scene")
+        if symbol in (k.NUM_SUBTRACT, k.NUM_ADD):
+            actions = ["tps_down" if symbol == k.NUM_SUBTRACT else "tps_up"]    # fixed, besides the bound keys
+        for action in actions:
+            self._scene_action(action)
+        if not actions or all(a in ("camera_up", "camera_down") for a in actions):
+            self.held_keys.add(symbol)
+
+    def _toggle_menu(self):
+        """Esc (and Start on the gamepad): as in the CTR viewer, it opens and
+        closes the menu; Quit is in the menu."""
+        if self.current_level is None:
+            self.menu.show(self._start_page())    # without a level the menu stays
+        elif self.menu.is_open:
+            self.menu.hide()
+            self._save_settings()
+        else:
+            self.held_keys.clear()
+            if self.menu.stack and self.menu.stack[0][0] == "missing_data":
+                self.menu.show()      # from the no-levels screen to the main page
+            else:
+                self.menu.reopen()      # where it was left
+
+    def _scene_action(self, action):
+        """A rebindable action with the menu closed (keybinds.ACTIONS)."""
+        if action == "textures":
             self.show_textures = not self.show_textures
-        elif symbol == k.F:
+        elif action == "wireframe":
             self.wireframe = not self.wireframe
-        elif symbol == k.O:
+        elif action == "props":
             self.show_props = not self.show_props
-        elif symbol == k.H:
+        elif action == "sky":
             self.show_sky = not self.show_sky
-        elif symbol == k.M:
+        elif action == "blending":
             self.show_blending = not self.show_blending
-        elif symbol == k.G:
+        elif action == "clones":
             self.show_clones = (self.show_clones + 1) % 3
-        elif symbol == k.N:
+        elif action == "texanim":
             self.animated_textures = not self.animated_textures
-        elif symbol == k.L:
+        elif action == "filter":
             self._set_filter(not self.bilinear)
-        elif symbol == k.P:
+        elif action == "pause":
             self.fixed_tick = None
             self.paused = not self.paused
-        elif symbol in (k.MINUS, k.NUM_SUBTRACT, k.EQUAL, k.PLUS, k.NUM_ADD):
-            step = -1.0 if symbol in (k.MINUS, k.NUM_SUBTRACT) else 1.0
+        elif action in ("tps_down", "tps_up"):
+            step = -1.0 if action == "tps_down" else 1.0
             self._set_tps(max(1.0, min(60.0, self.tps + step)))
-        elif symbol == k.R:
+        elif action == "reset_camera":
             self.reset_camera()
-        elif symbol in (k.BRACKETLEFT, k.BRACKETRIGHT):
-            step = -1 if symbol == k.BRACKETLEFT else 1
+        elif action in ("level_prev", "level_next"):
+            step = -1 if action == "level_prev" else 1
             self.index = (self.index + step) % len(self.level_files)
             self.load_level(self.level_files[self.index])
-        else:
-            self.held_keys.add(symbol)
+
+    # the gamepad (gamepad.py; drawn in Help -> Gamepad)
+    PAD_MENU_KEYS = {"dpup": "UP", "dpdown": "DOWN", "dpleft": "LEFT", "dpright": "RIGHT", "a": "ENTER"}
+
+    def _on_pad_button(self, button):
+        # out of focus the pad belongs to the other window (an emulator)
+        if self.screenshot or not self.gamepad_enabled or not self.focused or self.menu.capturing():
+            return
+        k = pyglet.window.key
+        if button == "start":
+            if self.ui_hidden:
+                self.ui_hidden = False
+            else:
+                self._toggle_menu()
+        elif button == "back":
+            if self.current_level is not None:
+                self.ui_hidden = not self.ui_hidden
+        elif self.ui_hidden or not self.menu.is_open:
+            return
+        elif button in self.PAD_MENU_KEYS:
+            self.menu.press(getattr(k, self.PAD_MENU_KEYS[button]), 0)
+        elif button == "b":
+            self.menu.press(self.bindings.key("menu_back") or self.bindings.key("menu_back_alt"), 0)
 
     def on_key_release(self, symbol, modifiers):
         self.held_keys.discard(symbol)
 
     def on_mouse_press(self, x, y, button, modifiers):
-        if self.screenshot or self.menu.click(x, y, button):
+        if self.screenshot or (not self.ui_hidden and self.menu.click(x, y, button)):
             return
         if button == pyglet.window.mouse.RIGHT:
             self.looking = True
@@ -1645,7 +2077,7 @@ class Viewer(pyglet.window.Window):
             self.set_exclusive_mouse(False)
 
     def on_mouse_motion(self, x, y, dx, dy):
-        if self.screenshot or self.menu.mouse_over(x, y):
+        if self.screenshot or (not self.ui_hidden and self.menu.mouse_over(x, y)):
             return
         if self.looking:
             self.yaw += dx * 0.15
@@ -1654,14 +2086,20 @@ class Viewer(pyglet.window.Window):
     on_mouse_drag = lambda self, x, y, dx, dy, b, m: self.on_mouse_motion(x, y, dx, dy)  # noqa: E731
 
     def on_mouse_scroll(self, x, y, sx, sy):
-        if self.screenshot or self.menu.wheel(x, y, sy):
+        if self.screenshot or (not self.ui_hidden and self.menu.wheel(x, y, sy)):
             return
         self.speed = max(1.0, self.speed * (1.2 if sy > 0 else 1 / 1.2))
+
+    def on_activate(self):
+        self.focused = True
 
     def on_deactivate(self):
         """Out of focus (for example while switching to an emulator): no keys
         left held down and no mouse look, as in the CTR viewer."""
+        self.focused = False
         self.held_keys.clear()
+        if self.gamepad is not None:
+            self.gamepad.release()
         if self.looking:
             self.looking = False
             self.set_exclusive_mouse(False)
@@ -1673,17 +2111,30 @@ class Viewer(pyglet.window.Window):
             # in screenshot mode the window can steal focus from another
             # instance: keys pressed there would move this camera
             return
-        if self.menu.is_open or self.current_level is None:
+        if self._feedback is not None and time.monotonic() - self._feedback[1] >= self.FEEDBACK_SECONDS:
+            self._feedback = None       # "copied ✓" goes away
+            self.menu.dirty = True
+        if (self.menu.is_open and not self.ui_hidden) or self.current_level is None:
             return      # with the menu open (or no level) the camera stays still
         k = pyglet.window.key
+        pad = self.gamepad if (self.gamepad is not None and self.gamepad_enabled and self.focused
+                               and self.gamepad.connected) else None
+        if pad is not None:
+            # L2 / R2 held: camera speed down / up (like the wheel), right stick: look
+            trigger = pad.right_trigger - pad.left_trigger
+            if trigger:
+                self.speed = max(1.0, self.speed * 2.0 ** (trigger * dt * 1.5))
+            self.yaw += pad.right.x * 120.0 * dt
+            self.pitch = max(-89.0, min(89.0, self.pitch + pad.right.y * 90.0 * dt))
         move_speed = self.speed * dt
-        if k.LSHIFT in self.held_keys or k.RSHIFT in self.held_keys:
+        if k.LSHIFT in self.held_keys or k.RSHIFT in self.held_keys or (pad is not None and "a" in pad.held):
             move_speed *= 5
         if k.LCTRL in self.held_keys:
             move_speed *= 0.2
         j, p = math.radians(self.yaw), math.radians(self.pitch)
         forward = Vec3(math.cos(j) * math.cos(p), math.sin(p), math.sin(j) * math.cos(p))
         right_vec = Vec3(-math.sin(j), 0.0, math.cos(j))
+        up = Vec3(0.0, 1.0, 0.0)
         movement = Vec3(0.0, 0.0, 0.0)
         if k.W in self.held_keys:
             movement += forward
@@ -1693,18 +2144,25 @@ class Viewer(pyglet.window.Window):
             movement += right_vec
         if k.A in self.held_keys:
             movement -= right_vec
-        if k.E in self.held_keys:
-            movement += Vec3(0.0, 1.0, 0.0)
-        if k.Q in self.held_keys:
-            movement -= Vec3(0.0, 1.0, 0.0)
+        if self.bindings.key("camera_up") in self.held_keys:
+            movement += up
+        if self.bindings.key("camera_down") in self.held_keys:
+            movement -= up
+        if pad is not None:
+            # d-pad like WASD, L1 / R1 down / up
+            movement += forward * pad.dpad[1] + right_vec * pad.dpad[0]
+            movement += up * (("rightshoulder" in pad.held) - ("leftshoulder" in pad.held))
         if movement.length() > 0:
             self.pos += movement.normalize() * move_speed
+        if pad is not None and (pad.left.x or pad.left.y):
+            # the left stick moves in proportion to how far it is pushed
+            self.pos += (forward * pad.left.y + right_vec * pad.left.x) * move_speed
 
     # -------------------------------------------------- drawing
 
     def on_draw(self):
         if self.current_level is None:
-            # no level: the Dimension X space and the menu, always open
+            # no level: the blue background and the menu, always open
             self._draw_background()
             if not self.menu.is_open:
                 self.menu.show(self._start_page())
@@ -1823,11 +2281,26 @@ class Viewer(pyglet.window.Window):
         drawn_triangles += self._draw_sprites(forward, set_blend)
         set_blend(None)
 
-        # then the semi-transparent ones, without writing depth
+        # then the semi-transparent ones, without writing depth: the still
+        # ones back to front (BlendSorter), then the moving ones and the overlays
         if self.show_blending:
             glDepthMask(GL_FALSE)
+            sorter = self._blend_sorter
+            if sorter is not None and sorter.vao:
+                sorter.update(self.pos, forward)
+                shown = {id(g) for g in visible_groups}
+                glBindVertexArray(sorter.vao)
+                for face_group, first_idx, item_count in sorter.runs:
+                    if id(face_group) not in shown:
+                        continue
+                    tex = self._gl_texture(face_group.tex_id) if face_group.tex_id is not None else None
+                    self.program["has_texture"] = 1 if tex else 0
+                    glBindTexture(GL_TEXTURE_2D, tex or 0)
+                    set_blend(face_group.blend)
+                    glDrawArrays(GL_TRIANGLES, first_idx, item_count)
+                    drawn_triangles += item_count // 3
             for face_group in visible_groups:
-                if face_group.blend is not None:
+                if face_group.blend is not None and not face_group.sorted:
                     set_blend(face_group.blend)
                     drawn_triangles += draw_face_group(face_group)
             set_blend(None)
@@ -1836,6 +2309,9 @@ class Viewer(pyglet.window.Window):
             for face_group in visible_groups:
                 if face_group.blend is not None:
                     drawn_triangles += draw_face_group(face_group)
+
+        if self.show_camera_shadow:
+            self._draw_camera_shadow()
 
         glBindVertexArray(0)
         self.program.stop()
@@ -1847,11 +2323,13 @@ class Viewer(pyglet.window.Window):
         glBlendEquation(GL_FUNC_ADD)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         self.drawn_triangles = drawn_triangles
-        if self.show_status_bar:
-            self._draw_status_bar()
-        if self.menu.is_open and self.menu.stack and self.menu.stack[-1][0] == "main":
-            self._draw_signature()
-        self.menu.draw_menu(self)
+        if not self.ui_hidden:
+            # the drawn pages (Keyboard, Gamepad) take the whole window
+            if self.show_status_bar and self.menu.custom() is None:
+                self._draw_status_bar()
+            if self.menu.is_open and self.menu.stack and self.menu.stack[-1][0] == "main":
+                self._draw_signature()
+            self.menu.draw_menu(self)
         glEnable(GL_DEPTH_TEST)
 
     def _start_page(self):
@@ -1892,6 +2370,61 @@ class Viewer(pyglet.window.Window):
         glEnable(GL_BLEND)
         self._status_background.draw()
         self.status_bar.draw()
+
+    def _draw_camera_shadow(self):
+        """Camera and points -> Show the shadow: a black disc on the ground
+        the game's query finds under the camera (Viewer._shadow_of), 4 units
+        above it like the other overlays, and an amber rim drawn without
+        depth, so it shows even where the heightmap is under the visible
+        terrain. Nothing when there is no ground below."""
+        (gx, gy, gz), grid_block = self._shadow_of(self.pos)
+        if grid_block is None:
+            return
+        u = geo.UNITS_PER_METER
+        cx, cy, cz = gx / u, -(gy - 4) / u, -gz / u
+        r = self.SHADOW_RADIUS / u
+        steps = 32
+        ring = [(math.cos(2 * math.pi * i / steps), math.sin(2 * math.pi * i / steps)) for i in range(steps + 1)]
+        disc, rim = [], []
+        for (c0, s0), (c1, s1) in zip(ring, ring[1:]):
+            for px, pz in ((0.0, 0.0), (c0, s0), (c1, s1)):
+                disc += [cx + px * r, cy, cz + pz * r, 0.0, 0.0, 0.0, 0.0, 0.0]
+            inner, outer = 0.82 * r, r
+            quad = [(c0 * inner, s0 * inner), (c0 * outer, s0 * outer), (c1 * outer, s1 * outer),
+                    (c0 * inner, s0 * inner), (c1 * outer, s1 * outer), (c1 * inner, s1 * inner)]
+            for px, pz in quad:
+                rim += [cx + px, cy, cz + pz, 1.0, 0.72, 0.15, 0.0, 0.0]
+        if self._shadow_vao is None:
+            vao, vbo = ctypes.c_uint(), ctypes.c_uint()
+            glGenVertexArrays(1, ctypes.byref(vao))
+            glGenBuffers(1, ctypes.byref(vbo))
+            glBindVertexArray(vao.value)
+            glBindBuffer(GL_ARRAY_BUFFER, vbo.value)
+            for name, measure, offset in (("position", 3, 0), ("color", 3, 12), ("uv", 2, 24)):
+                place = self.program.attributes[name]["location"]
+                glEnableVertexAttribArray(place)
+                glVertexAttribPointer(place, measure, GL_FLOAT, False, 32, ctypes.c_void_p(offset))
+            self._shadow_vao, self._shadow_vbo = vao.value, vbo.value
+        glBindVertexArray(self._shadow_vao)
+        glBindBuffer(GL_ARRAY_BUFFER, self._shadow_vbo)
+        data = disc + rim
+        arr = (ctypes.c_float * len(data))(*data)
+        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(arr), arr, GL_DYNAMIC_DRAW)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        glBlendEquation(GL_FUNC_ADD)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        self.program["has_texture"], self.program["blend_scale"] = 0, 1.0
+        glDepthMask(GL_FALSE)
+        self.program["alpha"] = 0.6
+        glDrawArrays(GL_TRIANGLES, 0, len(disc) // 8)
+        glDisable(GL_DEPTH_TEST)
+        self.program["alpha"] = 0.9
+        glDrawArrays(GL_TRIANGLES, len(disc) // 8, len(rim) // 8)
+        glEnable(GL_DEPTH_TEST)
+        glDepthMask(GL_TRUE)
+        self.program["alpha"] = 1.0
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
 
     def _draw_sprites(self, forward, set_blend):
         """The sprites (torch flames, ...) as squares facing the camera."""
@@ -1963,11 +2496,13 @@ def main() -> None:
                    help="show the faces without collision")
     p.add_argument("--boxes", action="store_true", help="show the collision boxes")
     p.add_argument("--deathzones", action="store_true", help="show the death zones")
+    p.add_argument("--damagezones", action="store_true", help="show the zones that hurt")
     p.add_argument("--deathfloor", action="store_true", help="show the death floor")
     p.add_argument("--ground", action="store_true", help="show the collision ground")
     p.add_argument("--hardwalls", action="store_true", help="show the heightmap's hard walls")
     p.add_argument("--areaboxes", action="store_true", help="show the area boxes")
     p.add_argument("--faces1000", action="store_true", help="show the 0x1000 terrain faces")
+    p.add_argument("--camera-shadow", action="store_true", help="show the shadow point under the camera")
     p.add_argument("--clones", type=int, choices=(0, 1, 2),
                    help="cloned templates: 0 off, 1 at startup, 2 all (key G)")
     p.add_argument("--albedo", type=float, help="texture x vertex color factor (default 1; 2 is the PlayStation)")
@@ -1978,10 +2513,23 @@ def main() -> None:
     p.add_argument("--language", choices=texts.LANGUAGES, help="interface language")
     p.add_argument("--menu", help="open a menu page at startup (main, load, level, flags, video, "
                                   "general, help, extra): for verification screenshots")
+    p.add_argument("--warm-cache", metavar="FOLDER", help=argparse.SUPPRESS)
+    p.add_argument("--parent", type=int, help=argparse.SUPPRESS)
     args = p.parse_args()
+    if args.warm_cache:
+        # the background process that fills the piece cache (cache_warmer.py):
+        # no window, and no error box if something goes wrong
+        try:
+            cache_warmer.run(args.warm_cache, args.cache, args.parent)
+        except Exception:  # noqa: BLE001
+            pass
+        return
 
     v = Viewer(None, args.cache, screenshot=args.screenshot, scale_factor=args.scale_factor, language=args.language,
                data=args.data, level=args.level)
+    # not while taking screenshots: those are verification runs
+    v.warm_cache = not args.screenshot
+    v.start_warmer()
     if args.menu:
         v.menu.show("main")
         if args.menu != "main":
@@ -1998,6 +2546,8 @@ def main() -> None:
         v.show_collision_boxes = True
     if args.deathzones:
         v.show_death_zones = True
+    if args.damagezones:
+        v.show_damage_zones = True
     if args.deathfloor:
         v.show_death_floor = True
     if args.ground:
@@ -2008,6 +2558,8 @@ def main() -> None:
         v.show_area_boxes = True
     if args.faces1000:
         v.show_faces_1000 = True
+    if args.camera_shadow:
+        v.show_camera_shadow = True
     v.ensure_overlays()
     if args.clones is not None:
         v.show_clones = args.clones

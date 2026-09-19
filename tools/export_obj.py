@@ -265,8 +265,66 @@ def convex_order(pts) -> tuple[int, int, int, int]:
     return (0, 1, 2, 3)
 
 
+class TerrainSector:
+    """One entry group of a terrain object's stream (terrain_sectors)."""
+    __slots__ = ("kind", "pos", "end", "item_count", "points_pos", "point_count", "prims_pos", "prim_count")
+
+    def __init__(self, kind, pos, end, item_count, points_pos=0, point_count=0, prims_pos=0, prim_count=0):
+        self.kind = kind                # "sector", "wall" (0x1000) or "rejected" (no point block)
+        self.pos, self.end = pos, end   # first byte, and the byte after the last
+        self.item_count = item_count    # the dispatcher entries it takes
+        self.points_pos, self.point_count = points_pos, point_count   # the points, 12 bytes each
+        self.prims_pos, self.prim_count = prims_pos, prim_count       # the polygons
+
+
+def terrain_sectors(sec4: bytes, pos: int, n_prim: int):
+    """The sectors of one terrain object, from its stream at `pos` whose
+    dispatcher entries add up to `n_prim` (Ombelll's finding 150: header,
+    point block `0x44`, polygons, and field +0 of a header counts its
+    entries). The one walk of the sectors: read_terrain, census.py and the
+    diagnostics use it.
+
+    A sector can lack its header (finding 289): the stream starts with the
+    point block, and the polygons run up to the next header or point block.
+    Only 3 blocks on the disc, the first sector of CCMERLIN and L03A2_8 and
+    all of CCEND (no global vertices): walked entry by entry like the
+    game's dispatcher, each ends exactly on its vertex table (or on the
+    block's end)."""
+    running_sum = 0
+    while running_sum < n_prim:
+        if sec4[pos + 3] == 0x44:
+            point_count = struct.unpack_from("<H", sec4, pos)[0]
+            q = pos + 4 + 12 * point_count
+            n_poly, r = 0, q
+            while running_sum + 1 + n_poly < n_prim and sec4[r + 3] in MODES:
+                r += MODES[sec4[r + 3]][0]
+                n_poly += 1
+            yield TerrainSector("sector", pos, r, 1 + n_poly, pos + 4, point_count, q, n_poly)
+            running_sum += 1 + n_poly
+            pos = r
+            continue
+        item_count, mode, length_words, n_bound_faces = struct.unpack_from("<HHHH", sec4, pos)
+        reclen = length_words * 4
+        if reclen <= 0 or pos + reclen > len(sec4):
+            return
+        running_sum += item_count
+        if mode == 0x1000:
+            yield TerrainSector("wall", pos, pos + reclen, item_count)
+        else:
+            # the header takes 8 bytes plus max(n_bound_faces, 1) faces of 8: even without
+            # bounding faces the dispatcher step still skips one
+            p = pos + 8 + max(n_bound_faces, 1) * 8
+            point_count, tag = struct.unpack_from("<HH", sec4, p)
+            if tag != 0x4400:
+                yield TerrainSector("rejected", pos, pos + reclen, item_count)
+            else:
+                yield TerrainSector("sector", pos, pos + reclen, item_count, p + 4, point_count,
+                                    p + 4 + 12 * point_count, max(item_count - 2, 0))
+        pos += reclen
+
+
 def read_terrain(sec4: bytes, offset: int, invisible_walls: list | None = None):
-    """Reads a terrain chunk as a list of sectors.
+    """Reads a terrain chunk as a list of sectors (terrain_sectors).
 
     With `invisible_walls` (a list) it also collects the invisible walls (modus 0x1000):
     one quad per record, indices into the block's global vertex list
@@ -287,56 +345,34 @@ def read_terrain(sec4: bytes, offset: int, invisible_walls: list | None = None):
             vertices.append((x, y, z))
 
         stat["expected"] += n_prim
-        pos, end_pos = basis + pt, basis + pt
-        # field +0 counts the dispatcher entries: the chain ends when their
-        # sum reaches n_prim (Ombelll's finding 150)
-        running_sum = 0
-        while running_sum < n_prim:
-            item_count, mode, length_words, n_bound_faces = struct.unpack_from("<HHHH", sec4, pos)
-            reclen = length_words * 4
-            if reclen <= 0 or pos + reclen > len(sec4):
-                break
+        end_pos = basis + pt
+        for sector in terrain_sectors(sec4, basis + pt, n_prim):
             stat["sectors"] += 1
-            stat["polygons"] += max(item_count - 2, 0)
-            running_sum += item_count
-
-            if mode == 0x1000:
+            end_pos = sector.end
+            if sector.kind == "wall":
                 stat["wall_sectors"] += 1          # invisible collision walls
-                if invisible_walls is not None and reclen == 20:
-                    q = struct.unpack_from("<4H", sec4, pos + 8)
+                stat["polygons"] += max(sector.item_count - 2, 0)
+                if invisible_walls is not None and sector.end - sector.pos == 20:
+                    q = struct.unpack_from("<4H", sec4, sector.pos + 8)
                     if all(h < n_vert for h in q):
                         pts = [vertices[global_start + h] for h in q]
                         invisible_walls.append(tuple(global_start + q[i] for i in convex_order(pts)))
-                pos += reclen
-                end_pos = pos
                 continue
-
-            # the header takes 8 bytes plus max(n_bound_faces, 1) faces of 8: even without
-            # bounding faces the dispatcher step still skips one
-            p = pos + 8 + max(n_bound_faces, 1) * 8
-            point_count, tag = struct.unpack_from("<HH", sec4, p)
-            if tag != 0x4400:
+            if sector.kind == "rejected":
+                stat["polygons"] += max(sector.item_count - 2, 0)
                 stat["rejected"] += 1
-                pos += reclen
-                end_pos = pos
                 continue
+            stat["polygons"] += sector.prim_count
             local_start = len(vertices)
-            q = p + 4
-            for k in range(point_count):
-                x, y, z = struct.unpack_from("<fff", sec4, q + 12 * k)
-                vertices.append((x, y, z))
-            q += 12 * point_count
-
+            for k in range(sector.point_count):
+                vertices.append(struct.unpack_from("<fff", sec4, sector.points_pos + 12 * k))
             sector_faces, next_pos, n_rejected = read_primitives(
-                sec4, q, max(item_count - 2, 0), lambda i: local_start + i, local=True, stat=stat)
+                sec4, sector.prims_pos, sector.prim_count, lambda i, s=local_start: s + i, local=True, stat=stat)
             faces += sector_faces
             stat["rejected"] += n_rejected
-            if next_pos == pos + reclen:
+            if next_pos == sector.end:
                 stat["clean"] += 1
-            pos += reclen
-            end_pos = pos
         stat["ends_on_vertices"] = (end_pos - basis) == vt
-        _ = global_start
     return vertices, faces, stat
 
 

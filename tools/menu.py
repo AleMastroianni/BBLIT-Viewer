@@ -221,10 +221,13 @@ class Page:
     """`menu_items` is a function: the pages that depend on the level (level list,
     entity groups) are rebuilt every time they open."""
 
-    def __init__(self, title_text, menu_items, width_units=440):
+    def __init__(self, title_text, menu_items, width_units=440, custom=None):
         self.title_text = title_text         # function that returns the title
         self.build_items = menu_items
         self.width_units = width_units
+        # a drawn page (keys_page): it takes the input and the drawing, and
+        # hears when it opens (`enter`) and when it is left (`leave`)
+        self.custom = custom
 
 
 # ------------------------------------------------------------------ menu
@@ -242,14 +245,35 @@ class Menu:
         self._start_lines = {}                # first visible line, per page
         self._draw_key = None
         self.dirty = True
+        # the Back keys (Backspace and M by default, rebindable: keybinds)
+        self.back_keys = lambda: (pyglet.window.key.BACKSPACE, pyglet.window.key.M)
 
     # ---- navigation
+
+    def custom(self):
+        """The drawn page on top, if the menu is open on one."""
+        if not self.is_open or not self.stack:
+            return None
+        return self.pages[self.stack[-1][0]].custom
+
+    def capturing(self) -> bool:
+        """A drawn page is waiting for a key (Help -> Keyboard)."""
+        c = self.custom()
+        return c is not None and getattr(c, "capturing", None) is not None
+
+    def _leave_top(self):
+        if self.stack:
+            c = self.pages[self.stack[-1][0]].custom
+            if c is not None:
+                c.leave(self)
 
     @property
     def page(self):
         return self.stack[-1] if self.stack else None
 
     def show(self, entry_name="main"):
+        if self.is_open:
+            self._leave_top()
         self.stack = []
         self.open_page(entry_name)
         self.is_open = True
@@ -263,8 +287,13 @@ class Menu:
             return
         self.rebuild()
         self.is_open = True
+        c = self.custom()
+        if c is not None:
+            c.enter(self)
 
     def hide(self):
+        if self.is_open:
+            self._leave_top()
         self.is_open = False
 
     def open_page(self, entry_name):
@@ -274,8 +303,11 @@ class Menu:
                        next((i for i, v in enumerate(menu_items) if v.selectable), 0))
         self.stack.append([entry_name, menu_items, cursor])
         self.dirty = True
+        if self.pages[entry_name].custom is not None:
+            self.pages[entry_name].custom.enter(self)
 
     def go_back(self):
+        self._leave_top()
         self.stack.pop()
         if not self.stack:
             self.is_open = False
@@ -313,6 +345,8 @@ class Menu:
     def press(self, symbol, modifiers) -> bool:
         if not self.is_open or not self.stack:
             return False
+        if self.custom() is not None:
+            return self.custom().press(symbol, modifiers, self)
         k = pyglet.window.key
         repeat = 10 if modifiers & k.MOD_SHIFT else 1
         item = self._current_item()
@@ -330,7 +364,7 @@ class Menu:
                 item.change(increment, self)
         elif symbol in (k.ENTER, k.NUM_ENTER, k.SPACE) and item is not None:
             item.confirm(self)
-        elif symbol in (k.BACKSPACE, k.M):
+        elif symbol in self.back_keys():
             self.go_back()
         else:
             return True      # the menu is open: keys do not go to the camera
@@ -346,6 +380,8 @@ class Menu:
     def mouse_over(self, x, y) -> bool:
         if not self.is_open or not self.stack:
             return False
+        if self.custom() is not None:
+            return self.custom().mouse_over(x, y, self)
         i = self._item_at(y) if x <= self._right_edge else None
         if i is not None and i != self.stack[-1][2]:
             self.stack[-1][2] = i
@@ -355,6 +391,8 @@ class Menu:
     def click(self, x, y, button) -> bool:
         if not self.is_open or not self.stack:
             return False
+        if self.custom() is not None:
+            return self.custom().click(x, y, button, self)
         if button == pyglet.window.mouse.RIGHT:
             self.go_back()
             return True
@@ -370,6 +408,8 @@ class Menu:
     def wheel(self, x, y, sy) -> bool:
         if not self.is_open or not self.stack:
             return False
+        if self.custom() is not None:
+            return self.custom().wheel(x, y, sy, self)
         item = self._current_item()
         if item is not None and isinstance(item, (Choice, Number, YesNo)):
             item.change(1 if sy > 0 else -1, self)
@@ -380,6 +420,13 @@ class Menu:
 
     def draw_menu(self, win):
         if not self.is_open or not self.stack:
+            return
+        if self.custom() is not None:
+            glDisable(GL_DEPTH_TEST)
+            glEnable(GL_BLEND)
+            glBlendEquation(GL_FUNC_ADD)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            self.custom().draw(win, self)
             return
         item_key = (win.width, win.height, id(self.stack[-1][1]))
         if self.dirty or item_key != self._draw_key:

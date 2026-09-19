@@ -38,6 +38,14 @@ DEFAULTS = {
     "status_bar": True,
     # levels folder chosen in General options; empty = bze_levels/
     "levels_folder": "",
+    # camera bookmarks per level file (Camera and points): {"L03A": [{"n": 1,
+    # "x": .., "y": .., "z": .., "yaw": .., "pitch": ..}]}, position in game
+    # units; an optional "name" written by hand replaces "Bookmark n"
+    "bookmarks": {},
+    # the rebindable keys (keybinds.py): {action: pyglet symbol}; empty = defaults
+    "key_bindings": {},
+    # the first gamepad found drives camera and menu (gamepad.py)
+    "gamepad": True,
 }
 
 # the keys the settings file used before the code was translated:

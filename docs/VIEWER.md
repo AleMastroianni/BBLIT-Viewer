@@ -157,6 +157,7 @@ command-line options below. Background: findings 282-288.
 | Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object). Orange |
 | Death zones | zones that kill you, with a respawn at the checkpoint (red), or respawn you directly at a fixed point (violet) |
 | Death floor | death zones at least half the size of the level: the sea, the abyss under the level. Not every level has one |
+| Damage zones | zones that hurt you without killing you (action `0x48`): they take health and give one second of invulnerability. Yellow |
 | Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
 | Hard walls | the heightmap's `0x7F` walls, which stop you at any height. Blue, drawn 5 m tall |
 | Area boxes | the collision volume of each mini area (heightmap blocks, base to top); still to be checked in the game |
@@ -185,7 +186,7 @@ command-line options below. Background: findings 282-288.
 | `--scale-factor N` | upscale textures with scale2x/scale3x: 1, 2, 3, 4, 6 or 8 |
 | `--sky` | show the sky dome |
 | `--no-blend` | draw semi-transparent faces as opaque |
-| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | turn on the flag of the same name |
+| `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--deathfloor`, `--damagezones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | turn on the flag of the same name |
 
 Example, a reproducible picture (take `x,y,z` from the "m" values of the
 status bar):
@@ -218,7 +219,10 @@ paused animations. An unknown or malformed entry is ignored.
   It carries a signature (size and date of the `.bze`, plus a hash of the
   `tools/` sources, or of the sources the executable was built from) and is
   rebuilt automatically when the code or the level file changes. A level
-  already seen reopens in a fraction of a second.
+  already seen reopens in a fraction of a second. At launch a background
+  process (low priority, no window) builds the ones not seen yet, so every
+  level opens that fast; it stops when the viewer is closed. Compressed,
+  about 2 MB a level.
 
 The glitch-hunting overlays are built only when one of their flags is
 turned on (the heightmap takes a few seconds on large levels); after that
@@ -279,6 +283,7 @@ PyInstaller's bootloader, bundled in the executable) and
 | `levels.py` | levels by era, with LevID and titles, for the menu |
 | `preferences.py` | chosen default states of some levels (not readings of the format) and the `entity_groups` the menu can change |
 | `level_cache.py` | the on-disk piece cache |
+| `cache_warmer.py` | fills the piece cache in the background at launch |
 | `menu.py`, `texts.py`, `settings.py`, `paths.py` | menu engine, interface texts (English and Italian), saved settings, data folders |
 
 All tools write PNG files by hand with `zlib`: no image library is needed.

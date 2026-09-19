@@ -159,7 +159,8 @@ def census_level(name: str, data_dir: str = DATA, cache: str = "extracted") -> d
 
 
 def _count_terrain_modes(sec4: bytes, offset: int, prim: dict) -> int:
-    """Replays the sector chain to count modes, flags and out-of-block indices.
+    """Replays the sector chain (export_obj.terrain_sectors) to count modes,
+    flags and out-of-block indices.
 
     `read_terrain` translates a local index with `local_start + i` without
     comparing it to the point block size: an index that is too large
@@ -179,22 +180,11 @@ def _count_terrain_modes(sec4: bytes, offset: int, prim: dict) -> int:
     basis = offset + 12
     for i in range(nobj):
         _vt, _nv, _nt, _nn, pt, n_prim, _s = struct.unpack_from("<7i", sec4, basis + 28 * i)
-        pos, running_sum = basis + pt, 0
-        while running_sum < n_prim:
-            item_count, mode, length_words, n_bound_faces = struct.unpack_from("<HHHH", sec4, pos)
-            reclen = length_words * 4
-            if reclen <= 0 or pos + reclen > len(sec4):
-                break
-            running_sum += item_count
-            if mode != 0x1000:
-                p = pos + 8 + max(n_bound_faces, 1) * 8
-                point_count, tag = struct.unpack_from("<HH", sec4, p)
-                if tag == 0x4400:
-                    q = p + 4 + 12 * point_count
-                    _vl, _next_pos, n_rejected = geo.read_primitives(sec4, q, max(item_count - 2, 0),
-                                                         index_checker(point_count), stat=prim)
-                    rejected += n_rejected
-            pos += reclen
+        for sector in geo.terrain_sectors(sec4, basis + pt, n_prim):
+            if sector.kind == "sector":
+                _vl, _next_pos, n_rejected = geo.read_primitives(sec4, sector.prims_pos, sector.prim_count,
+                                                                 index_checker(sector.point_count), stat=prim)
+                rejected += n_rejected
     return rejected
 
 

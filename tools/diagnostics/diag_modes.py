@@ -54,16 +54,9 @@ def scan(start, item_count):
 for t in lvl["terrain"]:
     basis = t["offset"] + 12
     _vt, _nv, _a, _b, pt, n_prim, _c = struct.unpack_from("<7i", sec4, basis)
-    pos, running_sum = basis + pt, 0
-    while running_sum < n_prim:
-        item_count, mode, l4, nd = struct.unpack_from("<HHHH", sec4, pos)
-        if mode != 0x1000:
-            p = pos + 8 + max(nd, 1) * 8
-            cnt, tag = struct.unpack_from("<HH", sec4, p)
-            if tag == 0x4400:
-                scan(p + 4 + 12 * cnt, max(item_count - 2, 0))
-        running_sum += item_count
-        pos += l4 * 4
+    for sector in geo.terrain_sectors(sec4, basis + pt, n_prim):
+        if sector.kind == "sector":
+            scan(sector.prims_pos, sector.prim_count)
 
 for r in lvl["resources"]:
     if r["data_kind"] != "model" or r["size"] <= 12:

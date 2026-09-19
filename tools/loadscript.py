@@ -248,9 +248,13 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
                     textures.append({"offset": offset, "id": tid})
 
         elif block.category == 0x09:
-            z = {"origin": None, "rotation": None, "number": None, "size": None, "rules": []}
+            z = {"origin": None, "rotation": None, "number": None, "size": None, "flags": [0, 0], "rules": []}
             for op, p in block.ops:
-                if op == 0x10:
+                if op == 0x16:
+                    # two flag words (zone+8, +0xc, finding 103); bit 0 of the
+                    # first: no rotation in the zone test (finding 290)
+                    z["flags"] = list(struct.unpack("<II", p))
+                elif op == 0x10:
                     z["origin"] = [_s32(p, 0), _s32(p, 4), _s32(p, 8)]
                 elif op == 0x11:
                     z["rotation"] = [_s16(p, 0), _s16(p, 2), _s16(p, 4)]

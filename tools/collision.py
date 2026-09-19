@@ -78,7 +78,7 @@ def fetch(sec4: bytes, offset: int) -> list[HeightmapBlock]:
 TOLERANCE = 100
 
 
-def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_boxes=()) -> str | None:
+def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_zones=()) -> str | None:
     """A walkable face with no collision under it that you fall through
     safely. `corner_points`: the face's vertices in game coordinates (Y down).
 
@@ -87,7 +87,8 @@ def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_box
     them). The face qualifies if at its centre no block has ground within
     TOLERANCE of it. Then the fall from the centre decides the kind:
     "safe" if the first thing met is ground, "trap" if it is one of the
-    `trap_boxes` (zone boxes that kill, hurt or teleport: zones.trap_box). A
+    `trap_zones` (zones that kill, hurt or teleport: zones.trap_shape, with
+    their rotation). A
     lava surface over a death slab is a trap; the one spot where you land
     safely on the base below is safe. None if the face has collision.
     """
@@ -106,9 +107,10 @@ def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_box
         return None
     below = [g for g in grounds if g > y]
     landing = min(below) if below else None          # the first ground under you
-    for x0, y0, z0, x1, y1, z1 in trap_boxes:
-        if x0 <= x <= x1 and z0 <= z <= z1 and y1 >= y:
-            contact = max(y0, y)                         # where the fall enters the zone
+    for zone in trap_zones:
+        span = zone.vertical_span(x, z)
+        if span is not None and span[1] >= y:
+            contact = max(span[0], y)                    # where the fall enters the zone
             if landing is None or contact <= landing:
                 return "trap"
     return "safe"
@@ -119,6 +121,57 @@ def read_level_blocks(sec4: bytes, lvl: dict) -> list[HeightmapBlock]:
     for item in lvl.get("heightmaps", []):
         output += fetch(sec4, item["offset"])
     return output
+
+
+# ----------------------------------------------------- the game's ground query
+# (build 74ab71e1; the documents' FUN_00436b60 and FUN_00436c20, finding 111)
+
+def block_at(grid_blocks, x: int, y: int, z: int, area: int | None = None):
+    """The block containing the point, as `0x436cd0` finds it: first the
+    blocks of `area` (the area the object had in the last frame), then all
+    of them in file order. Inside: ox <= x < ox + extent, the same in Z,
+    and y_ceiling < y <= y_floor (Y down: the slab from its top to its base)."""
+    def inside(b):
+        return (b.y_ceiling < y <= b.y_floor and b.ox <= x < b.ox + b.ext_x
+                and b.oz <= z < b.oz + b.ext_z)
+    if area is not None:
+        for b in grid_blocks:
+            if b.area == area and inside(b):
+                return b
+    for b in grid_blocks:
+        if inside(b):
+            return b
+    return None
+
+
+def ground_below(grid_blocks, x: int, y: int, z: int, area: int | None = None):
+    """Where a point falling straight down from (x, y, z) lands: (ground Y,
+    block), or None if nothing is under it. The ground of a block is read
+    as `0x436d90` does; on a 0x7E ("no ground") or 0x7F (hard wall)
+    sub-cell the game gives the slab's base as the ground, so the fall goes
+    on into the block under it. Above every slab the point falls to the
+    first top it meets. If the point is inside a slab but under its ground,
+    the answer is that ground, above the point: where the game puts an
+    object standing there.
+
+    Integer game coordinates. The origins of all 479 blocks of the menu's
+    levels are multiples of 320 and not negative: the game's sub-cell from
+    the absolute x % 320 is the same as `ground_height`'s from x - ox."""
+    for _ in range(len(grid_blocks) + 1):
+        b = block_at(grid_blocks, x, y, z, area)
+        if b is None:
+            # in the air: the nearest slab top under the point
+            tops = [c.y_ceiling for c in grid_blocks
+                    if c.y_ceiling >= y and c.ox <= x < c.ox + c.ext_x and c.oz <= z < c.oz + c.ext_z]
+            if not tops:
+                return None
+            y = min(tops) + 1
+            continue
+        g = b.ground_height(x, z)
+        if g is not None:
+            return g, b
+        y, area = b.y_floor + 1, b.area
+    return None
 
 
 # ----------------------------------------------------------- for the flags

@@ -1,5 +1,5 @@
 """The overlays (the flags Invisible walls, No collision, Collision boxes,
-Death zones and Death floor) change nothing else.
+Death zones, Death floor and Damage zones) change nothing else.
 
     .venv/Scripts/python tools/diagnostics/check_walls.py [L03A ...]
 
@@ -29,6 +29,7 @@ original = geo.read_terrain
 original_judge = collision.no_collision_kind
 collision_box = montage.collision_box
 original_kind_of = zones.kind_of
+original_hurts = zones.hurts
 originals = (collision.surfaces, collision.hard_walls, collision.volumes)
 OVERLAYS = tuple(viewer.OVERLAYS)
 
@@ -58,6 +59,7 @@ for entry_name in name_list:
         collision.no_collision_kind = lambda *a: None
         montage.collision_box = lambda *a, **k: None
         zones.kind_of = lambda z: None
+        zones.hurts = lambda z: False
         collision.surfaces = lambda *a: ([], [], [])
         collision.hard_walls = lambda *a: []
         collision.volumes = lambda *a: []
@@ -70,6 +72,7 @@ for entry_name in name_list:
         collision.no_collision_kind = original_judge
         montage.collision_box = collision_box
         zones.kind_of = original_kind_of
+        zones.hurts = original_hurts
         collision.surfaces, collision.hard_walls, collision.volumes = originals
     n = full.stat.get("walls_drawn", 0)
     walls_total += n

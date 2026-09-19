@@ -9,6 +9,11 @@ and a hash of the `tools/` sources (in the executable, that of the sources
 it was built from). If the signature does not match, the file is ignored and
 rewritten. Test: `tools/diagnostics/check_level_cache.py` (same level
 from the cache and from scratch, group by group).
+
+The file: the signature (u32 length + ASCII), then the pickled pieces
+compressed with zlib level 1, lossless: 17-18 MB -> about 2 MB a level,
++0.03 s to read. The signature alone can be read without
+the rest (`is_current`, used by cache_warmer.py).
 """
 
 from __future__ import annotations
@@ -16,9 +21,11 @@ from __future__ import annotations
 import hashlib
 import os
 import pickle
+import struct
 import sys
+import zlib
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 NAME = "pieces.pkl"
 FINGERPRINT_FILE = "code_hash.txt"
 _fingerprint = None
@@ -63,26 +70,55 @@ def _cache_path(cache: str, name: str) -> str:
     return os.path.join(cache, name, NAME)
 
 
+def _read_signature(f) -> str | None:
+    head = f.read(4)
+    if len(head) != 4:
+        return None
+    n = struct.unpack("<I", head)[0]
+    raw = f.read(n) if n < 4096 else b""
+    return raw.decode("ascii", "replace") if len(raw) == n else None
+
+
+def is_current(cache: str, name: str, expected_signature: str) -> bool:
+    """Whether the saved pieces match the signature, reading only the signature."""
+    try:
+        with open(_cache_path(cache, name), "rb") as f:
+            return _read_signature(f) == expected_signature
+    except OSError:
+        return False
+
+
 def fetch(cache: str, name: str, expected_signature: str) -> dict | None:
     """The saved pieces, or None if missing or from other code or another file."""
     try:
         with open(_cache_path(cache, name), "rb") as f:
-            stored_signature, pieces = pickle.load(f)
+            if _read_signature(f) != expected_signature:
+                return None
+            pieces = pickle.loads(zlib.decompress(f.read()))
     except (OSError, EOFError, pickle.UnpicklingError, ValueError, TypeError, AttributeError,
-            ImportError, IndexError):
+            ImportError, IndexError, zlib.error):
         return None
-    return pieces if stored_signature == expected_signature and isinstance(pieces, dict) else None
+    return pieces if isinstance(pieces, dict) else None
 
 
 def store(cache: str, name: str, current_signature: str, pieces: dict) -> None:
     """Writes to a temporary file and swaps it in: a viewer closed halfway
-    does not leave a broken file. A write error does not stop the viewer."""
+    does not leave a broken file. The temporary name carries the process id:
+    the viewer and cache_warmer.py may save the same level at the same time.
+    A write error does not stop the viewer."""
     file_path = _cache_path(cache, name)
-    tmp = file_path + ".tmp"
+    tmp = f"{file_path}.{os.getpid()}.tmp"
     try:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        signature_bytes = current_signature.encode("ascii", "replace")
+        data = zlib.compress(pickle.dumps(pieces, protocol=pickle.HIGHEST_PROTOCOL), 1)
         with open(tmp, "wb") as f:
-            pickle.dump((current_signature, pieces), f, protocol=pickle.HIGHEST_PROTOCOL)
+            f.write(struct.pack("<I", len(signature_bytes)) + signature_bytes)
+            f.write(data)
         os.replace(tmp, file_path)
     except OSError as e:
         print(f"piece cache not saved for {name}: {e}")
+        try:
+            os.remove(tmp)   # our own half-written copy, if any
+        except OSError:
+            pass

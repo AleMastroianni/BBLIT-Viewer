@@ -7,6 +7,8 @@ nothing. A missing key is shown on screen as is.
 
 from __future__ import annotations
 
+import re
+
 LANGUAGES = ("it", "en")
 LANGUAGE_NAMES = {"it": "Italiano", "en": "English"}
 
@@ -102,6 +104,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.flags": ("Flags", "Flags"),
     "level.death_zones": ("Zone di morte", "Death zones"),
     "level.death_floor": ("Pavimento della morte", "Death floor"),
+    "level.damage_zones": ("Zone di danno", "Damage zones"),
     "level.ground": ("Terreno di collisione", "Ground"),
     "level.hard_walls": ("Muri duri", "Hard walls"),
     "level.sky": ("Cielo", "Sky"),
@@ -122,9 +125,9 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "No selectable states for this level"),
 
     # descriptions (bottom line)
-    "desc.texture": ("Mostra le texture o solo il colore dei vertici. Tasto T.",
-                     "Show textures or vertex colours only. Key T."),
-    "desc.props": ("Oggetti piazzati e animati. Tasto O.", "Placed and animated objects. Key O."),
+    "desc.texture": ("Mostra le texture o solo il colore dei vertici. Tasto [[textures]].",
+                     "Show textures or vertex colours only. Key [[textures]]."),
+    "desc.props": ("Oggetti piazzati e animati. Tasto [[props]].", "Placed and animated objects. Key [[props]]."),
     "desc.invisible_walls": ("Cio' che ti ferma senza niente di disegnato: i muri duri 0x7F della "
                   "heightmap dove non c'e' una parete visibile (terreno o oggetto). In magenta. "
                   "I box degli oggetti sono a parte (Box di collisione).",
@@ -168,25 +171,29 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "ti fanno fare un respawn diretto in un punto fisso (viola).",
                         "Zones that kill you, with a respawn at the checkpoint (red), or that "
                         "respawn you directly at a fixed point (violet)."),
+    "desc.damage_zones": ("Le zone che ti feriscono senza ucciderti (azione 0x48): tolgono vita "
+                          "e danno un secondo di invulnerabilita'. In giallo.",
+                          "Zones that hurt you without killing you (action 0x48): they take health "
+                          "and give one second of invulnerability. In yellow."),
     "desc.death_floor": ("Le zone di morte grandi almeno meta' del livello: il mare, l'abisso "
                          "sotto il livello. Non tutti i livelli ne hanno.",
                          "Death zones at least half the size of the level: the sea, the abyss "
                          "under the level. Not every level has one."),
-    "desc.sky": ("La cupola del cielo, che segue la camera. Tasto H.",
-                   "The sky dome, which follows the camera. Key H."),
-    "desc.blending": ("Le quattro fusioni della PlayStation: ombre, acqua, bagliori. Tasto M.",
-                     "The four PlayStation blend modes: shadows, water, glows. Key M."),
-    "desc.wireframe": ("Solo gli spigoli dei triangoli. Tasto F.", "Triangle edges only. Key F."),
-    "desc.animations": ("Ferme: tutto si blocca dov'è (tasto P). Posa iniziale: il primo "
+    "desc.sky": ("La cupola del cielo, che segue la camera. Tasto [[sky]].",
+                   "The sky dome, which follows the camera. Key [[sky]]."),
+    "desc.blending": ("Le quattro fusioni della PlayStation: ombre, acqua, bagliori. Tasto [[blending]].",
+                     "The four PlayStation blend modes: shadows, water, glows. Key [[blending]]."),
+    "desc.wireframe": ("Solo gli spigoli dei triangoli. Tasto [[wireframe]].", "Triangle edges only. Key [[wireframe]]."),
+    "desc.animations": ("Ferme: tutto si blocca dov'è (tasto [[pause]]). Posa iniziale: il primo "
                         "fotogramma di ogni animazione.",
-                        "Paused: everything stops where it is (key P). Starting pose: "
+                        "Paused: everything stops where it is (key [[pause]]). Starting pose: "
                         "the first frame of every animation."),
-    "desc.tps": ("15 misurati sulla PSX. Tasti - e +.", "15, measured on the PSX. Keys - and +."),
-    "desc.texanim": ("Occhi, acqua, alone del sole. Tasto N.", "Eyes, water, sun halo. Key N."),
+    "desc.tps": ("15 misurati sulla PSX. Tasti [[tps_down]] e [[tps_up]].", "15, measured on the PSX. Keys [[tps_down]] and [[tps_up]]."),
+    "desc.texanim": ("Occhi, acqua, alone del sole. Tasto [[texanim]].", "Eyes, water, sun halo. Key [[texanim]]."),
     "desc.clones": ("Template che le regole degli oggetti fanno comparire. Le scelte di "
-                   "preferences.py si vedono sempre. Tasto G.",
+                   "preferences.py si vedono sempre. Tasto [[clones]].",
                    "Templates spawned by object rules. The choices in preferences.py "
-                   "are always shown. Key G."),
+                   "are always shown. Key [[clones]]."),
     "desc.group": ("Solo per questa sessione: al prossimo avvio torna la scelta di "
                     "preferences.py. Il livello si ricostruisce.",
                     "This session only: the next start goes back to the choice in "
@@ -216,8 +223,8 @@ TEXTS: dict[str, tuple[str, str]] = {
     "video.color.psx": ("PSX (x2)", "PSX (x2)"),
     "video.fov": ("Campo visivo", "Field of view"),
     "desc.fullscreen": ("Anche Alt+Invio.", "Also Alt+Enter."),
-    "desc.filter": ("Bilineare come il PC, o i texel netti. Tasto L.",
-                    "Bilinear like the PC, or sharp texels. Key L."),
+    "desc.filter": ("Bilineare come il PC, o i texel netti. Tasto [[filter]].",
+                    "Bilinear like the PC, or sharp texels. Key [[filter]]."),
     "desc.scale": ("Ingrandisce le texture con scale2x/scale3x.",
                    "Upscales textures with scale2x/scale3x."),
     "desc.color": ("Il PC usa il colore dei vertici com'è (scoperta 268), la PSX lo raddoppia.",
@@ -233,24 +240,186 @@ TEXTS: dict[str, tuple[str, str]] = {
                    "Level, game and metre coordinates, camera speed."),
 
     # help
-    "help.title": ("Aiuto — tasti", "Help — keys"),
-    "help.move": ("Muovi la camera", "Move the camera"),
-    "help.up_down": ("Camera su / giù", "Camera up / down"),
-    "help.look": ("Guarda (tasto destro premuto)", "Look (hold right button)"),
-    "help.wheel": ("Velocità della camera", "Camera speed"),
-    "help.shift": ("Più veloce / più lento", "Faster / slower"),
-    "help.menu": ("Apri / chiudi il menu", "Open / close the menu"),
-    "help.menu_nav": ("Nel menu: scegli, cambia, conferma", "In the menu: select, change, confirm"),
-    "help.back": ("Nel menu: indietro", "In the menu: back"),
-    "help.levels": ("Livello precedente / successivo", "Previous / next level"),
+    "help.title": ("Aiuto", "Help"),
     "help.reset": ("Camera al punto di partenza", "Camera back to the start"),
-    "help.tps": ("Tick al secondo", "Ticks per second"),
     "help.pause": ("Ferma / riavvia le animazioni", "Pause / resume animations"),
-    "help.fullscreen": ("Schermo intero", "Full screen"),
-    "help.k.mouse": ("Mouse destro", "Right mouse"),
-    "help.k.wheel": ("Rotella", "Wheel"),
-    "help.k.nav": ("↑ ↓ ← → Invio", "↑ ↓ ← → Enter"),
-    "help.k.alt": ("Alt+Invio", "Alt+Enter"),
+    "help.hide_ui": ("Copri / scopri l'interfaccia", "Hide / show the interface"),
+
+    # keys and gamepad (Help and General options, as in the CTR viewer)
+    "help.keyboard": ("Tastiera", "Keyboard"),
+    "help.gamepad": ("Gamepad", "Gamepad"),
+    "desc.help_keyboard": ("Tutti i comandi di tastiera e mouse. I tasti con una sola funzione si "
+                           "possono cambiare qui.",
+                           "All keyboard and mouse controls. Keys with a single function can be "
+                           "changed here."),
+    "desc.help_gamepad": ("Comandi del gamepad su un controller disegnato (solo informativo).",
+                          "Gamepad controls on a drawn controller (information only)."),
+    "general.keys": ("Tasti e gamepad", "Keys and gamepad"),
+    "desc.general_keys": ("I tasti (quelli con una sola funzione si cambiano) e i comandi del gamepad.",
+                          "The keys (those with a single function can be changed) and the gamepad controls."),
+    "general.gamepad": ("Gamepad", "Gamepad"),
+    "desc.general_gamepad": ("Usa il primo gamepad collegato: camera e menu. No lo ignora.",
+                             "Uses the first gamepad connected: camera and menu. No ignores it."),
+    "keys.camera_up": ("Camera su", "Camera up"),
+    "keys.camera_down": ("Camera giù", "Camera down"),
+    "keys.level_prev": ("Livello precedente", "Previous level"),
+    "keys.level_next": ("Livello successivo", "Next level"),
+    "keys.tps_down": ("Tick al secondo: meno", "Ticks per second: fewer"),
+    "keys.tps_up": ("Tick al secondo: più", "Ticks per second: more"),
+    "keys.menu_back": ("Menu indietro", "Menu back"),
+    "keys.menu_back_alt": ("Menu indietro (secondo tasto)", "Menu back (second key)"),
+    "keys.locked.esc": ("Apri / chiudi il menu, annulla la cattura del tasto",
+                        "Open / close the menu, cancel the key capture"),
+    "keys.locked.enter": ("Conferma; Alt + Invio: schermo intero", "Confirm; Alt + Enter: full screen"),
+    "keys.locked.space": ("Nel menu: conferma", "In the menu: confirm"),
+    "keys.locked.w": ("Camera avanti, menu su", "Camera forward, menu up"),
+    "keys.locked.a": ("Camera a sinistra, menu: valore precedente", "Camera left, menu: previous value"),
+    "keys.locked.s": ("Camera indietro, menu giù", "Camera back, menu down"),
+    "keys.locked.d": ("Camera a destra, menu: valore successivo", "Camera right, menu: next value"),
+    "keys.locked.up": ("Menu su", "Menu up"),
+    "keys.locked.down": ("Menu giù", "Menu down"),
+    "keys.locked.left": ("Menu: valore precedente", "Menu: previous value"),
+    "keys.locked.right": ("Menu: valore successivo", "Menu: next value"),
+    "keys.locked.pageup": ("Menu: 10 righe su", "Menu: 10 rows up"),
+    "keys.locked.pagedown": ("Menu: 10 righe giù", "Menu: 10 rows down"),
+    "keys.locked.shift": ("Camera più veloce, valori del menu x10", "Faster camera, menu values x10"),
+    "keys.locked.ctrl": ("Camera più lenta", "Slower camera"),
+    "keys.locked.alt": ("Alt + Invio: schermo intero, Alt + F4: esci", "Alt + Enter: full screen, Alt + F4: quit"),
+    "keys.locked.f4": ("Alt + F4: esci", "Alt + F4: quit"),
+    "keys.locked.num_tps": ("Tick al secondo (fisso, oltre ai tasti qui sopra)",
+                            "Ticks per second (fixed, besides the keys above)"),
+    "keys.cap.prtsc": ("Stamp", "PrtSc"),
+    "keys.cap.space": ("Spazio", "Space"),
+    "keys.no_key": ("(nessun tasto)", "(no key)"),
+    "keys.press_key": ("Premi un tasto... (Esc = annulla)", "Press a key... (Esc = cancel)"),
+    "keys.reset": ("Ripristina tasti predefiniti", "Restore default keys"),
+    "keys.row.esc": ("Esc - Apri / chiudi il menu", "Esc - Open / close the menu"),
+    "keys.row.nav": ("Frecce o WASD - Naviga nel menu", "Arrows or WASD - Navigate the menu"),
+    "keys.row.confirm": ("Invio / Spazio - Conferma", "Enter / Space - Confirm"),
+    "keys.row.move": ("WASD - Muovi la camera", "WASD - Move the camera"),
+    "keys.row.shift": ("Shift / Ctrl - Camera più veloce / più lenta", "Shift / Ctrl - Faster / slower camera"),
+    "keys.row.page": ("PagSu / PagGiù - Menu: 10 righe; Shift + ← → valori x10",
+                      "PgUp / PgDn - Menu: 10 rows; Shift + ← → values x10"),
+    "keys.row.num_tps": ("Num + / Num - - Tick al secondo", "Num + / Num - - Ticks per second"),
+    "keys.row.fullscreen": ("Alt + Invio - Schermo intero", "Alt + Enter - Full screen"),
+    "keys.row.quit": ("Alt + F4 - Esci", "Alt + F4 - Quit"),
+    "keys.row.mouse_look": ("Mouse destro - Guarda; nel menu indietro", "Right mouse - Look; in the menu back"),
+    "keys.row.wheel": ("Rotella - Velocità della camera; nel menu cambia valore",
+                       "Wheel - Camera speed; in the menu change value"),
+    "keys.reverted": ("Un'azione era rimasta senza tasto: tornano i tasti dell'ultimo salvataggio.",
+                      "An action was left without a key: the last saved keys are back."),
+    "keys.cancelled": ("Cambio tasto annullato.", "Key change cancelled."),
+    "keys.press_new": ("{action}: premi il nuovo tasto (Esc = annulla).",
+                       "{action}: press the new key (Esc = cancel)."),
+    "keys.defaults_restored": ("Tasti predefiniti ripristinati e salvati.", "Default keys restored and saved."),
+    "keys.saved": ("{action}: {key}. Salvato.", "{action}: {key}. Saved."),
+    "keys.not_saved_yet": ("{action}: {key}. Non ancora salvato, ancora senza tasto: {missing}.",
+                           "{action}: {key}. Not saved yet, still without a key: {missing}."),
+    "keys.is_locked": ("{key} è bloccato: ha già più funzioni.", "{key} is locked: it already has several functions."),
+    "keys.is_system": ("{key} non si può usare: è riservato a Windows o alla tastiera.",
+                       "{key} cannot be used: Windows or the keyboard reserve it."),
+    "keys.in_use": ("{key} è già usato da: {owner}. Toglilo prima da lì (clic destro).",
+                    "{key} is already used by: {owner}. Remove it there first (right click)."),
+    "keys.unsupported": ("{key} non è supportato.", "{key} is not supported."),
+    "keys.removed": ("{key} tolto da {action}. Assegna un nuovo tasto prima di uscire, o tornano i tasti "
+                     "dell'ultimo salvataggio.",
+                     "{key} removed from {action}. Give it a new key before leaving, or the last saved "
+                     "keys come back."),
+    "keys.legend": ("Arancione = usato  |  Grigio = libero  |  Clic su una riga: nuovo tasto  |  "
+                    "Clic destro: togli tasto  |  Lucchetto = bloccato",
+                    "Orange = used  |  Grey = free  |  Click a row: new key  |  Right click a row: "
+                    "remove key  |  Padlock = locked"),
+    "keys.mouse_help": ("Mouse: tasto destro - guarda (nel menu: indietro), rotella - velocità della "
+                        "camera (nel menu: cambia valore), tasto sinistro - clic nel menu",
+                        "Mouse: right button - look (in the menu: back), wheel - camera speed (in the "
+                        "menu: change value), left button - click in the menu"),
+    "keys.locked": ("bloccato", "locked"),
+    "keys.free": ("libero", "free"),
+    "pad.title": ("Comandi gamepad (solo informativo)", "Gamepad controls (information only)"),
+    "pad.connected": ("collegato: {name}", "connected: {name}"),
+    "pad.none": ("nessun gamepad collegato", "no gamepad connected"),
+    "pad.hint": ("{keys} / Cerchio: indietro  |  Esc / Start: chiudi il menu",
+                 "{keys} / Circle: back  |  Esc / Start: close the menu"),
+    "pad.select": ("Select (Share, Back)", "Select (Share, Back)"),
+    "pad.start": ("Start (Options)", "Start (Options)"),
+    "pad.l1": ("L1 (LB)", "L1 (LB)"),
+    "pad.r1": ("R1 (RB)", "R1 (RB)"),
+    "pad.l2": ("L2 (LT)", "L2 (LT)"),
+    "pad.r2": ("R2 (RT)", "R2 (RT)"),
+    "pad.triangle": ("Triangolo (Y)", "Triangle (Y)"),
+    "pad.circle": ("Cerchio (B)", "Circle (B)"),
+    "pad.cross": ("Croce (A)", "Cross (A)"),
+    "pad.square": ("Quadrato (X)", "Square (X)"),
+    "pad.dpad": ("Croce direzionale", "D-pad"),
+    "pad.left_stick": ("Levetta sinistra (L3)", "Left stick (L3)"),
+    "pad.right_stick": ("Levetta destra (R3)", "Right stick (R3)"),
+    "pad.select_does": ("Copri / scopri l'interfaccia (come F1)", "Hide / show the interface (like F1)"),
+    "pad.start_does": ("Apri / chiudi il menu (come Esc)", "Open / close the menu (like Esc)"),
+    "pad.l1_does": ("Camera giù", "Camera down"),
+    "pad.r1_does": ("Camera su", "Camera up"),
+    "pad.l2_does": ("Tenuto: velocità della camera giù", "Held: camera speed down"),
+    "pad.r2_does": ("Tenuto: velocità della camera su", "Held: camera speed up"),
+    "pad.circle_does": ("Menu indietro", "Menu back"),
+    "pad.cross_does": ("Conferma. Tenuto: camera più veloce", "Confirm. Held: faster camera"),
+    "pad.dpad_does": ("Muovi la camera (come WASD), naviga nel menu", "Move the camera (like WASD), navigate the menu"),
+    "pad.left_stick_does": ("Muovi la camera. Pressione: nessuna funzione", "Move the camera. Press: no function"),
+    "pad.right_stick_does": ("Guarda. Pressione: nessuna funzione", "Look around. Press: no function"),
+    "pad.nothing": ("Nessuna funzione", "No function"),
+
+    # Camera and points (glitch hunting, stage 3)
+    "level.camera": ("Camera e punti", "Camera and points"),
+    "desc.camera": ("Segnalibri di camera di questo livello e il punto ombra da copiare.",
+                    "Camera bookmarks for this level and the shadow point to copy."),
+    "camera.title": ("Camera e punti — {level}", "Camera and points — {level}"),
+    "camera.now": ("Camera", "Camera"),
+    "camera.shadow_point": ("Punto ombra", "Shadow point"),
+    "camera.no_ground": ("nessun terreno sotto", "no ground below"),
+    "camera.area": ("area {area}", "area {area}"),
+    "camera.show_shadow": ("Mostra l'ombra", "Show the shadow"),
+    "desc.show_shadow": ("Un cerchio nero dove cadrebbe Bugs dalla camera: il suolo che trova "
+                         "la query del gioco (heightmap di collisione, prima lastra sotto; niente "
+                         "box degli oggetti). Il bordo si vede anche attraverso il terreno.",
+                         "A black circle where Bugs would land from the camera: the ground the "
+                         "game's query finds (collision heightmap, first slab below; no object "
+                         "boxes). The rim shows through the terrain too."),
+    "camera.add": ("Aggiungi segnalibro qui", "Add a bookmark here"),
+    "desc.camera_add": ("Salva posizione e direzione della camera nelle impostazioni, per "
+                        "questo livello.",
+                        "Saves the camera's position and direction in the settings, for this level."),
+    "camera.copy_lua": ("Copia il punto per BizHawk (Lua)", "Copy the point for BizHawk (Lua)"),
+    "desc.copy_lua": ("Negli appunti una voce di tabella Lua { X = …, Y = …, Z = … }, come i "
+                      "waypoint di BBLIT_Tasing.lua.",
+                      "Puts a Lua table entry { X = …, Y = …, Z = … } on the clipboard, like the "
+                      "waypoints of BBLIT_Tasing.lua."),
+    "camera.copy_all_lua": ("Copia tutti i segnalibri per BizHawk", "Copy every bookmark for BizHawk"),
+    "desc.copy_all_lua": ("Negli appunti una tabella Lua con il punto ombra di ogni segnalibro "
+                          "di questo livello.",
+                          "Puts a Lua table with the shadow point of every bookmark of this "
+                          "level on the clipboard."),
+    "camera.copied": ("copiato ✓", "copied ✓"),
+    "camera.bookmarks": ("Segnalibri di questo livello", "Bookmarks of this level"),
+    "camera.no_bookmarks": ("Nessun segnalibro", "No bookmarks"),
+    "camera.bookmark": ("Segnalibro {n}", "Bookmark {n}"),
+    "desc.bookmark": ("Apre il segnalibro: vai qui, sostituisci, copia, elimina.",
+                      "Opens the bookmark: go there, replace, copy, delete."),
+    "bookmark.title": ("{name} — {level}", "{name} — {level}"),
+    "bookmark.go": ("Vai qui", "Go here"),
+    "desc.bookmark_go": ("Chiude il menu con la camera nel punto e nella direzione salvati.",
+                         "Closes the menu with the camera at the saved point and direction."),
+    "bookmark.replace": ("Sostituisci con la camera attuale", "Replace with the current camera"),
+    "bookmark.replaced": ("sostituito ✓", "replaced ✓"),
+    "bookmark.delete": ("Elimina", "Delete"),
+    "bookmark.confirm_delete": ("Conferma: elimina", "Confirm: delete"),
+    "desc.bookmark_delete": ("Al primo Invio chiede conferma; al secondo toglie il segnalibro "
+                             "dalle impostazioni.",
+                             "The first Enter asks for confirmation; the second removes the "
+                             "bookmark from the settings."),
+    # export: comments in the copied text
+    "export.shadow": ("punto ombra", "shadow point"),
+    "export.camera_no_ground": ("camera, nessun terreno sotto", "camera, no ground below"),
+    "export.table_comment": ("segnalibri del viewer, punto ombra in unità del gioco (Y negativa in alto)",
+                             "viewer bookmarks, shadow point in game units (Y negative is up)"),
+    "export.table_name": ("punti", "points"),
 
 }
 
@@ -264,10 +433,19 @@ def language() -> str:
     return _language
 
 
+# "[[action]]" in a text is the key bound to that action now (keybinds):
+# the viewer sets the function that names it
+key_of_action = None
+
+
 def t(item_key: str, **fields) -> str:
     """The key's text in the current language; the key itself if missing."""
     pair = TEXTS.get(item_key)
     if pair is None:
         return item_key
     label_text = pair[LANGUAGES.index(_language)]
-    return label_text.format(**fields) if fields else label_text
+    label_text = label_text.format(**fields) if fields else label_text
+    if "[[" in label_text:
+        label_text = re.sub(r"\[\[(\w+)\]\]",
+                            lambda m: key_of_action(m.group(1)) if key_of_action else m.group(1), label_text)
+    return label_text
