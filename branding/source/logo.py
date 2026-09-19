@@ -3,8 +3,9 @@ Luckiest Guy (Apache 2.0, branding/fonts).
 
     python branding/source/logo.py
 
-Writes banner_background.png, logo.png and background.png (the viewer's
-background without levels, 1920 x 1080) into branding/."""
+Writes banner_background.png, logo.png, social_preview.png (1280 x 640, for
+GitHub) and background.png (the viewer's background without levels, 1920 x
+1080) into branding/."""
 import math
 import os
 
@@ -61,6 +62,17 @@ def title(img, text, font_path, size, y, fill_top, fill_bottom, outline, x0):
     return tw, th
 
 
+def logo_on(img, carrot, dy=0):
+    """Carrot, title and subtitle of the logo, moved down by `dy`."""
+    img.alpha_composite(carrot.resize((330, 330), Image.LANCZOS), (30, 35 + dy))
+    font = os.path.join(FONTS, "LuckiestGuy-Regular.ttf")
+    title(img, "BBLIT Viewer", font, 132, 60 + dy, (255, 236, 140), (230, 150, 20), (60, 25, 5, 255), 370)
+    sub = ImageFont.truetype(font, 40)
+    ImageDraw.Draw(img).text((376, 60 + 132 + 58 + dy), "a level viewer for Bugs Bunny: Lost in Time", font=sub,
+                             fill=(220, 232, 255, 255), stroke_width=3, stroke_fill=(10, 25, 60, 255))
+    return img
+
+
 def main():
     import sys
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -68,14 +80,10 @@ def main():
     background(1920, 1080).convert("RGB").save(os.path.join(OUT, "background.png"))
     bg = background(W, H)
     bg.save(os.path.join(OUT, "banner_background.png"))
-    img = bg.copy()
-    img.alpha_composite(carrot().resize((330, 330), Image.LANCZOS), (30, 35))
-    font = os.path.join(FONTS, "LuckiestGuy-Regular.ttf")
-    title(img, "BBLIT Viewer", font, 132, 60, (255, 236, 140), (230, 150, 20), (60, 25, 5, 255), 370)
-    sub = ImageFont.truetype(font, 40)
-    ImageDraw.Draw(img).text((376, 60 + 132 + 58), "a level viewer for Bugs Bunny: Lost in Time", font=sub,
-                             fill=(220, 232, 255, 255), stroke_width=3, stroke_fill=(10, 25, 60, 255))
-    img.convert("RGB").save(os.path.join(OUT, "logo.png"))
+    logo_on(bg.copy(), carrot()).convert("RGB").save(os.path.join(OUT, "logo.png"))
+    # GitHub's social preview wants 2:1 (1280 x 640): the same logo, centred
+    # on a taller background
+    logo_on(background(W, 640), carrot(), dy=120).convert("RGB").save(os.path.join(OUT, "social_preview.png"))
 
 
 if __name__ == "__main__":

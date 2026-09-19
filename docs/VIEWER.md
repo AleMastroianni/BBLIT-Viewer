@@ -250,7 +250,9 @@ anything. With Python 3.10.0 exactly, the script works around a bug in `dis`
 that stops PyInstaller.
 
 `python tools/make_release.py` builds the release folder and its zip: the
-executable with `_internal/`, `README`, `README_Ita`, `LICENSE` and
+executable with `_internal/`, `README`, `README_Ita`, `LICENSE`,
+`THIRD_PARTY_LICENSES.txt` (the licences of Python, pyglet, Pillow and
+PyInstaller's bootloader, bundled in the executable) and
 `bze_levels/README.txt`.
 
 ---

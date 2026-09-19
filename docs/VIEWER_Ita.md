@@ -255,7 +255,9 @@ senza toccare niente. Con Python 3.10.0 esatto, lo script aggira un difetto
 di `dis` che blocca PyInstaller.
 
 `python tools/make_release.py` costruisce la cartella della release e il suo
-zip: l'eseguibile con `_internal/`, `README`, `README_Ita`, `LICENSE` e
+zip: l'eseguibile con `_internal/`, `README`, `README_Ita`, `LICENSE`,
+`THIRD_PARTY_LICENSES.txt` (le licenze di Python, pyglet, Pillow e del
+bootloader di PyInstaller, contenuti nell'eseguibile) e
 `bze_levels/README.txt`.
 
 ---

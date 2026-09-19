@@ -9,6 +9,7 @@ scratch by the scripts in `source/`: no game art, no official lettering.
 |---|---|
 | `logo.png` | the logo: golden carrot and "BBLIT Viewer" on the blue background (1280 × 400) |
 | `banner_background.png` | the blue background alone |
+| `social_preview.png` | the logo at 1280 × 640, for GitHub's social preview |
 | `background.png` | the viewer's background without levels (1920 × 1080) |
 | `icon_goldcarrot.ico`, `icon_goldcarrot_*.png` | the icon, 16 to 256 pixels |
 | `fonts/` | Luckiest Guy (Apache 2.0, used), Titan One and Bangers (OFL, tried), with their licences |
@@ -29,6 +30,7 @@ script in `source/`: niente grafica del gioco, niente lettering ufficiale.
 |---|---|
 | `logo.png` | il logo: carota d'oro e "BBLIT Viewer" sullo sfondo blu (1280 × 400) |
 | `banner_background.png` | lo sfondo blu da solo |
+| `social_preview.png` | il logo a 1280 × 640, per l'anteprima social di GitHub |
 | `background.png` | lo sfondo del viewer senza livelli (1920 × 1080) |
 | `icon_goldcarrot.ico`, `icon_goldcarrot_*.png` | l'icona, da 16 a 256 pixel |
 | `fonts/` | Luckiest Guy (Apache 2.0, usato), Titan One e Bangers (OFL, provati), con le loro licenze |

@@ -6,10 +6,15 @@
 Starts from the executable built by `tools/build_exe.py` and writes FOLDER
 (default `release/BBLIT Viewer/`, outside git) with `BBLIT Viewer.exe`,
 `_internal/`, `portable.flag` (settings in `userdata/` next to the viewer,
-nothing written to Documents), README.md, README_Ita.md, LICENSE and
-`bze_levels/` with only its README. Inside it, `<FOLDER name>.zip` with the
+nothing written to Documents), README.md, README_Ita.md, LICENSE,
+THIRD_PARTY_LICENSES.txt and `bze_levels/` with only its README. Inside it, `<FOLDER name>.zip` with the
 same things under one folder, ready to attach to a release; its SHA-256 is
 printed, for the release notes.
+
+THIRD_PARTY_LICENSES.txt holds the licences of what PyInstaller puts in
+`_internal/` (Python and the libraries it ships, pyglet, Pillow when
+bundled, PyInstaller's bootloader), read from the Python environment that
+runs this script: run it with the same Python as `build_exe.py`.
 
 Only these parts are replaced: `userdata/`, `extracted/` and `errors.txt` of
 whoever tried the folder stay, and never go into the zip.
@@ -19,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import os
 import shutil
 import stat
@@ -32,8 +38,53 @@ EXECUTABLE = "BBLIT Viewer.exe"
 DEFAULT_DIR = os.path.join(paths.PROJECT_DIR, "release", "BBLIT Viewer")
 DOCUMENTS = ("README.md", "README_Ita.md", "LICENSE")
 LEVELS_README = os.path.join("bze_levels", "README.txt")
+NOTICES = "THIRD_PARTY_LICENSES.txt"
 # the generated parts: only these are replaced and go into the zip
-PARTS = (EXECUTABLE, "_internal", "portable.flag", *DOCUMENTS, "bze_levels")
+PARTS = (EXECUTABLE, "_internal", "portable.flag", *DOCUMENTS, NOTICES, "bze_levels")
+# the Python packages PyInstaller puts in the executable, as (title,
+# distribution name, folder in _internal/ that shows it is bundled or None)
+BUNDLED = (("pyglet", "pyglet", None), ("Pillow", "pillow", "PIL"),
+           ("PyInstaller bootloader", "pyinstaller", None))
+NOTICES_HEADER = """BBLIT Viewer - third-party licences
+==================================
+
+BBLIT Viewer is released under the GPL-3.0 (see LICENSE). The executable and
+the _internal folder also contain the following third-party software, each
+under its own licence, reproduced below. The Microsoft Visual C++ runtime
+files (VCRUNTIME140.dll, ucrtbase.dll, api-ms-win-*.dll) are redistributed
+under Microsoft's terms for those files.
+"""
+
+
+def _section(title: str, text: str) -> str:
+    return f"\n\n{'=' * 78}\n{title}\n{'=' * 78}\n\n{text.strip()}\n"
+
+
+def third_party_licenses(internal_dir: str) -> str | None:
+    """The text of THIRD_PARTY_LICENSES.txt, or None if a licence is missing."""
+    parts = [NOTICES_HEADER]
+    python_license = os.path.join(sys.base_prefix, "LICENSE.txt")
+    if not os.path.exists(python_license):
+        print(f"missing: {python_license}")
+        return None
+    with open(python_license, encoding="utf-8", errors="replace") as f:
+        parts.append(_section(f"Python {sys.version.split()[0]}, with the libraries it ships "
+                              "(bzip2, libffi, OpenSSL, Tcl/Tk, xz and others)", f.read()))
+    for title, dist_name, folder in BUNDLED:
+        if folder and not os.path.isdir(os.path.join(internal_dir, folder)):
+            continue
+        try:
+            dist = importlib.metadata.distribution(dist_name)
+        except importlib.metadata.PackageNotFoundError:
+            print(f"missing: the {dist_name} package")
+            return None
+        texts = [f.read_text(encoding="utf-8") for f in (dist.files or [])
+                 if any(k in f.name.upper() for k in ("LICENSE", "COPYING"))]
+        if not texts:
+            print(f"missing: the licence file of {dist_name}")
+            return None
+        parts.append(_section(f"{title} {dist.version}", "\n\n".join(texts)))
+    return "".join(parts)
 
 
 def _clear_readonly(func, file_path, _error):
@@ -80,6 +131,11 @@ def main() -> int:
     open(os.path.join(output_folder, "portable.flag"), "w").close()
     for document in DOCUMENTS:
         shutil.copyfile(os.path.join(paths.PROJECT_DIR, document), os.path.join(output_folder, document))
+    notices = third_party_licenses(internal_dir)
+    if notices is None:
+        return 1
+    with open(os.path.join(output_folder, NOTICES), "w", encoding="utf-8", newline="\r\n") as f:
+        f.write(notices)
     os.makedirs(os.path.join(output_folder, "bze_levels"))
     shutil.copyfile(os.path.join(paths.PROJECT_DIR, LEVELS_README),
                     os.path.join(output_folder, LEVELS_README))

@@ -120,8 +120,8 @@ python -m venv .venv
 ```
 
 `build_exe.py` scrive `BBLIT Viewer.exe` e `_internal\` nella cartella del
-progetto; `make_release.py` li mette, con questo README, la licenza e una
-`bze_levels\` vuota, in `release\BBLIT Viewer\` e in uno zip, e stampa lo SHA-256
+progetto; `make_release.py` li mette, con questo README, la licenza, le
+licenze di terze parti (`THIRD_PARTY_LICENSES.txt`) e una `bze_levels\` vuota, in `release\BBLIT Viewer\` e in uno zip, e stampa lo SHA-256
 dello zip per le note della release (l'eseguibile non è firmato). La release è
 portatile: le impostazioni restano in `userdata\` accanto a lei. I pezzi di un
 livello finiscono in cache in `extracted\` dopo la prima apertura.
@@ -155,8 +155,9 @@ con i TAS e il glitch hunting.
   di contenitore, load script, modelli, animazioni e terreno.
 - **quantumdude836** — [BugsDecomp](https://github.com/quantumdude836/BugsDecomp),
   la decompilazione, usata come riferimento.
-- **CTR viewer** — il modello per l'interfaccia (menu, opzioni, impostazioni
-  portatili). Nessun codice è stato preso da lì.
+- **DCxDemo** — il CTR viewer di [CTR-tools](https://github.com/CTR-tools/CTR-tools),
+  il modello per l'interfaccia (menu, opzioni, impostazioni portatili).
+  Nessun codice è stato preso da lì.
 - Font del logo: [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)
   di Astigmatic (Apache 2.0). Logo, icona e sfondo sono disegnati dagli script
   in `branding/`.
