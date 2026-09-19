@@ -47,7 +47,7 @@ di Ombelll, lo dice.
 | 282 | I settori `0x1000`: un quad per record, in due ordini dei vertici |
 | 283 | Facce che si vedono e su cui non si sta |
 | 284 | Un box per oggetto: il muro invisibile sopra il vetro in `L05A3C` |
-| 285 | Le regole delle zone: effetti a +16; le zone che uccidono o riportano indietro |
+| 285 | Le regole delle zone: effetti a +16; le zone che uccidono o fanno fare un respawn diretto |
 | 286 | Quello che si vede contro quello su cui si sta: terreno invisibile, pixel, muri finti |
 | 287 | I blocchi di collisione sono lastre impilate; la loro cima come soffitto e' solo un candidato |
 | 288 | Le flag di collisione del viewer, riviste sul gioco |
@@ -895,7 +895,7 @@ stream della posa di partenza).
 cupole del cielo e mare, restano fuori: coprirebbero tutto). Con e senza,
 ogni altro gruppo e' identico byte per byte (`check_walls.py`).
 
-## 285 — Le regole delle zone: effetti a +16; le zone che uccidono o riportano indietro
+## 285 — Le regole delle zone: effetti a +16; le zone che uccidono o fanno fare un respawn diretto
 
 `PROVEN_RAW_DATA`.
 

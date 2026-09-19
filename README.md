@@ -2,7 +2,7 @@
 
 <p align="center">A level viewer for <i>Bugs Bunny: Lost in Time</i> (PC, 1999), with glitch-hunting overlays.</p>
 
-<p align="center"><b><a href="../../releases/latest">Download the latest release</a></b> · <a href="README_Ita.md">Italiano</a></p>
+<p align="center"><b><a href="../../releases/latest">Download the latest release</a></b></p>
 
 <p align="center"><img src="docs/images/dock_L03A.png" alt="The dock of L03A in the viewer" width="900"></p>
 
@@ -85,7 +85,7 @@ with what is drawn: they are a guide to where to look, not a proof.
 | Hard walls | the heightmap's `0x7F` walls: they stop you at any height | read |
 | Ground | the ground you really stand on (the heightmap) | read |
 | Collision boxes | each object's collision box, as the game tests it | read |
-| Death zones | zones that kill and respawn you, or grab you and put you back | read |
+| Death zones | zones that kill you (respawn at the checkpoint) or respawn you directly at a fixed point | read |
 | 0x1000 faces | the terrain faces the game never draws; they are not walls | read |
 | Invisible walls | hard walls where nothing visible stands | deduced |
 | No collision | faces you see but cannot stand on: where the fall lands you safely, and where it ends in a death zone | deduced |
@@ -93,8 +93,8 @@ with what is drawn: they are a guide to where to look, not a proof.
 | Area boxes | each heightmap block as a box, base to top | deduced, not checked in the game |
 
 <p align="center">
-  <img src="docs/images/collision_boxes_L03D1.png" alt="Collision boxes in L03D1" width="440">
-  <img src="docs/images/wireframe_L02A1.png" alt="Wireframe of L02A1" width="440">
+  <img src="docs/images/collision_boxes_L03D1.png" alt="Collision boxes in L03D1" width="49%">
+  <img src="docs/images/wireframe_L02A1.png" alt="Wireframe of L02A1" width="49%">
 </p>
 
 The findings behind each flag are in [docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md)

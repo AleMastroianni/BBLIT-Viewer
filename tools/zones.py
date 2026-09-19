@@ -1,5 +1,5 @@
-"""The zones (load script block 0x09) that kill or recover the
-player: for the viewer's "Death zones" and "Death floor" flags.
+"""The zones (load script block 0x09) that kill the player or respawn
+them directly: for the viewer's "Death zones" and "Death floor" flags.
 
 A zone is a box (finding 103): origin (x, y, z), extent
 in X and in Z, and in Y from its floor up to "Y limit" higher up (the game's
@@ -8,9 +8,10 @@ carry an effects word at +16 (finding 169):
 
 * 0x200000: the player goes into a series of animations and the lives
   counter drops to zero: death, and you restart from the checkpoint;
-* 0x40000000: teleport to the three parameters: the zone catches you and puts
-  you back at a fixed point, like CTR's mask pickup (the recovery net of
-  L04A2: six zones over the whole floor, all towards (7900, -15520, 5000)).
+* 0x40000000: teleport to the three parameters: a direct respawn at a fixed
+  point (the recovery net of L04A2: six zones over the whole floor, all
+  towards (7900, -15520, 5000)). Nothing grabs the player in the game: a
+  zone kills, hurts, or respawns you.
 
 On the menu levels: 165 zones with 0x200000 in 46 levels, 15 with
 teleport in 4. The rules' conditions are not evaluated: you see
@@ -56,8 +57,8 @@ DAMAGE = 0x48      # action: damage (finding 158)
 
 
 def trap_box(z: dict):
-    """The box of a zone that catches you when you fall into it: it kills,
-    teleports or hurts (action 0x48). None otherwise. Used by the
+    """The box of a zone that ends a fall badly: it kills, respawns you
+    directly (teleport) or hurts (action 0x48). None otherwise. Used by the
     no-collision flag: falling into one of these is not a safe fall."""
     if kind_of(z) or any(r["action"][0] == DAMAGE for r in z.get("rules", [])):
         return zone_box(z)

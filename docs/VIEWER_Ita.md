@@ -158,7 +158,7 @@ Flags**, o con le opzioni da riga di comando qui sotto. Contesto: scoperte
 | Muri invisibili | ciò che ti ferma senza niente di disegnato: i muri duri (`0x7F`) della heightmap di collisione dove non c'è una parete visibile. In magenta |
 | Senza collisione | facce che sembrano calpestabili ma non hanno collisione: ciano acceso dove, cadendo, si atterra sani e salvi; ciano scuro dove si finisce in una zona di morte, danno o teletrasporto |
 | Box di collisione | il box di collisione di ogni oggetto, come lo prova il gioco (può essere molto più grande dell'oggetto). In arancione |
-| Zone di morte | le zone che ti uccidono e fanno ripartire (rosso) o ti riprendono e rimettono in un punto fisso (viola) |
+| Zone di morte | le zone che ti uccidono, con respawn al checkpoint (rosso), o ti fanno fare un respawn diretto in un punto fisso (viola) |
 | Pavimento della morte | le zone di morte grandi almeno metà del livello: il mare, l'abisso sotto il livello. Non tutti i livelli ne hanno |
 | Terreno di collisione | il terreno su cui si sta davvero (la heightmap): verde tenue sotto le facce visibili, verde acceso dove non c'è niente di disegnato, bianco coi raggi i punti isolati da 40 unità |
 | Muri duri | i muri `0x7F` della heightmap, che fermano a qualunque altezza. In blu, disegnati alti 5 m |
@@ -275,7 +275,7 @@ zip: l'eseguibile con `_internal/`, `README`, `README_Ita`, `LICENSE` e
 | `rig.py` | stream `0x50`: rig, pose, catena dei genitori (scoperta 261) |
 | `montage.py` | sceglie rig e posa di un oggetto e produce le trasformazioni delle parti, anche per ogni fotogramma |
 | `collision.py` | la heightmap di collisione (blocco `0x36` del load script) |
-| `zones.py` | le zone che uccidono (`0x200000`) o riprendono (teletrasporto `0x40000000`) |
+| `zones.py` | le zone che uccidono (`0x200000`) o fanno fare un respawn diretto (teletrasporto `0x40000000`) |
 | `upscale.py` | scale2x / scale3x per le texture |
 | `bmp.py` | i file `.bmp` del gioco -> PNG |
 | `census.py` | censimento dei difetti di resa, una riga per livello |

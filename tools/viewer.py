@@ -116,7 +116,7 @@ COLOR_NO_COLLISION = (40, 230, 255)
 COLOR_NO_COLLISION_TRAP = (0, 120, 160)
 # the objects' collision boxes (flag Collision boxes): orange, at half transparency
 COLOR_COLLISION_BOXES = (255, 150, 20)
-# the zones (flags Death zones, Death floor): red where you die, purple where you get picked up
+# the zones (flags Death zones, Death floor): red where you die, purple where you respawn directly
 # and put back at a fixed point (teleport)
 COLOR_DEATH = (235, 25, 25)
 COLOR_TELEPORT = (170, 70, 255)
@@ -727,7 +727,7 @@ class Level:
         self.stat["pixel"] = len(pixel)
 
     def _death_zones(self):
-        """The zones that kill or pick up the player (zones.py): red for
+        """The zones that kill the player or respawn them directly (zones.py): red for
         death, purple for teleport. Those at least half the size of the terrain
         footprint are the "death floor" (flag Death floor), the others the
         death zones (flag Death zones)."""

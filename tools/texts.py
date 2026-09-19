@@ -164,10 +164,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                        "nothing is drawn. In blue, 5 m tall."),
     "desc.flags": ("Sovrapposizioni per il glitch hunting: muri, collisioni, zone di morte.",
                    "Overlays for glitch hunting: walls, collisions, death zones."),
-    "desc.death_zones": ("Le zone che ti uccidono e fanno ripartire (rosso) o ti riprendono e "
-                        "rimettono in un punto fisso (viola), come il mask pickup del CTR.",
-                        "Zones that kill you and respawn you (red) or grab you and put you back "
-                        "at a fixed point (violet), like CTR's mask pickup."),
+    "desc.death_zones": ("Le zone che ti uccidono, con respawn al checkpoint (rosso), o che "
+                        "ti fanno fare un respawn diretto in un punto fisso (viola).",
+                        "Zones that kill you, with a respawn at the checkpoint (red), or that "
+                        "respawn you directly at a fixed point (violet)."),
     "desc.death_floor": ("Le zone di morte grandi almeno meta' del livello: il mare, l'abisso "
                          "sotto il livello. Non tutti i livelli ne hanno.",
                          "Death zones at least half the size of the level: the sea, the abyss "

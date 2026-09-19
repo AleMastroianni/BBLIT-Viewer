@@ -47,7 +47,7 @@ says so.
 | 282 | The `0x1000` sectors: one quad per record, in two vertex orders |
 | 283 | Faces you can see and cannot stand on |
 | 284 | One box per object: the invisible wall above the glass in `L05A3C` |
-| 285 | Zone rules: effects at +16; the zones that kill or bring you back |
+| 285 | Zone rules: effects at +16; the zones that kill or respawn you directly |
 | 286 | What you see against what you stand on: invisible ground, landing pixels, fake walls |
 | 287 | Collision blocks are stacked slabs; their top as a ceiling is only a candidate |
 | 288 | The viewer's collision flags, revised against the game |
@@ -872,7 +872,7 @@ stream).
 domes and sea, are left out: they would cover everything). With and without
 them every other group is byte-identical (`check_walls.py`).
 
-## 285 — Zone rules: effects at +16; the zones that kill or bring you back
+## 285 — Zone rules: effects at +16; the zones that kill or respawn you directly
 
 `PROVEN_RAW_DATA`.
 

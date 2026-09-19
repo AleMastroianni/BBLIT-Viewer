@@ -2,7 +2,7 @@
 
 <p align="center">Un viewer dei livelli di <i>Bugs Bunny: Lost in Time</i> (PC, 1999), con sovrapposizioni per il glitch hunting.</p>
 
-<p align="center"><b><a href="../../releases/latest">Scarica l'ultima release</a></b> · <a href="README.md">English</a></p>
+<p align="center"><b><a href="../../releases/latest">Scarica l'ultima release</a></b> · <a href="README.md">README</a></p>
 
 <p align="center"><img src="docs/images/dock_L03A.png" alt="Il molo di L03A nel viewer" width="900"></p>
 
@@ -87,7 +87,7 @@ sono una prova.
 | Hard walls | i muri `0x7F` della heightmap: fermano a qualunque altezza | letta |
 | Ground | il terreno su cui si sta davvero (la heightmap) | letta |
 | Collision boxes | il box di collisione di ogni oggetto, come lo prova il gioco | letta |
-| Death zones | le zone che uccidono e fanno ripartire, o riprendono e rimettono in un punto fisso | letta |
+| Death zones | le zone che uccidono (respawn al checkpoint) o fanno fare un respawn diretto in un punto fisso | letta |
 | 0x1000 faces | le facce del terreno che il gioco non disegna mai; non sono muri | letta |
 | Invisible walls | i muri duri dove non c'è niente di visibile | dedotta |
 | No collision | le facce che si vedono ma su cui non si sta: dove la caduta atterra sani e salvi, e dove finisce in una zona di morte | dedotta |
@@ -95,8 +95,8 @@ sono una prova.
 | Area boxes | ogni blocco della heightmap come un box, dalla base alla cima | dedotta, non verificata nel gioco |
 
 <p align="center">
-  <img src="docs/images/collision_boxes_L03D1.png" alt="Box di collisione in L03D1" width="440">
-  <img src="docs/images/wireframe_L02A1.png" alt="Wireframe di L02A1" width="440">
+  <img src="docs/images/collision_boxes_L03D1.png" alt="Box di collisione in L03D1" width="49%">
+  <img src="docs/images/wireframe_L02A1.png" alt="Wireframe di L02A1" width="49%">
 </p>
 
 Le scoperte dietro ogni flag sono in

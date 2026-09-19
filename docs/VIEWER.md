@@ -155,7 +155,7 @@ command-line options below. Background: findings 282-288.
 | Invisible walls | what stops you with nothing drawn: the collision heightmap's hard walls (`0x7F`) where there is no visible wall. Magenta |
 | No collision | walkable-looking faces with no collision: bright cyan where the fall lands you safely, dark cyan where it ends in a death, damage or teleport zone |
 | Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object). Orange |
-| Death zones | zones that kill you and respawn you (red) or grab you and put you back at a fixed point (violet) |
+| Death zones | zones that kill you, with a respawn at the checkpoint (red), or respawn you directly at a fixed point (violet) |
 | Death floor | death zones at least half the size of the level: the sea, the abyss under the level. Not every level has one |
 | Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
 | Hard walls | the heightmap's `0x7F` walls, which stop you at any height. Blue, drawn 5 m tall |
@@ -270,7 +270,7 @@ executable with `_internal/`, `README`, `README_Ita`, `LICENSE` and
 | `rig.py` | `0x50` streams: rig, poses, parent chain (finding 261) |
 | `montage.py` | picks an object's rig and pose and produces the part transforms, also per frame |
 | `collision.py` | the collision heightmap (load script block `0x36`) |
-| `zones.py` | zones that kill (`0x200000`) or grab you back (teleport `0x40000000`) |
+| `zones.py` | zones that kill (`0x200000`) or respawn you directly (teleport `0x40000000`) |
 | `upscale.py` | scale2x / scale3x for textures |
 | `bmp.py` | the game's `.bmp` files -> PNG |
 | `census.py` | census of rendering defects, one row per level |
