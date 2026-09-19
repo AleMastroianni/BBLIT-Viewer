@@ -289,7 +289,7 @@ def read_terrain(sec4: bytes, offset: int, invisible_walls: list | None = None):
         stat["expected"] += n_prim
         pos, end_pos = basis + pt, basis + pt
         # field +0 counts the dispatcher entries: the chain ends when their
-        # sum reaches n_prim (docs finding 150)
+        # sum reaches n_prim (Ombelll's finding 150)
         running_sum = 0
         while running_sum < n_prim:
             item_count, mode, length_words, n_bound_faces = struct.unpack_from("<HHHH", sec4, pos)
@@ -354,7 +354,7 @@ def _transform(p, *, scale_factor=1.0, rot=None, pos=(0, 0, 0), meters=True):
 
 
 def _rotation_matrix(corners):
-    """Rx*Ry*Rz, with 4096 = one full turn (docs finding 32)."""
+    """Rx*Ry*Rz, with 4096 = one full turn (Ombelll's finding 32)."""
     ax, ay, az = [h * 2 * math.pi / 4096.0 for h in corners]
     cx, sx, cy, sy, cz, sz = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay), math.cos(az), math.sin(az)
     rx = ((1, 0, 0), (0, cx, -sx), (0, sx, cx))

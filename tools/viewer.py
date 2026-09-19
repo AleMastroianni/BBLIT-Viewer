@@ -101,7 +101,7 @@ from pyglet.math import Mat4, Vec3  # noqa: E402
 TICKS_PER_SECOND = 15.0
 
 # Object rule passes per animation tick. The type 14 handler walks the step's
-# rules on every logic tick (docs finding 188), and the logic runs at 30 per
+# rules on every logic tick (Ombelll's finding 188), and the logic runs at 30 per
 # second against the 15 animation blocks (finding 278). NOT measured:
 # the rotation speed of the anchors will tell (280).
 RULE_PASSES_PER_TICK = 2
@@ -116,7 +116,7 @@ COLOR_NO_COLLISION = (40, 230, 255)
 COLOR_NO_COLLISION_TRAP = (0, 120, 160)
 # the objects' collision boxes (flag Collision boxes): orange, at half transparency
 COLOR_COLLISION_BOXES = (255, 150, 20)
-# the zones (keys Z and K): red where you die, purple where you get picked up
+# the zones (flags Death zones, Death floor): red where you die, purple where you get picked up
 # and put back at a fixed point (teleport)
 COLOR_DEATH = (235, 25, 25)
 COLOR_TELEPORT = (170, 70, 255)
@@ -142,6 +142,16 @@ OVERLAYS = {
     "pixel": "show_ground", "pixel_beam": "show_ground",
     "hard_walls": "show_hard_walls",
 }
+# the overlay families: each is built, as pieces of its own, only when one of
+# its flags is on, so a level opened with the flags off skips them all (the
+# heightmap alone was 80-93% of the first build of a level: L03A 4.0 of 4.9 s)
+FAMILIES = {
+    "terrain_overlays": ("show_faces_1000", "show_no_collision"),
+    "heightmap": ("show_ground", "show_hard_walls", "show_invisible_walls", "show_area_boxes"),
+    "zones": ("show_death_zones", "show_death_floor"),
+    "collision_boxes": ("show_collision_boxes",),
+}
+assert set(OVERLAYS.values()) == {a for flags in FAMILIES.values() for a in flags}
 
 # on the main menu background (like "ctrviewer by DCxDemo")
 SIGNATURE = "BBLIT Viewer by AleMastroianni"
@@ -234,7 +244,7 @@ class FaceGroup:
 
 
 # conditions that can be evaluated at level start, when table 1
-# is zeroed (docs finding 161); the opcodes are those of FUN_0042a7d0
+# is zeroed (Ombelll's finding 161); the opcodes are those of FUN_0042a7d0
 def _condition_at_startup(cond) -> bool:
     op, val, _index = cond
     if op == 0x00:
@@ -261,7 +271,7 @@ def _spin_speed(obj) -> int:
     Action 0x26 adds `value * 16 + index` (two s16) to the object's Y rotation
     (`obj+0xDE`, read in the handler at 0x0042D070 of this build).
     The type 14 handler walks the current step's rules on every tick and
-    stops at the first true one without effect 0x8000 (docs finding 188): here
+    stops at the first true one without effect 0x8000 (Ombelll's finding 188): here
     the starting step is walked with the conditions evaluated at startup.
 
     A step that ends when the object gets near a role (effect
@@ -293,9 +303,13 @@ class Level:
     object and every clone is a piece (its triangles per group, its
     bounds, its counters). `_pieces` is the memory of pieces already built for
     this level: rebuilding it for a state chosen from the menu redoes
-    only the pieces whose role changed (before: 4.3 s to raise the bridges)."""
+    only the pieces whose role changed (before: 4.3 s to raise the bridges).
+    `families`: the overlay families to build (FAMILIES), all by default;
+    the viewer passes only those with a flag on."""
 
-    def __init__(self, bze_path: str, cache: str, table=None, session_poses=None, pieces=None):
+    def __init__(self, bze_path: str, cache: str, table=None, session_poses=None, pieces=None,
+                 families=tuple(FAMILIES)):
+        self.families = frozenset(families)
         self.name = os.path.splitext(os.path.basename(bze_path))[0]
         self.table = table
         sec = sections(bze_path, cache)
@@ -334,10 +348,11 @@ class Level:
 
     # ---- pieces
 
-    def _piece(self, item_key, build_items):
+    def _piece(self, item_key, build_items, mount=True):
         """Mounts piece `item_key`: from memory if present, otherwise builds it
         (`build_items` calls _add_faces) and remembers it. The counters the build
-        changes are remembered as a difference and reapplied."""
+        changes are remembered as a difference and reapplied. With
+        `mount=False` the caller mounts the returned piece later."""
         piece = self._pieces.get(item_key)
         if piece is None:
             before = dict(self.stat)
@@ -359,7 +374,9 @@ class Level:
         else:
             for k, d in piece[3].items():
                 self.stat[k] = self.stat.get(k, 0) + d
-        self._mount(piece)
+        if mount:
+            self._mount(piece)
+        return piece
 
     def _mount(self, piece):
         """Adds a piece's triangles to the level's groups (copying them:
@@ -450,48 +467,9 @@ class Level:
 
     def _build(self):
         for k, t in enumerate(self.lvl["terrain"]):
-            def ground_height(t=t):
-                invisible_walls = []
-                vertices, faces, stat = geo.read_terrain(self.sec4, t["offset"], invisible_walls)
-                self._add_faces(vertices, faces, "terrain", pos=tuple(t["translation"]))
-                if invisible_walls:
-                    # the invisible walls (flag Invisible walls): two triangles per quad, in
-                    # a separate group, semi-transparent and in a color the
-                    # game does not have; off by default, as in the game
-                    face_list = []
-                    for a, b, c, d in invisible_walls:
-                        face_list.append(geo.Face((a, b, c), None, None, [COLOR_FACES_1000] * 3, 0))
-                        face_list.append(geo.Face((a, c, d), None, None, [COLOR_FACES_1000] * 3, 0))
-                    self._add_faces(vertices, face_list, "faces_1000", pos=tuple(t["translation"]), counted=False)
-                    self.stat["walls_drawn"] = self.stat.get("walls_drawn", 0) + len(invisible_walls)
-                # walkable faces with no collision terrain below (key
-                # C): a cyan copy, raised by 4 units so it does not flicker
-                # on the texture (collision.no_collision_kind)
-                if self.collision_blocks:
-                    # no collision: bright cyan where you land safely, a faint
-                    # dark cyan where the fall ends in a death/damage zone
-                    sp = t["translation"]
-                    kinds = {"safe": [], "trap": []}
-                    for vl in faces:
-                        kind = collision.no_collision_kind(
-                            self.collision_blocks,
-                            [tuple(vertices[h][k] + sp[k] for k in range(3)) for h in vl.corners],
-                            self.trap_boxes)
-                        if kind:
-                            kinds[kind].append(vl)
-                    for kind, category, draw_color, blend in (
-                            ("safe", "no_collision", COLOR_NO_COLLISION, 0),
-                            ("trap", "no_collision_trap", COLOR_NO_COLLISION_TRAP, 3)):
-                        face_list = [geo.Face(vl.corners, None, None, [draw_color] * len(vl.corners), blend)
-                                 for vl in kinds[kind]]
-                        if face_list:
-                            self._add_faces(vertices, face_list, category, pos=(sp[0], sp[1] - 4, sp[2]), counted=False)
-                            self.stat[category] = self.stat.get(category, 0) + len(face_list)
-                self.stat["terrain"] += len(faces)
-                for item_key in ("sectors", "wall_sectors"):
-                    if item_key in stat:
-                        self.stat[item_key] = self.stat.get(item_key, 0) + stat[item_key]
-            self._piece(("terrain_block", k), ground_height)
+            self._piece(("terrain_block", k), lambda t=t: self._terrain_block(t))
+            if "terrain_overlays" in self.families:
+                self._piece(("terrain_overlays", k), lambda t=t: self._terrain_overlays(t))
         # the terrain bounds are used to frame the camera: props can
         # be huge (the sky dome) and would throw off the framing
         self.terrain_lo = list(self.lo)
@@ -506,12 +484,76 @@ class Level:
             if mid is None or models[mid]["size"] <= 12:
                 continue
             role = self.pref["pose"].get(mid)
-            self._piece(("object", n, role),
-                        lambda n=n, o=o, mid=mid, role=role: self._placed_object(n, o, models[mid], role, diagonal))
+            piece = self._piece(("object", n, role),
+                                lambda n=n, o=o, mid=mid, role=role: self._placed_object(n, o, models[mid], role, diagonal),
+                                mount=False)
+            # the box only for an object that draws something (a piece
+            # without groups read no faces), and mounted before the object,
+            # as when it was part of it: same drawing order
+            if "collision_boxes" in self.families and piece[0]:
+                self._piece(("collision_box", n, role),
+                            lambda o=o, role=role: self._object_collision_box(o, role, diagonal))
+            self._mount(piece)
 
         self._build_clones(models)
-        self._piece(("zone",), self._death_zones)
-        self._piece(("heightmap",), self._heightmap)
+        if "zones" in self.families:
+            self._piece(("zone",), self._death_zones)
+        if "heightmap" in self.families:
+            self._piece(("heightmap",), self._heightmap)
+
+    def _terrain_block(self, t):
+        """The triangles of a terrain block (one piece)."""
+        vertices, faces, stat = geo.read_terrain(self.sec4, t["offset"], [])
+        self._add_faces(vertices, faces, "terrain", pos=tuple(t["translation"]))
+        self.stat["terrain"] += len(faces)
+        for item_key in ("sectors", "wall_sectors"):
+            if item_key in stat:
+                self.stat[item_key] = self.stat.get(item_key, 0) + stat[item_key]
+
+    def _terrain_overlays(self, t):
+        """A terrain block's overlays (one piece, family terrain_overlays):
+        the 0x1000 faces and the faces without collision."""
+        invisible_walls = []
+        vertices, faces, _stat = geo.read_terrain(self.sec4, t["offset"], invisible_walls)
+        if invisible_walls:
+            # the 0x1000 faces (flag 0x1000 faces): two triangles per quad, in
+            # a separate group, semi-transparent and in a color the
+            # game does not have; off by default, as in the game
+            face_list = []
+            for a, b, c, d in invisible_walls:
+                face_list.append(geo.Face((a, b, c), None, None, [COLOR_FACES_1000] * 3, 0))
+                face_list.append(geo.Face((a, c, d), None, None, [COLOR_FACES_1000] * 3, 0))
+            self._add_faces(vertices, face_list, "faces_1000", pos=tuple(t["translation"]), counted=False)
+            self.stat["walls_drawn"] = self.stat.get("walls_drawn", 0) + len(invisible_walls)
+        # walkable faces with no collision terrain below (flag No
+        # collision): a cyan copy, raised by 4 units so it does not flicker
+        # on the texture (collision.no_collision_kind)
+        if self.collision_blocks:
+            # no collision: bright cyan where you land safely, a faint
+            # dark cyan where the fall ends in a death/damage zone
+            sp = t["translation"]
+            kinds = {"safe": [], "trap": []}
+            for vl in faces:
+                kind = collision.no_collision_kind(
+                    self.collision_blocks,
+                    [tuple(vertices[h][k] + sp[k] for k in range(3)) for h in vl.corners],
+                    self.trap_boxes)
+                if kind:
+                    kinds[kind].append(vl)
+            for kind, category, draw_color, blend in (
+                    ("safe", "no_collision", COLOR_NO_COLLISION, 0),
+                    ("trap", "no_collision_trap", COLOR_NO_COLLISION_TRAP, 3)):
+                face_list = [geo.Face(vl.corners, None, None, [draw_color] * len(vl.corners), blend)
+                         for vl in kinds[kind]]
+                if face_list:
+                    self._add_faces(vertices, face_list, category, pos=(sp[0], sp[1] - 4, sp[2]), counted=False)
+                    self.stat[category] = self.stat.get(category, 0) + len(face_list)
+
+    def _object_collision_box(self, o, role, diagonal):
+        """A placed object's collision box (one piece, family collision_boxes)."""
+        rot = geo._rotation_matrix(o["rotation"]) if o["rotation"] else None
+        scale_factor = (o["scale_factor"][0] / 4096.0) if o["scale_factor"] else 1.0
+        self._add_collision_box(o, role, rot, scale_factor, diagonal)
 
     def _placed_object(self, n, o, model, role, diagonal):
         """The triangles of a placed object (one piece)."""
@@ -533,7 +575,6 @@ class Level:
         span = max(max(p[k] for p in vertices) - min(p[k] for p in vertices)
                    for k in range(3)) * scale_factor / geo.UNITS_PER_METER
         category = "sky_dome" if span > 0.8 * diagonal else "props"
-        self._add_collision_box(o, role, rot, scale_factor, diagonal)
         step = _spin_speed(o)
         spin = (("spin", n), step) if step else None
         # an animation that actually changes something: one group per frame
@@ -723,7 +764,7 @@ class Level:
         In the game a template (block 0x08, no position) becomes visible
         when a `0x31` rule of a live object carries effect 0x100 or
         0x40000: `FUN_00448d40` clones the template whose role is field +28,
-        at the object's position and with its rotation (docs finding 194). The
+        at the object's position and with its rotation (Ombelll's finding 194). The
         lit torches, the blue chests and the falling crates work like this.
 
         Static version, and a declared approximation: the conditions
@@ -1249,8 +1290,10 @@ class Viewer(pyglet.window.Window):
         def flags():
             """The overlays for glitch hunting."""
             def item(item_key, attr_name, desc):
-                return M.YesNo(item_key, lambda: getattr(self, attr_name),
-                              lambda v: setattr(self, attr_name, v), desc)
+                def set_flag(v):
+                    setattr(self, attr_name, v)
+                    self.ensure_overlays()
+                return M.YesNo(item_key, lambda: getattr(self, attr_name), set_flag, desc)
             return [item("level.invisible_walls", "show_invisible_walls", "desc.invisible_walls"),
                     item("level.no_collision", "show_no_collision", "desc.no_collision"),
                     item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
@@ -1499,7 +1542,11 @@ class Viewer(pyglet.window.Window):
             self._pieces = level_cache.fetch(self.cache, name, self._signature) or {}
             self._texture_table = texmod.construct(os.path.dirname(file_path), name, self.cache)
         n_known = len(self._pieces)
-        self.current_level = Level(file_path, self.cache, self._texture_table, self.session_poses.get(name), self._pieces)
+        # the families with a flag on; on the same level also those already
+        # built, whose flags are now off: they stay mounted, only hidden
+        families = self._families_on() | (self.current_level.families if same_level else set())
+        self.current_level = Level(file_path, self.cache, self._texture_table, self.session_poses.get(name), self._pieces,
+                                   families=families)
         if len(self._pieces) > n_known:
             level_cache.store(self.cache, name, self._signature, self._pieces)
         for face_group in self.current_level.face_groups.values():
@@ -1513,6 +1560,25 @@ class Viewer(pyglet.window.Window):
               f"{len(self.current_level.face_groups)} groups, "
               f"{len(self.current_level.sizes)} texture, "
               f"{hi[0]-lo[0]:.0f} x {hi[1]-lo[1]:.0f} x {hi[2]-lo[2]:.0f} m")
+
+    def _families_on(self):
+        """The overlay families with at least one flag on."""
+        return {family for family, flags in FAMILIES.items()
+                if any(getattr(self, a) for a in flags)}
+
+    def ensure_overlays(self):
+        """After a flag is turned on: if its family is not in the level yet,
+        rebuild it where it is (the other pieces come from memory; the new
+        ones are built now and stay in the cache). Turning a flag off only
+        hides its groups."""
+        level = self.current_level
+        if level is not None and not self._families_on() <= level.families:
+            self.load_level(self.level_files[self.index], camera=False)
+            if self.screenshot:
+                # the rebuild can take longer than the wait before the
+                # screenshot: it is taken after the rebuild, as at startup
+                pyglet.clock.unschedule(self._screenshot)
+                pyglet.clock.schedule_once(self._screenshot, 0.6)
 
     def reset_camera(self):
         lo, hi = self.current_level.terrain_lo, self.current_level.terrain_hi
@@ -1723,7 +1789,7 @@ class Viewer(pyglet.window.Window):
             return item_count // 3
 
         def set_blend(blend):
-            """The four PlayStation blend modes (docs MODELFORMAT 5b)."""
+            """The four PlayStation blend modes (Ombelll's MODELFORMAT 5b)."""
             if blend is None:
                 glBlendEquation(GL_FUNC_ADD)
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -1957,6 +2023,7 @@ def main() -> None:
         v.show_area_boxes = True
     if args.faces1000:
         v.show_faces_1000 = True
+    v.ensure_overlays()
     if args.clones is not None:
         v.show_clones = args.clones
     if args.albedo is not None:

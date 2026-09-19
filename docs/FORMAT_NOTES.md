@@ -26,7 +26,7 @@ says so.
 | 261 | A model's parts are assembled with the rig and chained on their parents |
 | 262 | UVs are scaled by (size − 1), not divided by 256 |
 | 263 | The `.bmp` files in `Datas/bze` are not level previews |
-| 264 | Executable build (omitted) |
+| 264 | Two builds of `Bugs.exe`: the data addresses hold, the code addresses do not |
 | 265 | Type 4 streams are animations |
 | 266 | REJECTED: "semi-transparent `0x4A`/`0x4E` faces are drawn opaque" |
 | 267 | The sky dome follows the camera |
@@ -165,9 +165,20 @@ visible with linear filtering or mipmaps (on a 16×16 texture half a texel is
 **256×1280 at 8 bits**: video memory dumps, not screenshots. They give no
 ground truth for how a level looks.
 
-## 264 — Executable build (omitted)
+## 264 — Two builds of `Bugs.exe`: the data addresses hold, the code addresses do not
 
-Not relevant to the PC data format; omitted.
+`PROVEN_BINARY`. Ombelll's finding 208 describes two retail builds of
+`Bugs.exe`, both 772,096 bytes, with identical level data: SHA-256
+`6E15F920…`, to which every code address in Ombelll's documents belongs, and
+`74AB71E1…` ("BBLIT release" in Ombelll's NATIVE_TRACE). The code addresses
+in these notes (finding 280) come from `74AB71E1…`.
+
+On that build the `.data` addresses of Ombelll's documents read correctly
+(the level table, 111 entries of 24 bytes from `..\BZE\TITLE.BZE;1`), while
+the `.text` addresses must be located again by byte signature: the shift is
+not constant (+0x1A0 for the `CreateFileA` call sites in Ombelll's 208, +0x90
+for the handlers of actions 0x17 and 0x19 here). The level files are the
+same: `MERLIN.BZE` has the documented hash.
 
 ## 265 — Type 4 streams are animations
 
@@ -659,9 +670,10 @@ now animate. 10 objects of L01a and MERLIN whose starting pose removes all
 meshes stay invisible: in the game they start invisible (effects, emitters).
 
 **2. Action `0x26` rotates around the vertical.** The addresses here are
-those of the executable examined, whose code is shifted from the addresses in
-Ombelll's documents (checked on the action table: handlers 0x17 and 0x19 fall
-0x90 later), so they should be located by byte signature. The handler, at
+those of build `74AB71E1…` (finding 264), whose code is shifted from the
+addresses in Ombelll's documents (checked on the action table: handlers 0x17
+and 0x19 fall 0x90 later): on the other build they should be located by byte
+signature. The handler, at
 `0x0042D070` (action table at `0x004AC6E0`), does
 `[obj+0xC0]+0x12 += value*16 + index` (s16 at +4 and +6 of the action record,
 i.e. `p[16]` and `p[18]` of the rule). `obj+0xC0` points to `obj+0xCC`

@@ -182,7 +182,7 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
                 # know which animation the game starts (Ombelll's findings 188, 89)
                 "states": [],
                 "steps": [],
-                # second rule table (0x31, docs FORMATS): used to know
+                # second rule table (0x31, Ombelll's FORMATS): used to know
                 # which templates the object spawns (effect 0x100/0x40000)
                 "rules": [],
                 # objects of type 2 and 20: the texture slot they fill on

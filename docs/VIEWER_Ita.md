@@ -224,6 +224,11 @@ malformata viene ignorata.
   l'eseguibile) e si ricostruisce da solo quando cambiano il codice o il file
   del livello. Un livello già visto si riapre in una frazione di secondo.
 
+Le sovrapposizioni per il glitch hunting si costruiscono solo quando si
+accende una loro flag (la heightmap richiede qualche secondo nei livelli
+grandi); da lì in poi stanno anche loro in cache, e spegnere la flag le
+nasconde soltanto.
+
 Le sezioni decompresse si riusano finché esistono. Se si sostituisce un file
 di livello con uno diverso con lo stesso nome, si cancella la cartella di quel
 livello in `extracted/` (cancellare tutta la cartella è sempre sicuro).

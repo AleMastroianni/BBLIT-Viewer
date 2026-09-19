@@ -121,7 +121,8 @@ python -m venv .venv
 
 `build_exe.py` scrive `BBLIT Viewer.exe` e `_internal\` nella cartella del
 progetto; `make_release.py` li mette, con questo README, la licenza e una
-`bze_levels\` vuota, in `release\BBLIT Viewer\` e in uno zip. La release è
+`bze_levels\` vuota, in `release\BBLIT Viewer\` e in uno zip, e stampa lo SHA-256
+dello zip per le note della release (l'eseguibile non è firmato). La release è
 portatile: le impostazioni restano in `userdata\` accanto a lei. I pezzi di un
 livello finiscono in cache in `extracted\` dopo la prima apertura.
 
@@ -135,11 +136,12 @@ su cui il viewer è costruito; dove una scoperta la corregge, lo dice.
 
 ## Contribuire
 
-Issue e pull request sono benvenute: un livello che sembra sbagliato, una flag
-che non corrisponde al gioco, una lettura del formato. Per tutto ciò che
-riguarda il comportamento del gioco aiuta molto una schermata o un breve video
-del gioco accanto a quella del viewer. Per favore non allegare mai file del
-gioco.
+Apri una **issue**: un livello che sembra sbagliato, una flag che non
+corrisponde al gioco, una lettura del formato. Per tutto ciò che riguarda il
+comportamento del gioco aiuta molto una schermata o un breve video del gioco
+accanto a quella del viewer. Le pull request non vengono accettate: le
+correzioni si fanno qui, a partire dalle issue. Per favore non allegare mai
+file del gioco.
 
 ## Community
 

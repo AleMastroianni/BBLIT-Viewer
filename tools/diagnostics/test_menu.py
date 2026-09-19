@@ -34,6 +34,9 @@ def press(s, mod=0):
 
 
 probe("title with the build", v.caption.endswith("Debug"))
+probe("flags off at startup: no overlay family built",
+      not v.current_level.families
+      and not any(g.category in viewer.OVERLAYS for g in v.current_level.face_groups.values()))
 probe("English by default", viewer.texts.language() == "en")
 viewer.texts.set_language("it")   # the test uses the Italian labels
 probe("menu closed at startup", not v.menu.is_open)
@@ -80,6 +83,10 @@ for i_f, attr in enumerate(flag_attrs):
     press(k.ENTER)
 probe("Enter turns each flag on and off again", all(turned_on)
       and not any(getattr(v, a) for a in flag_attrs))
+probe("turning a flag on builds its family; off only hides it",
+      v.current_level.families == set(viewer.FAMILIES)
+      and {g.category for g in v.current_level.face_groups.values()} >= {
+          "invisible_walls", "no_collision", "collision_boxes", "death_floor"})   # L03A: sea only
 press(k.BACKSPACE)
 probe("Backspace from Flags returns to Level options", v.menu.stack[-1][0] == "level")
 v.menu.hide()

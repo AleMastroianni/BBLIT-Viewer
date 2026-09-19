@@ -26,7 +26,7 @@ di Ombelll, lo dice.
 | 261 | Le parti di un modello si montano con il rig e si concatenano sui genitori |
 | 262 | Le UV vanno scalate per (dimensione − 1), non divise per 256 |
 | 263 | I `.bmp` in `Datas/bze` non sono anteprime dei livelli |
-| 264 | Build dell'eseguibile (omessa) |
+| 264 | Due build di `Bugs.exe`: gli indirizzi dei dati valgono, quelli del codice no |
 | 265 | Gli stream di tipo 4 sono animazioni |
 | 266 | RESPINTA: "le facce `0x4A`/`0x4E` semitrasparenti vengono disegnate opache" |
 | 267 | La cupola del cielo segue la camera |
@@ -167,9 +167,20 @@ texel e' il 3% della superficie). Il verso della v e' corretto dalla 271.
 **256×1280 a 8 bit**: dump della memoria video, non schermate. Non danno una
 verita' di riferimento su come appare un livello.
 
-## 264 — Build dell'eseguibile (omessa)
+## 264 — Due build di `Bugs.exe`: gli indirizzi dei dati valgono, quelli del codice no
 
-Non riguarda il formato dei dati PC; omessa.
+`PROVEN_BINARY`. Il finding 208 di Ombelll descrive due build commerciali di
+`Bugs.exe`, entrambe di 772.096 byte, con dati dei livelli identici: SHA-256
+`6E15F920…`, a cui appartengono tutti gli indirizzi di codice dei documenti di
+Ombelll, e `74AB71E1…` ("BBLIT release" nel NATIVE_TRACE di Ombelll). Gli
+indirizzi di codice di queste note (scoperta 280) vengono da `74AB71E1…`.
+
+Su quella build gli indirizzi `.data` dei documenti di Ombelll si leggono
+correttamente (la tabella dei livelli, 111 voci da 24 byte a partire da
+`..\BZE\TITLE.BZE;1`), mentre quelli `.text` vanno ritrovati per firma di
+byte: lo spostamento non e' costante (+0x1A0 per le chiamate a `CreateFileA`
+nel 208 di Ombelll, +0x90 qui per i gestori delle azioni 0x17 e 0x19). I file
+dei livelli sono gli stessi: `MERLIN.BZE` ha l'hash documentato.
 
 ## 265 — Gli stream di tipo 4 sono animazioni
 
@@ -673,10 +684,10 @@ cui posa di partenza toglie tutte le mesh: nel gioco partono invisibili
 (effetti, emettitori).
 
 **2. L'azione `0x26` ruota attorno alla verticale.** Gli indirizzi qui sono
-quelli dell'eseguibile esaminato, il cui codice e' spostato rispetto agli
-indirizzi dei documenti di Ombelll (verificato sulla tabella delle azioni: i
-gestori 0x17 e 0x19 cadono 0x90 dopo), quindi vanno ritrovati per firma di
-byte. Il gestore, a `0x0042D070` (tabella delle azioni a `0x004AC6E0`), fa
+quelli della build `74AB71E1…` (scoperta 264), il cui codice e' spostato
+rispetto agli indirizzi dei documenti di Ombelll (verificato sulla tabella
+delle azioni: i gestori 0x17 e 0x19 cadono 0x90 dopo): sull'altra build vanno
+ritrovati per firma di byte. Il gestore, a `0x0042D070` (tabella delle azioni a `0x004AC6E0`), fa
 `[obj+0xC0]+0x12 += valore*16 + indice` (s16 a +4 e +6 del record
 dell'azione, cioe' `p[16]` e `p[18]` della regola). `obj+0xC0` punta a
 `obj+0xCC` (`lea edx,[eax+0xCC]; mov [eax+0xC0],edx`, anche nel caricatore a

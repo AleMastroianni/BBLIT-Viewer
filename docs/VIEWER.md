@@ -220,6 +220,10 @@ paused animations. An unknown or malformed entry is ignored.
   rebuilt automatically when the code or the level file changes. A level
   already seen reopens in a fraction of a second.
 
+The glitch-hunting overlays are built only when one of their flags is
+turned on (the heightmap takes a few seconds on large levels); after that
+they are in the cache too, and turning the flag off only hides them.
+
 The decompressed sections are reused as long as they exist. If you replace a
 level file with a different one of the same name, delete that level's folder
 in `extracted/` (deleting the whole folder is always safe).

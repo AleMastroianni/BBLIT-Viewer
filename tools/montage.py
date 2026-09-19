@@ -1,6 +1,6 @@
 """Finds the rig and pose of an object and returns the transforms of its parts.
 
-An object carries several resources (docs finding 6): the model (role 7), the rig
+An object carries several resources (Ombelll's finding 6): the model (role 7), the rig
 (role 4) and a series of animations. Each animation holds its own complete
 opening pose (finding 34), so to assemble a static object any one of them
 is enough — the rest pose is preferred when there is one.
@@ -26,7 +26,7 @@ END_MARKER = 0xFFF0   # ends the slot list of a state
 def start_key(obj: dict | None) -> int | None:
     """The key of the step the object starts with: slot 0 of state 2 (or 1).
 
-    An object's rules run only for the current step (docs finding
+    An object's rules run only for the current step (Ombelll's finding
     192): for a freshly cloned template they are the ones with this key.
     """
     if not obj or not obj.get("states"):
@@ -42,7 +42,7 @@ def start_role(obj: dict | None) -> int | None:
     """The role of the animation the game starts the object with.
 
     This is the chain of the type 14 object handler (`FUN_00440120`,
-    docs finding 188): the initial state is 2, and 1 only if 2 is missing; slot
+    Ombelll's finding 188): the initial state is 2, and 1 only if 2 is missing; slot
     0 of its playlist is a KEY (finding 89), looked up among the object's
     steps; the step found carries the role at +2 (finding 84).
     """
@@ -154,7 +154,7 @@ def collision_box(sec4: bytes, resources: list[int], res: dict, obj: dict | None
 
     Six `s16` in object space, (min x, min y, min z, max x, max y,
     max z) with Y pointing down: the game copies them to `object+0x48` and
-    tests them rotated with the object (`FUN_004313a0`, docs finding 123). The box
+    tests them rotated with the object (`FUN_004313a0`, Ombelll's finding 123). The box
     changes from one animation block to the next: here only the first.
     """
     _r, pose = choose_sources(sec4, resources, res, obj, role=role)

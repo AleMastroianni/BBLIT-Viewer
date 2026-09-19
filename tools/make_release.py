@@ -8,7 +8,8 @@ Starts from the executable built by `tools/build_exe.py` and writes FOLDER
 `_internal/`, `portable.flag` (settings in `userdata/` next to the viewer,
 nothing written to Documents), README.md, README_Ita.md, LICENSE and
 `bze_levels/` with only its README. Inside it, `<FOLDER name>.zip` with the
-same things under one folder, ready to attach to a release.
+same things under one folder, ready to attach to a release; its SHA-256 is
+printed, for the release notes.
 
 Only these parts are replaced: `userdata/`, `extracted/` and `errors.txt` of
 whoever tried the folder stay, and never go into the zip.
@@ -17,6 +18,7 @@ whoever tried the folder stay, and never go into the zip.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import stat
@@ -95,7 +97,13 @@ def main() -> int:
                     z.write(f, os.path.join(name, os.path.relpath(f, output_folder)))
     os.replace(tmp, zip_path)
     mb = os.path.getsize(zip_path) / 2**20
-    print(f"release in {output_folder}\nzip {zip_path} ({mb:.0f} MB)")
+    # the executable is not signed: the zip's SHA-256 goes into the release
+    # notes, so whoever downloads it can check it
+    digest = hashlib.sha256()
+    with open(zip_path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    print(f"release in {output_folder}\nzip {zip_path} ({mb:.0f} MB)\nSHA-256 {digest.hexdigest()}")
     return 0
 
 

@@ -1,4 +1,4 @@
-"""The collision heightmap (load script block 0x36, docs FINDINGS
+"""The collision heightmap (load script block 0x36, Ombelll's FINDINGS
 110-116): the game does not collide with the faces it draws, but with this.
 
 A block (opcode 0x37: offset and size in section 4) is a `u32` with

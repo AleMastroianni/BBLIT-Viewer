@@ -239,7 +239,7 @@ def per_part(parts: dict[int, Part]) -> dict[int, tuple]:
     """Like `transforms`, but by part id and also for parts without a mesh.
 
     Used for attachments: a clone can appear on a part of the parent's rig
-    that draws nothing (docs finding 73-74). Same parent chaining
+    that draws nothing (Ombelll's finding 73-74). Same parent chaining
     as `transforms`.
     """
     cache: dict[int, tuple] = {}
