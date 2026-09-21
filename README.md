@@ -42,6 +42,10 @@ changed.
   textures, the sky dome, semi-transparent blends and the template clones the
   level's rules spawn. Free camera; menus in English and Italian.
 - **Glitch-hunting overlays** (Level options → Flags): see below.
+- **Two ways to read the game's texture coordinates**, because the game
+  itself has two (Video options → Texture coordinates): with an **AMD card**
+  the game cuts the outer strip of every texture and the viewer can do the
+  same. See [docs/VIEWER.md](docs/VIEWER.md).
 - **Command-line tools** in `tools/`, usable on their own:
   - `bze.py`: unpacks and decompresses the `.bze` container;
   - `export_obj.py`: exports a level's terrain and props to OBJ + MTL, with
@@ -69,8 +73,8 @@ changed.
 | L | bilinear filter |
 | Alt+Enter | full screen |
 
-From the sources, `python tools/viewer.py L03A` opens a level directly; `python
-tools/viewer.py --help` lists the options (framing with `--camera`, a PNG with
+From the sources, `python bblit/viewer.py L03A` opens a level directly; `python
+bblit/viewer.py --help` lists the options (framing with `--camera`, a PNG with
 `--screenshot`, frozen animations with `--tick`, the overlays, the language...).
 The full guide is in [docs/VIEWER.md](docs/VIEWER.md).
 
@@ -84,10 +88,10 @@ with what is drawn: they are a guide to where to look, not a proof.
 |---|---|---|
 | Hard walls | the heightmap's `0x7F` walls: they stop you at any height | read |
 | Ground | the ground you really stand on (the heightmap) | read |
-| Collision boxes | each object's collision box, as the game tests it | read |
+| Collision boxes | each object's collision box, as the game tests it: SOLID, PLATFORM (you stand on it) or only TOUCH | read |
 | Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named DEATH, DEATH FLOOR or DAMAGE on top | read |
-| Teleport zones | zones that respawn you directly at a fixed point (RESPAWN) | read |
-| 0x1000 faces | the terrain faces the game never draws; they are not walls | read |
+| Teleport zones | zones that send somebody somewhere, with an arrow to the point: ENTRANCE (and the level it comes from), TELEPORT, RECOVER, RESTART, and LEVEL with the level it leads to | read |
+| Portals | the terrain quads the game never draws: they are portals, with the area they lead to | read |
 | Invisible walls | hard walls where nothing visible stands, and steps of more than 100 units | deduced |
 | No collision | faces you see but cannot stand on, and the walls joined to them that let you through | deduced |
 | DEATH FLOOR | in Death and damage zones: the death zones at least half the size of the level (sea, abyss) | deduced |
@@ -106,7 +110,7 @@ The findings behind each flag are in [docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md
 Python 3.10 or newer, on Windows (the viewer uses OpenGL 3.3):
 
 - [pyglet](https://pyglet.org/) — the window and OpenGL: enough to run
-  `python tools/viewer.py`;
+  `python bblit/viewer.py`;
 - [Pillow](https://python-pillow.org/) — only for the scripts in `branding/`;
 - [PyInstaller](https://pyinstaller.org/) — for the executable.
 

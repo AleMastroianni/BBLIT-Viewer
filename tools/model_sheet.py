@@ -15,13 +15,13 @@ import os
 import struct
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import paths  # noqa: E402
-import export_obj as geo  # noqa: E402
-import montage  # noqa: E402
-import rig as rigmod  # noqa: E402
-import textures as texmod  # noqa: E402
-import tim  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bblit"))
+from support import paths  # noqa: E402
+from game import geometry as geo  # noqa: E402
+from game import montage  # noqa: E402
+from game import rig as rigmod  # noqa: E402
+from game import textures as texmod  # noqa: E402
+from game import tim  # noqa: E402
 from render_obj import _png  # noqa: E402
 
 

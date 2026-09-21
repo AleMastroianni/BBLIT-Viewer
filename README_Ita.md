@@ -43,6 +43,10 @@ vengono solo letti, mai modificati.
   livello fanno comparire. Camera libera; menu in inglese e in italiano.
 - **Sovrapposizioni per il glitch hunting** (Opzioni livello → Flags): vedi
   sotto.
+- **Due modi di leggere le coordinate texture del gioco**, perché il gioco
+  stesso ne ha due (Opzioni video → Coordinate texture): con una **scheda
+  AMD** il gioco taglia la striscia esterna di ogni texture e il viewer può
+  fare lo stesso. Vedi [docs/VIEWER_Ita.md](docs/VIEWER_Ita.md).
 - **Strumenti da riga di comando** in `tools/`, usabili da soli:
   - `bze.py`: apre e decomprime il contenitore `.bze`;
   - `export_obj.py`: esporta terreno e oggetti di un livello in OBJ + MTL, con
@@ -70,8 +74,8 @@ vengono solo letti, mai modificati.
 | L | filtro bilineare |
 | Alt+Invio | schermo intero |
 
-Dai sorgenti, `python tools/viewer.py L03A` apre direttamente un livello;
-`python tools/viewer.py --help` elenca le opzioni (inquadratura con `--camera`,
+Dai sorgenti, `python bblit/viewer.py L03A` apre direttamente un livello;
+`python bblit/viewer.py --help` elenca le opzioni (inquadratura con `--camera`,
 un PNG con `--screenshot`, animazioni ferme con `--tick`, le sovrapposizioni,
 la lingua...). La guida completa è in [docs/VIEWER_Ita.md](docs/VIEWER_Ita.md).
 
@@ -86,10 +90,10 @@ sono una prova.
 |---|---|---|
 | Hard walls | i muri `0x7F` della heightmap: fermano a qualunque altezza | letta |
 | Ground | il terreno su cui si sta davvero (la heightmap) | letta |
-| Collision boxes | il box di collisione di ogni oggetto, come lo prova il gioco | letta |
+| Collision boxes | il box di collisione di ogni oggetto, come lo prova il gioco: SOLID, PLATFORM (ci si sta sopra) o solo TOUCH | letta |
 | Death and damage zones | le zone che uccidono (respawn al checkpoint) o feriscono, ruotate come le ruota il gioco, col nome DEATH, DEATH FLOOR o DAMAGE in alto | letta |
-| Teleport zones | le zone che fanno fare un respawn diretto in un punto fisso (RESPAWN) | letta |
-| 0x1000 faces | le facce del terreno che il gioco non disegna mai; non sono muri | letta |
+| Teleport zones | le zone che mandano qualcuno da qualche parte, con una freccia fino al punto: ENTRANCE (e il livello da cui si arriva), TELEPORT, RECOVER, RESTART, e LEVEL col livello a cui portano | letta |
+| Portals | le facce del terreno che il gioco non disegna mai: sono portali, con l'area a cui portano | letta |
 | Invisible walls | i muri duri dove non c'è niente di visibile, e i gradini di più di 100 unità | dedotta |
 | No collision | le facce che si vedono ma su cui non si sta, e le pareti collegate che si attraversano | dedotta |
 | DEATH FLOOR | in Death and damage zones: le zone di morte grandi almeno metà del livello (mare, abisso) | dedotta |
@@ -109,7 +113,7 @@ italiano le flag hanno i nomi tradotti.
 Python 3.10 o più recente, su Windows (il viewer usa OpenGL 3.3):
 
 - [pyglet](https://pyglet.org/) — la finestra e OpenGL: basta per avviare
-  `python tools/viewer.py`;
+  `python bblit/viewer.py`;
 - [Pillow](https://python-pillow.org/) — solo per gli script di `branding/`;
 - [PyInstaller](https://pyinstaller.org/) — per l'eseguibile.
 

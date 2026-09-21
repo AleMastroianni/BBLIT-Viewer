@@ -4,7 +4,7 @@ English: [FORMAT_NOTES.md](FORMAT_NOTES.md)
 
 Note tecniche sui dati dei livelli di *Bugs Bunny: Lost in Time* (PC, 1999)
 e su cio' che il gioco ne fa, trovate costruendo il viewer dei livelli di
-questo repository (`tools/viewer.py`), per lo piu' su `L03A` (*Hey... What's
+questo repository (`bblit/viewer.py`), per lo piu' su `L03A` (*Hey... What's
 Up, Dock?*, prima sezione) e poi controllate sul resto dei livelli. La
 numerazione prosegue quella delle [note di reverse engineering di Ombelll](https://github.com/Ombelll/Bugs-bunny-lost-in-time-reverse-engineered),
 che finiscono alla 255: "finding N di Ombelll", "MODELFORMAT di Ombelll" e
@@ -334,7 +334,7 @@ poppa.
 
 Le texture esportate come PNG non cambiano: sono gia' diritte (il cartellone
 dell'isolotto ha le palme in alto). Cambia solo la mappatura, in
-`export_obj.uv_to_texture` (`tools/export_obj.py`), che viewer ed export OBJ
+`export_obj.uv_to_texture` (`bblit/game/geometry.py`), che viewer ed export OBJ
 condividono.
 
 ## 272 — La posa di un oggetto e' quella che il gioco fa partire, non quella con piu' record
@@ -488,7 +488,7 @@ quasi ogni file registra gli slot 3-7 e 291/293, quindi qualunque file
 "compagno" li avrebbe riempiti; e a schermo dava la cinghia di un barile al
 posto degli occhi e un ventaglio oliva al posto dell'alone (269). Dopo la 275
 nessun livello ha piu' una faccia disegnata da spiegare con la catena, e
-`textures.construct` (`tools/textures.py`) non aggiunge piu' i file compagni
+`textures.construct` (`bblit/game/textures.py`) non aggiunge piu' i file compagni
 (si possono ancora chiedere con `extra`). Che la tabella del gioco sopravviva
 al cambio di livello resta vero nel codice (nessun azzeratore), ma non serve
 a disegnare nulla.
@@ -708,7 +708,7 @@ cerca un ruolo 725 (i pirati) entro 160, la 4 cambia stato quando l'orologio
 **Nel viewer** i gruppi di un oggetto che gira hanno la loro matrice:
 rotazione attorno alla verticale per il punto dell'oggetto (esatta quando la
 rotazione di base ha X e Z nulle, come per tutte e 4 le ancore). Di default le
-ancore si vedono sempre (`tools/preferences.py`, ruolo 533): in aria, che
+ancore si vedono sempre (`bblit/support/preferences.py`, ruolo 533): in aria, che
 girano, con l'ombra a terra. La caduta non e' simulata.
 
 **Non misurato: la velocita'.** Con 2 passaggi delle regole per tick
@@ -716,7 +716,7 @@ d'animazione (logica a 30 al secondo, 278) un giro sono 4096/136 = 30,1
 passaggi, **1,0 s** (60 fotogrammi PlayStation). Se le regole girassero una
 volta per tick d'animazione sarebbero 2,0 s (120 fotogrammi). Decide una
 misura fotogramma per fotogramma in BizHawk (`RULE_PASSES_PER_TICK` in
-`tools/viewer.py`).
+`bblit/viewer.py`).
 
 **Escluso di proposito:** il pirata 110 ruota di 60×16 = 960 (84°) in ognuno
 dei suoi quattro stati, e ogni stato finisce quando arriva vicino a un punto
@@ -795,7 +795,7 @@ elencato.
 **Controllo incrociato.** La tabella combacia con un foglio LevID
 indipendente (riga r = LevID r + 1) per tutte le 70 voci che il viewer usa:
 titolo e nota sono confrontati parola per parola da
-`tools/diagnostics/check_levels.py`, che trova un file scambiato o una nota
+`checks/check_levels.py`, che trova un file scambiato o una nota
 sbagliata introdotti apposta. La tabella nomina anche file che non sono nei
 dati del gioco: `LANGUAGE`, `LB05`, i cinque `DEMO*`, `SCREEN4`, `SCREEN5`.
 
@@ -807,7 +807,7 @@ Il finding 15 di Ombelll e il MODELFORMAT ("Modus 0x10") descrivono i settori
 del terreno con modus `0x1000` come facce invisibili di confine e di
 collisione: un record da 20 byte con un quad negli indici globali dei vertici
 del blocco. Misurato sui 79 livelli del menu del viewer
-(`tools/diagnostics/check_walls.py`):
+(`checks/check_walls.py`):
 
 - **1527** record in **26** livelli (nessuno in `L03A`); tutti lunghi 20
   byte, `n_bound_faces` 0, conteggio 1. Un record di `CCEND` risulta lungo
@@ -834,11 +834,11 @@ senza, in 78 livelli su 78. Se nel gioco facciano da muri: vedi 288.
 classificazione.
 
 Il gioco non si scontra col terreno che disegna ma con la heightmap di
-collisione (blocco `0x36`, finding 110-116 di Ombelll). `tools/collision.py`
+collisione (blocco `0x36`, finding 110-116 di Ombelll). `bblit/game/collision.py`
 la legge come quei finding la descrivono: record da 68 byte, un `u16` per
 cella da 320 unita', tessere 8×8 di byte d'altezza con segno, `0x7E`/`0x7F` =
 niente terreno, offset relativi al numero di record. Prove
-(`tools/diagnostics/check_collision.py`, 79 livelli del menu):
+(`checks/check_collision.py`, 79 livelli del menu):
 
 - **479 su 479** record hanno celle × 320 == estensione su entrambi gli assi;
 - al centro delle facce calpestabili visibili il terreno della heightmap sta

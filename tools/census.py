@@ -32,12 +32,12 @@ import os
 import struct
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import paths  # noqa: E402
-import export_obj as geo  # noqa: E402
-import loadscript  # noqa: E402
-import montage  # noqa: E402
-import textures as texmod  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bblit"))
+from support import paths  # noqa: E402
+from game import geometry as geo  # noqa: E402
+from game import loadscript  # noqa: E402
+from game import montage  # noqa: E402
+from game import textures as texmod  # noqa: E402
 
 DATA = paths.DATA_BZE
 
@@ -159,7 +159,7 @@ def census_level(name: str, data_dir: str = DATA, cache: str = "extracted") -> d
 
 
 def _count_terrain_modes(sec4: bytes, offset: int, prim: dict) -> int:
-    """Replays the sector chain (export_obj.terrain_sectors) to count modes,
+    """Replays the sector chain (geometry.terrain_sectors) to count modes,
     flags and out-of-block indices.
 
     `read_terrain` translates a local index with `local_start + i` without

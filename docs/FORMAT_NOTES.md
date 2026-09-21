@@ -4,7 +4,7 @@ Italiano: [FORMAT_NOTES_Ita.md](FORMAT_NOTES_Ita.md)
 
 Technical notes on the level data of *Bugs Bunny: Lost in Time* (PC, 1999)
 and on what the game does with it, found while building the level viewer in
-this repository (`tools/viewer.py`), mostly on `L03A` (*Hey... What's Up,
+this repository (`bblit/viewer.py`), mostly on `L03A` (*Hey... What's Up,
 Dock?*, first section) and then checked on the rest of the levels. The
 numbering continues [Ombelll's reverse-engineering notes](https://github.com/Ombelll/Bugs-bunny-lost-in-time-reverse-engineered),
 which end at 255: "Ombelll's finding N", "Ombelll's MODELFORMAT" and
@@ -328,7 +328,7 @@ the portholes missing on the ship; white and black triangles at the stern.
 
 Textures exported as PNG do not change: they are already upright (the islet
 billboard has the palms at the top). Only the mapping changes, in
-`export_obj.uv_to_texture` (`tools/export_obj.py`), shared by the viewer and
+`export_obj.uv_to_texture` (`bblit/game/geometry.py`), shared by the viewer and
 the OBJ export.
 
 ## 272 — An object's pose is the one the game starts, not the one with the most records
@@ -478,7 +478,7 @@ across files (`title -> L03ACOM -> L03A`). That proof was weak: almost every
 file registers slots 3-7 and 291/293, so any "companion" file would have
 filled them; on screen it gave a barrel strap in place of the eyes and an
 olive fan in place of the halo (269). After 275 no level has a drawn face
-left to explain with the chain, and `textures.construct` (`tools/textures.py`)
+left to explain with the chain, and `textures.construct` (`bblit/game/textures.py`)
 no longer adds companion files (they can still be requested with `extra`).
 That the game's table survives level changes remains true in the code (no
 clearing routine), but nothing needs it to be drawn.
@@ -695,14 +695,14 @@ clock (action 25) with the player within 300, rule 5 looks for a role 725
 **In the viewer** the groups of a rotating object have their own matrix:
 rotation around the vertical through the object's point (exact when the base
 rotation has zero X and Z, as for all 4 anchors). By default the anchors are
-always shown (`tools/preferences.py`, role 533): in the air, spinning, with
+always shown (`bblit/support/preferences.py`, role 533): in the air, spinning, with
 the shadow on the ground. The fall is not simulated.
 
 **Not measured: the speed.** With 2 rule passes per animation tick (logic at
 30 per second, 278) one turn is 4096/136 = 30.1 passes, **1.0 s** (60
 PlayStation frames). If rules ran once per animation tick it would be 2.0 s
 (120 frames). A frame-by-frame measurement in BizHawk decides
-(`RULE_PASSES_PER_TICK` in `tools/viewer.py`).
+(`RULE_PASSES_PER_TICK` in `bblit/viewer.py`).
 
 **Deliberately excluded:** pirate 110 rotates by 60×16 = 960 (84°) in each of
 its four states, and each state ends when it gets near a waypoint (roles 58,
@@ -778,7 +778,7 @@ same levels; which objects and textures change has not been listed.
 
 **Cross-check.** The table agrees with an independent LevID spreadsheet (row
 r = LevID r + 1) for all 70 entries the viewer uses: title and note are
-compared word for word by `tools/diagnostics/check_levels.py`, which catches a
+compared word for word by `checks/check_levels.py`, which catches a
 swapped file or a wrong note introduced on purpose. The table also names
 files that are not in the game data: `LANGUAGE`, `LB05`, the five `DEMO*`,
 `SCREEN4`, `SCREEN5`.
@@ -790,7 +790,7 @@ files that are not in the game data: `LANGUAGE`, `LB05`, the five `DEMO*`,
 Ombelll's finding 15 and MODELFORMAT ("Modus 0x10") describe terrain sectors
 with modus `0x1000` as invisible boundary and collision faces: a 20-byte
 record with one quad in the chunk's global vertex indices. Measured on the 79
-levels of the viewer's menu (`tools/diagnostics/check_walls.py`):
+levels of the viewer's menu (`checks/check_walls.py`):
 
 - **1527** records in **26** levels (none in `L03A`); all 20 bytes long,
   `n_bound_faces` 0, count 1. One record in `CCEND` reads as 16384 bytes long:
@@ -815,10 +815,10 @@ they act as walls in the game: see 288.
 `PROVEN_RAW_DATA` for the reading, a declared rule for the classification.
 
 The game does not collide with the terrain it draws but with the collision
-heightmap (block `0x36`, Ombelll's findings 110-116). `tools/collision.py`
+heightmap (block `0x36`, Ombelll's findings 110-116). `bblit/game/collision.py`
 reads it as those findings describe: 68-byte records, a `u16` per 320-unit
 cell, 8×8 tiles of signed height bytes, `0x7E`/`0x7F` = no ground, offsets
-relative to the record count. Checks (`tools/diagnostics/check_collision.py`,
+relative to the record count. Checks (`checks/check_collision.py`,
 79 menu levels):
 
 - **479 of 479** records have cells × 320 == extent on both axes;

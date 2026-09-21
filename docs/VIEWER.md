@@ -4,9 +4,9 @@ Italian version: [VIEWER_Ita.md](VIEWER_Ita.md)
 
 BBLIT Viewer is a free-camera level viewer for the PC game *Bugs Bunny: Lost
 in Time* (1999). It reads the game's `.bze` level files directly and builds
-everything in memory; there is no intermediate format. The same `tools/`
-folder also holds command-line tools that extract textures and export levels
-to OBJ.
+everything in memory; there is no intermediate format. The program is in
+`bblit/`; `tools/` also holds command-line tools that extract textures and
+export levels to OBJ.
 
 - **PC version only.** The PlayStation version is not supported.
 - **No game data is included.** You need your own copy of the game. Files are
@@ -29,8 +29,8 @@ The folder dialog uses `tkinter`, which comes with the python.org installer.
 
 ```bash
 pip install pyglet
-python tools/viewer.py            # opens the main menu
-python tools/viewer.py L03A       # opens a level directly (file name, any case)
+python bblit/viewer.py            # opens the main menu
+python bblit/viewer.py L03A       # opens a level directly (file name, any case)
 ```
 
 A level name that is not in the levels folder opens the main menu instead.
@@ -38,8 +38,8 @@ Run the commands from the repository root.
 
 Other packages are needed only for side jobs: PyInstaller to build the
 executable, Pillow for the scripts in `branding/` that draw the icon and logo.
-The tools in `tools/` use only the standard library, except the viewer
-(pyglet).
+The tools in `tools/` use only the standard library; the viewer uses
+pyglet.
 
 ### Where the levels come from
 
@@ -64,7 +64,7 @@ entries whose file is missing are greyed out.
 
 The viewer reads only the `.bze` of the level it opens, and only its sections
 1 (load script), 3 (textures) and 4 (models and terrain). Level titles in the
-menu come from `tools/levels.py`, not from the game files.
+menu come from `bblit/game/levels.py`, not from the game files.
 
 ---
 
@@ -123,15 +123,42 @@ level open the menu stays open.
 |---|---|
 | Main | Resume (greyed out with no level), Load level, Level options, Video options, General options, Help, Quit |
 | Load level | the five eras (Stone Age, Medieval Period, Pirate Years, The 1930s, Dimension X), then Nowhere (opens directly), then **Extra**: the Era selector (`LS01`), also opened at the centre of each era, and the `_8` variants that are on the disc but not in the game's level table. In an era page the levels are listed by title and part, with the file name on the right (a dot marks the open level), the full name and LevID in the description, and a Bonus section where the era has one |
-| Level options | **Flags** (below); Rendering: Textures, Objects, Sky, Semi-transparency, Wireframe; Entities: Animations (Playing / Paused / Starting pose), Ticks per second, Animated textures, Cloned templates, plus the group states of the level, if it has any |
-| Video options | Full screen, VSync, Texture filtering, Texture scale (x1 to x4, scale2x/scale3x), Colour (PC, or PSX x2: finding 268), Field of view (40 to 100 degrees, default 65) |
+| Level options | **Flags** (below); Rendering: Textures, Objects, Sky, Semi-transparency, Wireframe, Visibility by area as in the game (only what the game would draw: the camera's area and the areas reached through the portals on screen, findings 293-295; off at every start); Entities: Animations (Playing / Paused / Starting pose), Ticks per second, Animated textures, Cloned templates, plus the group states of the level, if it has any |
+| Video options | Full screen, VSync, Texture filtering, Texture scale (x1 to x4, scale2x/scale3x), Colour (PC, or PSX x2: finding 268), Texture coordinates (PC NVIDIA/Intel, default; PC AMD; PlayStation — findings 328, 341, see below), Field of view (40 to 100 degrees, default 65, with a 51° stop: the game's own, finding 327) |
 | General options | Language (English, default, or Italian), Status bar, Levels folder, Open the bze_levels folder |
 | Help | the keys |
 
 Every row has a description at the bottom of the panel.
 
+**Texture coordinates, and why an AMD card sees a different picture.** The PC
+game has two renderers and they do not read the byte texture coordinates the
+same way (findings 328, 341). The OpenGL one, the one the game plays with,
+reads them as `byte / 255` over the whole texture, then **clamps them to
+[0.01, 0.99]** on both axes, and repeats the texture past its edge: so the
+opposite edge mixes in at a border only on textures under 50 texels a side,
+and only a little. The software renderer scales them by (size − 1) and
+samples at the texel centre, which is the PlayStation's rule. On top of that,
+**when the driver calls itself `ATI` or `RAGE PRO`** — that is any AMD card
+today — the game clamps them to the narrower [4.5/255, 250.5/255], so the
+outer strip of every texture, about 3.5% of it, is never drawn.
+
+The viewer cannot have one single behaviour, so the rule is a choice in
+**Video options → Texture coordinates**:
+
+| value | what it draws |
+|---|---|
+| PC, NVIDIA/Intel card | `byte / 255` clamped to [0.01, 0.99], repeated: what the game shows (the default) |
+| PC, AMD card | the same, with the outer strip of every texture cut away, as the game does with an AMD driver |
+| PlayStation | the (size − 1) rule of the software renderer |
+
+The viewer does **not** pick it from your card on its own: the picture would
+then change from machine to machine, and so would the screenshots any check
+compares. If your card is an AMD one and your game looks slightly more
+"zoomed" at the edges of every texture than the viewer, that is the setting
+to change.
+
 **Group states.** Some levels have objects whose state the game decides at
-run time. For those, `tools/preferences.py` fixes a default and declares the
+run time. For those, `bblit/support/preferences.py` fixes a default and declares the
 alternatives (`entity_groups`); at present only `L03A` has them: drawbridges
 (raised, one third, two thirds, lowered), barrels in the water (rising,
 floating) and green crates (falling, on the ground). A state chosen in the
@@ -152,24 +179,25 @@ command-line options below. Background: findings 282-288.
 
 | flag | what it shows |
 |---|---|
-| Invisible walls | what stops you with nothing drawn, in magenta: the collision heightmap's hard walls (`0x7F`) where there is no visible wall (INVISIBLE WALL, short INV) and the steps of more than 100 units (STEP WALL, short STP, finding 298) |
+| Invisible walls | what stops you with nothing drawn, in magenta: the collision heightmap's hard walls (`0x7F`) where there is no visible wall (INVISIBLE WALL, short INV) and the steps of more than 100 units (STEP WALL, short STP), which stop you only going up: from the high side STEP WALL · OUTSIDE (findings 298, 309) |
 | No collision | faces you see but cannot stand on, and the walls joined to them that let you through. White with black edges, written NO COLLISION; what is under them is told by the zone flags |
-| Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object). Orange |
+| Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object), by what it does to Bugs (finding 300): SOLID in orange stops you, PLATFORM in green stops you and you can stand on it, TOUCH in blue is only touched (pickups, triggers) |
 | Death and damage zones | zones that kill you, with a respawn at the checkpoint (DEATH; DEATH FLOOR for those at least half the size of the level: the sea, the abyss), and zones that hurt you without killing you (DAMAGE, action `0x48`). All red, the name on the top face |
-| Teleport zones | zones that put you straight back at a fixed point, without dying. Violet, written RESPAWN |
+| Teleport zones | zones that send somebody somewhere (finding 326), violet, each with an arrow from the zone to the point: **ENTRANCE** is the way in from another level, and says which one (it only fires when the level change you came through wrote its byte, so you cannot use it while playing); **TELEPORT** moves Bugs with no condition at all; **RECOVER** the object inside the zone (the recovery nets); **RESTART** is where Bugs comes back after a death; **LEVEL** names the level the zone leads to (a level change has no point in this file). Levels are named, not coded: "LEVEL Wabbit on the run! 1" |
 | Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
-| Hard walls | the heightmap's `0x7F` walls, which stop you at any height. Blue, drawn 5 m tall, written HARD WALL |
-| Area boxes | the collision volume of each mini area (heightmap blocks). Their sides stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you pass); a slab top stops the head of a jump (JUMP CEILING, from below; from above JUMP CEILING · OUTSIDE): Bugs's origin stops about 410 lower (findings 298, 299). The row below hides the OUTSIDE side |
-| Area boxes: outside side | the OUTSIDE side of the area boxes; on at every start. Off, from outside you see the areas without the box in front |
-| 0x1000 faces | faces of the `0x1000` terrain sectors: the game does not draw them and they do not stop you; maybe triggers or loading areas. Grey |
+| Hard walls | the heightmap's `0x7F` walls, which stop you at any height (HARD WALL, short HRD). Blue, drawn 5 m tall, seen from the side you would enter from; for Bugs they stop from every side (finding 309) |
+| Area boxes | the collision volume of each mini area (heightmap blocks). Their sides stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you pass); a slab top stops the head of a jump (JUMP CEILING, from below; from above JUMP CEILING · OUTSIDE): Bugs's origin stops about 410 lower (findings 298, 299). Walls: outside side hides the OUTSIDE side |
+| Walls: outside side | the side of the walls that does not stop you (the OUTSIDE names): area boxes from outside and above, steps from the high side; on at every start |
+| Walls: edges over holes | with Invisible walls, also the steps seen from a `0x7E` hole (its ground is the slab's base): the edges of platforms over the void; they stop whoever falls next to the platform but are mostly noise. Off at every start |
+| Portals | the terrain's `0x1000` quads are portals: the area each one leads to is written on it (finding 293). The game does not draw them and they do not stop you. Grey |
 
-Names on the overlays are always in English. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), INV (invisible wall), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), for example `DTH + DMG` on the lava of `L03D1`.
+Names on the overlays are always in English. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), INV (invisible wall), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), SLD (solid), PLT (platform), TCH (touch), for example `DTH + DMG` on the lava of `L03D1`.
 
 ---
 
 ## Command-line options
 
-`python tools/viewer.py [LEVEL] [options]`, or the same options after
+`python bblit/viewer.py [LEVEL] [options]`, or the same options after
 `"BBLIT Viewer.exe"`.
 
 | option | effect |
@@ -189,13 +217,15 @@ Names on the overlays are always in English. A thing that does several things, o
 | `--sky` | show the sky dome |
 | `--no-blend` | draw semi-transparent faces as opaque |
 | `--invisible-walls`, `--nocollision`, `--boxes`, `--deathzones`, `--teleportzones`, `--ground`, `--hardwalls`, `--areaboxes`, `--faces1000` | turn on the flag of the same name |
-| `--no-area-outside` | the area boxes without their outside side |
+| `--no-walls-outside` | the walls without their OUTSIDE side |
+| `--area-visibility` | draw only the areas the game would draw |
+| `--hole-steps` | with the invisible walls, also the steps seen from a `0x7E` hole |
 
 Example, a reproducible picture (take `x,y,z` from the "m" values of the
 status bar):
 
 ```bash
-python tools/viewer.py L03A --camera 10,5,-20,-90,-15 --tick 0 --screenshot l03a.png
+python bblit/viewer.py L03A --camera 10,5,-20,-90,-15 --tick 0 --screenshot l03a.png
 ```
 
 Except for the flags, values set on the command line (language, sky,
@@ -218,9 +248,9 @@ paused animations. An unknown or malformed entry is ignored.
 
 - `<LEVEL>_id01.bin`, `_id03.bin`, `_id04.bin`: the decompressed sections
   (decompressing in Python takes a few seconds per level);
-- `pieces.pkl`: the level already built, piece by piece (`tools/level_cache.py`).
+- `pieces.pkl`: the level already built, piece by piece (`bblit/support/level_cache.py`).
   It carries a signature (size and date of the `.bze`, plus a hash of the
-  `tools/` sources, or of the sources the executable was built from) and is
+  `bblit/` sources, or of the sources the executable was built from) and is
   rebuilt automatically when the code or the level file changes. A level
   already seen reopens in a fraction of a second. At launch a background
   process (low priority, no window) builds the ones not seen yet, so every
@@ -244,19 +274,19 @@ executable also shows it in a message box.
 
 ```bash
 pip install pyinstaller
-python tools/build_exe.py
+python packaging/build_exe.py
 ```
 
 Builds a one-folder, console-less PyInstaller app and puts `BBLIT Viewer.exe`
 and `_internal/` in the repository root. `_internal/` contains Python, the
 libraries, `resources/` (the golden carrot icon and the blue background) and
 `code_hash.txt`, the hash of the sources, so the executable and
-`python tools/viewer.py` share the piece cache. PyInstaller's work files stay
+`python bblit/viewer.py` share the piece cache. PyInstaller's work files stay
 in `build/`. If the viewer is running, the script stops without touching
 anything. With Python 3.10.0 exactly, the script works around a bug in `dis`
 that stops PyInstaller.
 
-`python tools/make_release.py` builds the release folder and its zip: the
+`python packaging/make_release.py` builds the release folder and its zip: the
 executable with `_internal/`, `README`, `README_Ita`, `LICENSE`,
 `THIRD_PARTY_LICENSES.txt` (the licences of Python, pyglet, Pillow and
 PyInstaller's bootloader, bundled in the executable) and
@@ -296,10 +326,10 @@ Tools that take a `--data` option default to `BBLIT_DATA`; their cache is
 ### Example: from a `.bze` to a textured OBJ
 
 ```bash
-python tools/bze.py "C:/Games/Lost in Time/Datas/bze/L03A.bze" -o extracted/L03A
-python tools/loadscript.py extracted/L03A/L03A_id01.bin --json extracted/L03A/l03a.json
-python tools/tim.py extracted/L03A/L03A_id03.bin extracted/L03A/l03a.json -o out/L03A/textures
-python tools/export_obj.py extracted/L03A/L03A_id04.bin extracted/L03A/l03a.json --section3 extracted/L03A/L03A_id03.bin -o out/L03A/L03A.obj
+python bblit/game/bze.py "C:/Games/Lost in Time/Datas/bze/L03A.bze" -o extracted/L03A
+python bblit/game/loadscript.py extracted/L03A/L03A_id01.bin --json extracted/L03A/l03a.json
+python bblit/game/tim.py extracted/L03A/L03A_id03.bin extracted/L03A/l03a.json -o out/L03A/textures
+python bblit/game/geometry.py extracted/L03A/L03A_id04.bin extracted/L03A/l03a.json --section3 extracted/L03A/L03A_id03.bin -o out/L03A/L03A.obj
 python tools/render_obj.py out/L03A/L03A.obj -o out/L03A/check.png --textures out/L03A/textures
 python tools/model_sheet.py extracted/L03A -o out/L03A/models.png --assemble
 ```
@@ -372,6 +402,6 @@ Figures are for `L03A` unless stated.
 | PC vertex colour factor 1, not 2 | colour of the `L03A` sea measured in the game | finding 268 |
 | 15 animation ticks per second | measured frame by frame on the PlayStation version | finding 278 |
 
-The checks behind these figures are the scripts in `tools/diagnostics/`
+The checks behind these figures are the scripts in `checks/`
 (`check_*.py`, `diag_*.py`); they read the levels from `BBLIT_DATA` and can be
 rerun.
