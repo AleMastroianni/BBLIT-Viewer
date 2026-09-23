@@ -474,13 +474,22 @@ class OverlayBuilder:
             self.stat["boxes_hurt_" + hurt[0]] = self.stat.get("boxes_hurt_" + hurt[0], 0) + 1
 
     def _clone_collision_box(self, template, n_template, n_parent, pos, rot, frame=None, n_frames=0,
-                             counted=True, label=True):
+                             counted=True):
         """The collision box of a clone (flag Collision boxes).
 
-        A clone has no object number of its own, so its name says the template
-        and whose it is: "T74 of #117 SOLID · HURT 1".
         `frame` puts it on one frame of the parent's animation, for a
         child held at the marker that follows its bone (finding 317).
+
+        The box only: the NAME above it is `_clone_labels`, built from the
+        jobs collected while the clones were read. It used to be written
+        here as well, and this runs inside a piece. So a level built from
+        scratch got the name TWICE, once here and once from the job, one
+        exactly on top of the other, while a level mounted from the piece
+        cache got it once and was right. The picture was the same either way
+        -- the two copies fall on the same pixels -- but the triangle count
+        was not: the same framing of Hey... What's up, Dock? 1 counted 36130
+        from scratch and 36106 from the cache (136 names, 109 of them
+        distinct). A name has one place to be made, and this is not it.
         """
         try:
             box = montage.collision_box(self.sec4, template["resources"], self.res, template)
@@ -501,17 +510,6 @@ class OverlayBuilder:
                       edge_category="collision_boxes_hurt_lines" if edge_color else None)
         if counted:
             self.stat["clone_boxes"] = self.stat.get("clone_boxes", 0) + 1
-        # the name floats above the middle of the box's top, as for an object
-        x0, y0, z0, x1, y1, z1 = box
-        top = min(y0, y1)
-        middle = ((x0 + x1) / 2.0, top, (z0 + z1) / 2.0)
-        if rot is not None:
-            middle = tuple(sum(rot[i][k] * middle[k] for k in range(3)) for i in range(3))
-        place = (middle[0] * scale_factor + pos[0], middle[1] * scale_factor + pos[1] - LABEL_LIFT,
-                 middle[2] * scale_factor + pos[2])
-        if not label:
-            return
-        self._clone_label(template, n_template, n_parent, place, frame, n_frames)
 
     def _clone_label(self, template, n_template, n_parent, place, frame=None, n_frames=0):
         """The name that floats above a clone's box: "T74 of #117 SOLID · HURT 1".

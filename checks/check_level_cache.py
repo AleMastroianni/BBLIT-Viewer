@@ -29,8 +29,14 @@ def fingerprint(built_level):
     groups_by_key = {k: (g.tex_id, g.category, g.blend, g.spin, g.data.tobytes(),
                   [b.tobytes() for b in g.frames], list(g.face_tris))
                   for k, g in built_level.face_groups.items()}
+    # the names floating over the collision boxes are not triangles in a
+    # group, so they used to be outside this and a difference in them went
+    # unseen: a name was written both inside the clone's piece and from the
+    # job list, so a level built from scratch had 27 of them twice over and
+    # a level mounted from the cache had them once. Sorted, because what has
+    # to be the same is the SET of names, not the order they were made in.
     return (groups_by_key, dict(built_level.stat), built_level.lo, built_level.hi, built_level.terrain_lo, built_level.terrain_hi,
-            repr(built_level.sprites))
+            repr(built_level.sprites), sorted(repr(entry) for entry in built_level.box_labels))
 
 
 name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})

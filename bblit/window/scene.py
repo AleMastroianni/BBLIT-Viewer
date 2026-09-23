@@ -951,8 +951,7 @@ class Level(OverlayBuilder):
                             anim=(lookup_key, f, n_frames), mover=mover)
             if boxes_on:
                 self._clone_collision_box(t, self._idx[id(t)], n_parent, place, matrix,
-                                          frame=f, n_frames=n_frames, counted=f == first,
-                                          label=False)
+                                          frame=f, n_frames=n_frames, counted=f == first)
         self.stat["held_clones"] = self.stat.get("held_clones", 0) + 1
 
     def _clone(self, t, n_t, model, role, pos, rot, category):
