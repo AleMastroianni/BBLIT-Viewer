@@ -120,6 +120,47 @@ probe("the menu draws after the change", drawn)
 v.on_mouse_press(10, y_of_lowest, pyglet.window.mouse.LEFT, 0)
 probe("a click does not take it out either", v.menu.stack[-1][2] < len(v.menu.stack[-1][1]))
 
+# ---- 3. the level change with the flags that write names on
+
+# The texture cache does not hold one shape of value: a name floating above
+# an object is `(name, width, height)`, not the GL name alone. Walking the
+# cache as if every value were a name handed that tuple to glDeleteTextures,
+# in the middle of `_free_gpu`, with the level's VAOs and VBOs already
+# deleted: the frame after the change drew freed buffers and the viewer died
+# on an access violation. It took a flag that writes names to show, so a
+# change with the flags off never did (`drawing.texture_names`).
+press(k.ESCAPE)                                        # the menu closes
+v.show_collision_boxes = v.show_area_boxes = True      # these write the names
+v.show_hard_walls = v.show_steps = "all"
+v.ensure_overlays()
+frame()                                                # the floating names go into the cache
+floating = [key for key in v.textures if isinstance(key, tuple) and key[0] == "floating"]
+probe("a flag that writes names fills the cache with floating ones", bool(floating))
+probe("and those are kept as (name, width, height)",
+      all(isinstance(v.textures[key], tuple) and len(v.textures[key]) == 3 for key in floating))
+probe("while texture_names gives back only the GL names",
+      all(isinstance(n, int) and n for n in v.texture_names()))
+try:
+    open_level(0 if v.index == 1 else 1)
+    frame()
+    frame()
+    changed = True
+except Exception as error:  # noqa: BLE001
+    print(error)
+    changed = False
+probe("the level changes with the names on, and the frame after it draws", changed)
+# the same cache is walked by the bilinear filter, by Distant textures and by
+# Texture coordinates: those crashed the same way
+try:
+    v._push_filters()
+    v._set_uv_rule(v.uv_rule)
+    frame()
+    options = True
+except Exception as error:  # noqa: BLE001
+    print(error)
+    options = False
+probe("and the video options that walk the cache do not fall over", options)
+
 v.close()
 failed = [n for n, ok in results if not ok]
 print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")

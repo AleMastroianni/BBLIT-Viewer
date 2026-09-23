@@ -1193,6 +1193,27 @@ class Drawing:
         self.uniform("alpha_test", 0)
         return n
 
+    def texture_names(self):
+        """Every GL name in the texture cache, and nothing else.
+
+        `self.textures` does not hold one shape of value: a normal texture
+        and a flag's name are the GL name itself, a texture that could not
+        be read is None, and a name floating above an object is
+        `(name, width, height)`, because its size is needed to draw its
+        quad. Whoever walks the cache to bind or to delete has to take the
+        name out first: handing the tuple straight to `glDeleteTextures`
+        raised a TypeError in the middle of `_free_gpu`, with the level's
+        VAOs and VBOs already deleted, so the frame after the level change
+        drew freed buffers and the viewer died on an access violation. It
+        only happened with a flag that writes names on, which is why a
+        level change with the flags off never showed it.
+        """
+        for value in self.textures.values():
+            if isinstance(value, tuple):
+                value = value[0]
+            if value:
+                yield value
+
     def _floating_label(self, text):
         """(texture, width, height) of a name floating above an object, made
         once per text (flag_labels.floating_texture_rgba)."""

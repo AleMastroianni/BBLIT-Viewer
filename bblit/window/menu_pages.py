@@ -505,12 +505,11 @@ class MenuPages:
         self._push_filters()
 
     def _push_filters(self):
-        for name in self.textures.values():
-            if name:
-                glBindTexture(GL_TEXTURE_2D, name)
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-                                GL_LINEAR if self.bilinear else GL_NEAREST)
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.min_filter())
+        for name in self.texture_names():
+            glBindTexture(GL_TEXTURE_2D, name)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                            GL_LINEAR if self.bilinear else GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.min_filter())
 
     def _set_uv_rule(self, rule):
         """Video options -> Texture coordinates (findings 328, 341). Nothing is
@@ -520,16 +519,15 @@ class MenuPages:
         self.uv_rule = rule
         self.forget_uv_rule()
         wrap = self.uv_wrap()
-        for name in self.textures.values():
-            if name:
-                glBindTexture(GL_TEXTURE_2D, name)
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap)
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap)
+        for name in self.texture_names():
+            glBindTexture(GL_TEXTURE_2D, name)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap)
 
     def _set_texture_scale(self, scale_factor):
         """The textures are rebuilt at the new scale the next time they are needed."""
         self.scale_factor = scale_factor
-        names = [n for n in self.textures.values() if n]
+        names = list(self.texture_names())
         if names:
             glDeleteTextures(len(names), (ctypes.c_uint * len(names))(*names))
         self.textures = {}
