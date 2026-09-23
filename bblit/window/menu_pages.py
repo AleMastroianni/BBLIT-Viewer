@@ -26,6 +26,7 @@ from game import levels  # noqa: E402
 from ui import menu as menumod  # noqa: E402
 from support import paths  # noqa: E402
 from support import preferences  # noqa: E402
+from support import version  # noqa: E402
 from ui import texts  # noqa: E402
 from ui.texts import t  # noqa: E402
 
@@ -46,6 +47,10 @@ except ImportError:
 # 51 in the menu, next to the round values the viewer had before.
 PC_FIELD_OF_VIEW = 51
 FIELD_OF_VIEW_STOPS = sorted({PC_FIELD_OF_VIEW} | set(range(40, 101, 5)))
+# Camera and points -> Camera speed: the base speeds offered, in metres per
+# second (the opening speed of a level, radius / 12, is not on the list and
+# moves to the next one either way)
+CAMERA_SPEEDS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500]
 
 
 class MenuPages:
@@ -139,13 +144,19 @@ class MenuPages:
             return menu_items
 
         def load_items():
-            menu_items = [M.Submenu(era, f"era:{era}", desc="load.desc_era")
-                    for era, _titles, _bonus in levels.ERAS]
+            # the Era selector first, then the eras
+            menu_items = [M.Submenu("load.eras", "eras", desc="load.desc_eras")]
+            menu_items += [M.Submenu(era, f"era:{era}", desc="load.desc_era")
+                           for era, _titles, _bonus in levels.ERAS]
             # Nowhere under Dimension X, opened directly
             menu_items += level_list(levels.NOWHERE)
-            menu_items += [M.Section(None, label_text=lambda: ""),
-                     M.Submenu("extra.title", "extra", desc="load.desc_extra"),
-                     M.Back()]
+            # Extra (the `_8` variants, and inside it the menu, the credits
+            # and the cutscenes) only in the Debug build: no other copy
+            # lists any of it
+            if self.build == "Debug":
+                menu_items += [M.Section(None, label_text=lambda: ""),
+                         M.Submenu("extra.title", "extra", desc="load.desc_extra")]
+            menu_items += [M.Back()]
             return menu_items
 
         def era_page(titles, bonus):
@@ -164,7 +175,7 @@ class MenuPages:
                     # selector): the title only once
                     if not (len(titles) == 1 and titles[0][0] == t(section)):
                         menu_items.append(M.Section(section))
-                    menu_items += level_list(titles, every_title=section_list is levels.EXTRA)
+                    menu_items += level_list(titles, every_title=section_list in (levels.EXTRA, levels.HUB))
                 if section_list is levels.EXTRA and self.build == "Debug":
                     # only in the Debug build, for now
                     menu_items += [M.Section(None, label_text=lambda: ""),
@@ -180,23 +191,41 @@ class MenuPages:
                     setattr(self, attr_name, v)
                     self.ensure_overlays()
                 return M.YesNo(item_key, lambda: getattr(self, attr_name), set_flag, desc)
-            return [item("level.invisible_walls", "show_invisible_walls", "desc.invisible_walls"),
+            return [M.Submenu("level.walls", "walls", desc="desc.walls"),
                     item("level.no_collision", "show_no_collision", "desc.no_collision"),
                     item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
                     item("level.death_zones", "show_death_zones", "desc.death_zones"),
                     item("level.teleport_zones", "show_teleport_zones", "desc.teleport_zones"),
                     item("level.ground", "show_ground", "desc.ground"),
-                    item("level.hard_walls", "show_hard_walls", "desc.hard_walls"),
-                    item("level.area_boxes", "show_area_boxes", "desc.area_boxes"),
-                    M.YesNo("level.walls_outside", lambda: self.show_walls_outside,
-                            lambda v: setattr(self, "show_walls_outside", v), "desc.walls_outside"),
-                    M.YesNo("level.hole_steps", lambda: self.show_hole_steps,
-                            lambda v: setattr(self, "show_hole_steps", v), "desc.hole_steps"),
                     M.Choice("level.gate_links",
                              [("off", "level.gate_links.off"), ("gates", "level.gate_links.gates"),
                               ("all", "level.gate_links.all")],
                              lambda: self.show_gate_links, self._set_gate_links, "desc.gate_links"),
                     item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
+                    M.Back()]
+
+        def walls():
+            """Flags -> Walls: every wall flag of the heightmap in one
+            place. Hard walls and Steps choose between
+            all of them and only the invisible ones."""
+            def three_way(item_key, attr_name, desc):
+                def set_flag(v):
+                    setattr(self, attr_name, v)
+                    self.ensure_overlays()
+                return M.Choice(item_key, [("off", "level.walls.off"), ("all", "level.walls.all"),
+                                           ("unseen", "level.walls.unseen")],
+                                lambda: getattr(self, attr_name), set_flag, desc)
+
+            def set_area_boxes(v):
+                self.show_area_boxes = v
+                self.ensure_overlays()
+            return [three_way("level.hard_walls", "show_hard_walls", "desc.hard_walls"),
+                    three_way("level.steps", "show_steps", "desc.steps"),
+                    M.YesNo("level.hole_steps", lambda: self.show_hole_steps,
+                            lambda v: setattr(self, "show_hole_steps", v), "desc.hole_steps"),
+                    M.YesNo("level.area_boxes", lambda: self.show_area_boxes, set_area_boxes, "desc.area_boxes"),
+                    M.YesNo("level.walls_outside", lambda: self.show_walls_outside,
+                            lambda v: setattr(self, "show_walls_outside", v), "desc.walls_outside"),
                     M.Back()]
 
         def copy_item(item_key, desc, make_text, disabled=False):
@@ -206,6 +235,26 @@ class MenuPages:
             item.disabled = disabled
             return item
 
+        def pick_page():
+            """The selector: what Alt+click took, in words, with Copy."""
+            menu_items = [M.YesNo("pick.enabled", lambda: self.pick_enabled,
+                                  lambda v: setattr(self, "pick_enabled", v), "pick.desc"),
+                          M.Section(None, label_text=lambda: "")]
+            lines = self.picked_card()
+            if not lines:
+                menu_items.append(M.Info(lambda: t("pick.none")))
+            else:
+                for line in lines:
+                    menu_items.append(M.Info(lambda line=line: line))
+            clear_item = M.Action("pick.clear", self.clear_pick)
+            clear_item.disabled = not lines
+            menu_items += [M.Section(None, label_text=lambda: ""),
+                           copy_item("pick.copy", "pick.desc_copy",
+                                     lambda: chr(10).join(self.picked_card()), disabled=not lines),
+                           clear_item,
+                           M.Back()]
+            return menu_items
+
         def camera():
             if self.current_level is None:
                 return [M.Info(lambda: t("level.no_level")), M.Back()]
@@ -214,6 +263,11 @@ class MenuPages:
                           M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(self.pos)),
                           M.YesNo("camera.show_shadow", lambda: self.show_camera_shadow,
                                   lambda v: setattr(self, "show_camera_shadow", v), "desc.show_shadow"),
+                          # the camera's base speed (the wheel only scrolls the
+                          # menus now; Shift and Ctrl held stay)
+                          M.Number("camera.speed", lambda: self.speed, lambda v: setattr(self, "speed", float(v)),
+                                   CAMERA_SPEEDS[0], CAMERA_SPEEDS[-1], number_format="{:.0f} m/s",
+                                   desc="desc.camera_speed", stops=CAMERA_SPEEDS),
                           M.Action("camera.add", self._add_bookmark, desc="desc.camera_add"),
                           *([copy_item("camera.copy_ce", "desc.copy_ce",
                                        lambda: self._point_text("private", self.pos, t("camera.now")))]
@@ -230,6 +284,9 @@ class MenuPages:
                                                (m["x"], m["y"], m["z"])) + "   ›"))
             if not marks:
                 menu_items.append(M.Info(lambda: t("camera.no_bookmarks")))
+            # the selector last, so the lines above keep their place
+            menu_items.append(M.Section(None, label_text=lambda: ""))
+            menu_items.append(M.Submenu("pick.title", "pick", desc="pick.desc"))
             menu_items.append(M.Back())
             return menu_items
 
@@ -314,6 +371,19 @@ class MenuPages:
                                      lambda g=entity_group: self._group_state(g),
                                      lambda role, g=entity_group: self._set_group_state(g, role),
                                      "desc.group"))
+            if self.current_level.sky_choices:
+                # the skies the game alternates (finding 314): one at a time,
+                # the level's starting one first, like the states above
+                default = self.current_level.sky_choices[0][0]
+                menu_items.append(M.Choice(
+                    "level.sky_choice",
+                    [(role, lambda n=n, at_start=at_start, role=role:
+                        t("level.sky_choice.start" if at_start else
+                          "level.sky_choice.default" if role == default and not at_start else
+                          "level.sky_choice.other", n=n))
+                     for role, n, at_start in self.current_level.sky_choices],
+                    lambda: self.current_level.sky_choices[0][0], self._set_sky_choice,
+                    "desc.sky_choice"))
             menu_items.append(M.Back())
             return menu_items
 
@@ -336,6 +406,8 @@ class MenuPages:
                              40, 100, increment=5, number_format="{:.0f}°",
                              desc="desc.fov", stops=FIELD_OF_VIEW_STOPS,
                              labels={PC_FIELD_OF_VIEW: "video.fov.pc"}),
+                    M.YesNo("video.backface", lambda: self.backface_culling,
+                            lambda v: setattr(self, "backface_culling", v), "desc.backface"),
                     M.Back()]
 
         def general_items():
@@ -370,12 +442,21 @@ class MenuPages:
             # as in the CTR viewer: Help -> Keyboard / Gamepad (drawn pages)
             return [M.Submenu("help.keyboard", "keyboard", desc="desc.help_keyboard"),
                     M.Submenu("help.gamepad", "gamepad", desc="desc.help_gamepad"),
+                    M.Submenu("help.about", "about", desc="desc.help_about"),
+                    M.Back()]
+
+        def about_items():
+            # the version comes from support/version.py, like the window title
+            return [M.Info(lambda: t("title"), lambda: version.VERSION),
+                    M.Info(lambda: t("about.author"), "AleMastroianni"),
+                    M.Info(lambda: t("about.build"), lambda: self.build or "—"),
                     M.Back()]
 
         return {
             # as in the CTR viewer: name and author on the main page
             "main": M.Page(lambda: t("menu.main"), main_items, 360),
             "load": M.Page(lambda: t("load.title"), load_items, 360),
+            "eras": M.Page(lambda: t("load.eras"), section_pages(levels.HUB), 720),
             "extra": M.Page(lambda: t("extra.title"), section_pages(levels.EXTRA), 720),
             "cutscenes": M.Page(lambda: t("extra.cutscenes"), section_pages(levels.CUTSCENES), 720),
             **{f"era:{era}": M.Page(lambda era=era: t(era), era_page(titles, bonus), 720)
@@ -383,13 +464,16 @@ class MenuPages:
             "level": M.Page(lambda: t("level.title",
                                           n=self.current_level.name if self.current_level else "—"), level),
             "flags": M.Page(lambda: t("level.flags"), flags, 440),
+            "walls": M.Page(lambda: t("level.walls"), walls, 440),
             "camera": M.Page(lambda: t("camera.title", level=self.current_level.name if self.current_level else "—"),
                              camera, 600),
             "bookmark": M.Page(bookmark_title, bookmark, 600),
+            "pick": M.Page(lambda: t("pick.title"), pick_page, 680),
             "missing_data": M.Page(lambda: t("data.title"), data_items, 640),
             "video": M.Page(lambda: t("video.title"), video),
             "general": M.Page(lambda: t("general.title"), general_items),
             "help": M.Page(lambda: t("help.title"), help_items),
+            "about": M.Page(lambda: t("help.about"), about_items),
             "keyboard": M.Page(lambda: t("help.keyboard"), lambda: [], custom=self.keyboard_page),
             "gamepad": M.Page(lambda: t("help.gamepad"), lambda: [], custom=self.gamepad_page),
         }
@@ -455,6 +539,12 @@ class MenuPages:
         default_role = preferences.for_level(self.current_level.name)["pose"].get(entity_group["model"])
         return own.get(entity_group["model"], default_role)
 
+    def _set_sky_choice(self, role):
+        """Level options -> Sky: the level is rebuilt with the other sky; the
+        choice holds for the session, per level, like the object states."""
+        self.session_sky[self.current_level.name] = role
+        self.load_level(self.level_files[self.index], camera=False)
+
     def _set_group_state(self, entity_group, role):
         """A state chosen from the menu: lasts for the session, the level is rebuilt."""
         self.session_poses.setdefault(self.current_level.name, {})[entity_group["model"]] = role
@@ -466,7 +556,7 @@ class MenuPages:
 
     def _set_language(self, language):
         texts.set_language(language)
-        self.set_caption(t('title') + (f" — {self.build}" if self.build else ""))
+        self.set_caption(version.window_title(t('title'), self.build))
         self.menu.rebuild()
 
     def _set_gamepad(self, on):
@@ -488,6 +578,7 @@ class MenuPages:
         user_settings["texture_scale"], user_settings["albedo"] = self.scale_factor, float(self.albedo)
         user_settings["uv_rule"] = self.uv_rule
         user_settings["field_of_view"], user_settings["status_bar"] = self.fov, self.show_status_bar
+        user_settings["backface_culling"] = self.backface_culling
         user_settings["key_bindings"], user_settings["gamepad"] = self.bindings.stored(), self.gamepad_enabled
         user_settings.persist()
 

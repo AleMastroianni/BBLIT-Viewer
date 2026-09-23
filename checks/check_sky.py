@@ -93,10 +93,11 @@ def at_the_camera(level):
     return found
 
 
-def build(code, pieces=None):
+def build(code, pieces=None, sky_choice=None):
     path = os.path.join(paths.DATA_BZE, code + ".bze")
     textures = texmod.construct(paths.DATA_BZE, code, "extracted")
-    return Level(path, "extracted", textures, None, {} if pieces is None else pieces)
+    return Level(path, "extracted", textures, None, {} if pieces is None else pieces,
+                 sky_choice=sky_choice)
 
 
 if not os.path.exists(PLACEMENT):
@@ -174,8 +175,13 @@ probe("the sky of The Carrot-henge Mystery 3 arrives as a clone", "L02C3" in pro
 # template that nothing clones in the state the viewer shows, and the same
 # model is also placed there as object 165, which is sky already.
 
-SKY_FROM_A_CLONE = {"L02A6": 1, "L02B1": 1, "L02B2": 1, "L02C3": 3, "L02C4": 1,
-                    "L04A2": 1, "L04B1": 1, "L04E": 2, "L04E2": 1}
+# Where two skies take turns (finding 314, `Level._read_sky_choices`) the
+# viewer builds one at a time: the starting sky of `L02B1` and `L02B2` is the
+# placed one (no clone), and `L02C3` shows the rocks 91 (preferences.py),
+# cloned by two rules but built once (so is the sky of `L04E`, object 70,
+# cloned by 59 and 254); the other sky is asked for by name below.
+SKY_FROM_A_CLONE = {"L02A6": 1, "L02B1": 0, "L02B2": 0, "L02C3": 1, "L02C4": 1,
+                    "L04A2": 1, "L04B1": 1, "L04E": 1, "L04E2": 1}
 wrong = []
 for code in sorted({c.upper() for c in promoted} | set(SKY_FROM_A_CLONE)):
     level = build(code)
@@ -188,6 +194,79 @@ for code in sorted({c.upper() for c in promoted} | set(SKY_FROM_A_CLONE)):
     if from_clone != want:
         wrong.append(f"{in_prose(code)}: {from_clone} instead of {want}")
 probe("every sky built from a template is drawn as sky, not as a clone", not wrong)
+
+# ---- the skies that take turns: exactly three levels, one sky at a time,
+# and the other one on request (tools/sky_rules.py: no other level has a
+# rule that deletes a sky while another is cloned)
+
+TAKE_TURNS = {"L02B1": ([(446, 47, True), (849, 143, False)], 1),
+              "L02B2": ([(446, 39, True), (849, 131, False)], 1),
+              "L02C3": ([(849, 91, False), (446, 132, False)], 1)}
+wrong = []
+for code, (choices, other_clones) in TAKE_TURNS.items():
+    level = build(code)
+    if level.sky_choices != choices or level.stat.get("sky_dome", 0) != 1:
+        wrong.append(f"{in_prose(code)}: reads {level.sky_choices}, {level.stat.get('sky_dome', 0)} sky parts")
+    other = build(code, sky_choice=choices[1][0])
+    from_clone = sum(1 for key, piece in other._pieces.items()
+                     if isinstance(key, tuple) and key and key[0] == "clone"
+                     and any(meta[1] == "sky_dome" for meta in piece[0]))
+    if other.sky_choices[0][0] != choices[1][0] or from_clone != other_clones:
+        wrong.append(f"{in_prose(code)} with the other sky: {other.sky_choices}, "
+                     f"{from_clone} sky pieces from a clone ({other_clones} expected)")
+    print(f"  {in_prose(code)[:44]:44s} default object {choices[0][1]}, the other {choices[1][1]}: "
+          f"{from_clone} sky pieces from a clone")
+for line in wrong:
+    print("  " + line)
+probe("the three levels with two skies show one at a time, the other on request", not wrong)
+no_turns = [code for code in ("L01A", "L02C4", "L04E", "LB01", "LS01") if build(code).sky_choices]
+probe("nowhere else does a sky take turns", not no_turns)
+
+# ---- the levels with more than one big sky (the reverse's sky_layers.md,
+# N46): what the viewer draws must be what the rules let stand together.
+# Threshold fixed before running: 11 levels of 11. Expected = the objects
+# the list names, minus the templates it marks as cloned by no rule, minus
+# the sky hidden where two take turns; Era selector one per area, all built.
+
+SKY_LAYERS = os.path.join(os.path.dirname(paths.PROJECT_DIR), "BBLIT_Decomp_ALE",
+                          "docs", "lists", "sky_layers.md")
+listed, code = {}, None
+for line in open(SKY_LAYERS, encoding="utf-8"):
+    heading = re.match(r"^##\s+.*?`([^`]+)`", line)
+    if heading:
+        code = heading.group(1).upper()
+        listed.setdefault(code, {})
+        continue
+    item = re.match(r"^- object (\d+)( \(template( NO RULE CLONES)?\))?", line)
+    if code and item:
+        listed[code][int(item.group(1))] = item.group(3) is None
+wrong = []
+for code, objects in sorted(listed.items()):
+    level = build(code)
+    hidden = {n for role, n, _start in level.sky_choices if role in level.sky_hidden}
+    expected = {n for n, cloned in objects.items() if cloned} - hidden
+    drawn = set()
+    for key, piece in level._pieces.items():
+        if not (isinstance(key, tuple) and key and key[0] in ("object", "clone")
+                and any(meta[1] == "sky_dome" for meta in piece[0])):
+            continue
+        if key[0] == "object":
+            drawn.add(key[1])
+        elif key[0] == "clone":
+            # route = (parent, rule, ...): the template is the one the rule names
+            parent, rule = key[1][0], key[1][1]
+            t = level.templates.get(level.lvl["objects"][parent]["rules"][rule]["field28"])
+            for depth in key[1][2:]:
+                t = level.templates.get(t["rules"][depth]["field28"]) if t else None
+            if t is not None:
+                drawn.add(level._idx[id(t)])
+    ok = drawn == expected
+    print(f"  {in_prose(code)[:44]:44s} draws {sorted(drawn)}, expected {sorted(expected)}"
+          + ("" if ok else "  <-- DIFFERENT"))
+    if not ok:
+        wrong.append(code)
+probe(f"in the {len(listed)} levels with more than one big sky the viewer draws what the rules "
+      f"let stand together (threshold: all of them)", not wrong)
 
 # ---- one sky at a time where the level has one per area (Era selector)
 

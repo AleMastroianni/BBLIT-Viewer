@@ -13,6 +13,9 @@ Each entry says which measurement the number comes from.
   and so do the clones they request themselves (the torch flame).
 * `table1`: fixed values of variables of the game's table 1 (finding
   161), to pick a state the game picks at runtime.
+* `sky`: the role of the sky to show where two skies take turns (finding
+  314, `Level._read_sky_choices`) and none of them is there when the level
+  starts; elsewhere the default is the starting sky and needs no entry.
 """
 
 PREFERENCES = {
@@ -65,10 +68,20 @@ PREFERENCES = {
              "states": [(348, "falling"), (131, "on_ground")]},
         ],
     },
+    "L02C3": {
+        # The Carrot-henge Mystery 3 starts in a cave with no sky. The rocks
+        # (object 91, role 849) are what the game shows first (the big block
+        # follows the camera and does not block the ice passage); the snowy
+        # sky (object 132, role 446, the
+        # model of parts 1, 2 and 4 of the mission) comes from the chain of
+        # level byte 81 at the first portal and stays a menu choice
+        # (tools/sky_rules.py)
+        "sky": 849,
+    },
 }
 
 
 def for_level(name: str) -> dict:
-    pref = {"pose": {}, "always_cloned": set(), "table1": {}, "entity_groups": []}
+    pref = {"pose": {}, "always_cloned": set(), "table1": {}, "entity_groups": [], "sky": None}
     pref.update(PREFERENCES.get(name.upper(), {}))
     return pref

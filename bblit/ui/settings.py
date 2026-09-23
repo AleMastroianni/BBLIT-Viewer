@@ -46,6 +46,10 @@ DEFAULTS = {
     # 341, is no rule any more: it falls back to "pc" (app.py)
     "uv_rule": "pc",
     "field_of_view": 65,
+    # Video options -> Backface culling: off, the viewer shows every face
+    # (its advantage over the game); on, the one-sided faces are culled as
+    # the PC culls them (finding 307), to look inside a level from above
+    "backface_culling": False,
     "status_bar": True,
     # levels folder chosen in General options; empty = bze_levels/
     "levels_folder": "",

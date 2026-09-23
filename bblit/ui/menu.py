@@ -265,6 +265,9 @@ class Menu:
         self._right_edge = 0                 # right edge of the panel
         self._desc_max = {}              # lines of the page's longest description
         self._start_lines = {}                # first visible line, per page
+        # (row heights, space available) of the last layout, per page: what
+        # the wheel needs to scroll the list by rows
+        self._scroll = {}
         self._draw_key = None
         self.dirty = True
         # the Back keys (Backspace and M by default, rebindable: keybinds)
@@ -464,15 +467,39 @@ class Menu:
         self.dirty = True
         return True
 
+    # rows the wheel scrolls per notch
+    WHEEL_ROWS = 3
+
     def wheel(self, x, y, sy) -> bool:
+        """The wheel scrolls the list up and down, `WHEEL_ROWS` rows per
+        notch, and nothing else: the values of the entries change with left
+        / right and a click. The cursor is kept
+        inside the visible part, on a selectable row, or the layout would
+        pull the list back to it."""
         if not self.is_open or not self.stack:
             return False
         if self.custom() is not None:
             return self.custom().wheel(x, y, sy, self)
-        item = self._current_item()
-        if item is not None and isinstance(item, (Choice, Number, YesNo)):
-            item.change(1 if sy > 0 else -1, self)
-            self.dirty = True
+        entry_name, menu_items, cursor = self.stack[-1]
+        scroll = self._scroll.get(id(menu_items))
+        if scroll is None or sy == 0:
+            return True         # not laid out yet, or a sideways wheel
+        row_heights, space_avail = scroll
+        # the last start that still fills the space: past it the list would
+        # leave an empty band at the bottom
+        max_start = 0
+        while max_start < len(menu_items) - 1 and sum(row_heights[max_start:]) > space_avail:
+            max_start += 1
+        start_line = self._start_lines.get(id(menu_items), 0)
+        start_line = max(0, min(max_start, start_line - int(sy) * self.WHEEL_ROWS))
+        self._start_lines[id(menu_items)] = start_line
+        end_line = start_line
+        while end_line < len(menu_items) and sum(row_heights[start_line:end_line + 1]) <= space_avail:
+            end_line += 1
+        visible = [i for i in range(start_line, end_line) if menu_items[i].selectable]
+        if visible and not start_line <= cursor < end_line:
+            self.stack[-1][2] = visible[0] if cursor < start_line else visible[-1]
+        self.dirty = True
         return True
 
     # ---- drawing
@@ -548,6 +575,7 @@ class Menu:
         while sum(row_heights[start_line:cursor + 1]) > space_avail and start_line < cursor:
             start_line += 1
         self._start_lines[id(menu_items)] = start_line
+        self._scroll[id(menu_items)] = (row_heights, space_avail)
         end_line = start_line
         while end_line < len(menu_items) and sum(row_heights[start_line:end_line + 1]) <= space_avail:
             end_line += 1

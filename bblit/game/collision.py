@@ -27,6 +27,16 @@ import struct
 CELL_UNITS = 320
 SUBCELL = 40
 NO_GROUND = (0x7E, 0x7F)
+# How high Bugs gets from standing (the reverse's figure). Together with the
+# 100 units the sweep already lets him walk up (findings 298, 309) it draws
+# the line between the two classes: a rise of 101 to 383 units is a STEP, he
+# clears it with a jump; over 383 it is a WALL, it just stops him.
+# Two measurements, no statistics
+JUMP_HEIGHT = 383
+# An edge over the void (a 0x7E sub-cell with nothing under it) has no
+# thickness in the collision: this is the least the viewer draws under the
+# floor so the edge is visible, one sub-cell (see `_edge_bottom`)
+EDGE_MIN_THICKNESS = SUBCELL
 
 
 class HeightmapBlock:
@@ -138,6 +148,45 @@ def wall_crossable(grid_blocks, corner_points) -> bool | None:
     side_a, side_b = (cx + step[0], cz + step[1]), (cx - step[0], cz - step[1])
     return not any(sweep_stops(grid_blocks, side_a, side_b, y) or sweep_stops(grid_blocks, side_b, side_a, y)
                    for y in (foot - 20, (top + foot) / 2, top + 20))
+
+
+def joined_face_crossable(grid_blocks, corner_points) -> bool:
+    """A face joined to a face without collision that neither test above
+    judges: a slope steeper than 45 degrees, a wall shorter than 60 units,
+    an overhang or a ceiling (8330 on the disc, `tools/unjudged_faces.py`).
+    The rim under the flat top of the mushroom rock of Wabbit on the run! 2
+    (`L01B`) is five such faces, 108 to 116 degrees from vertical up, and
+    Bugs falls straight through it (recorded in the game, 70 units a tick
+    down to -730).
+
+    True when the game's own queries find nothing: no ground within
+    TOLERANCE of the face's centre (finding 292, `ground_heights`), and,
+    where the face has a horizontal component, the sweep across its centre
+    lets a mover through both ways (finding 298, `sweep_stops`) at its
+    middle, and at its foot and top when it is taller than 60 units.
+    """
+    p = corner_points
+    u = [p[1][k] - p[0][k] for k in range(3)]
+    v = [p[2][k] - p[0][k] for k in range(3)]
+    n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+    ln = (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
+    if ln == 0 or n[1] / ln >= 0.7:
+        return False                    # a floor: no_collision_kind judged it already
+    cx = sum(q[0] for q in p) / len(p)
+    cy = sum(q[1] for q in p) / len(p)
+    cz = sum(q[2] for q in p) / len(p)
+    if any(abs(g - cy) <= TOLERANCE for g in ground_heights(grid_blocks, cx, cz)):
+        return False
+    horizontal = (n[0] ** 2 + n[2] ** 2) ** 0.5
+    if horizontal / ln < 0.05:
+        return True                     # flat: only the ground counts
+    step = (n[0] / horizontal * SUBCELL, n[2] / horizontal * SUBCELL)
+    side_a, side_b = (cx + step[0], cz + step[1]), (cx - step[0], cz - step[1])
+    ys = [q[1] for q in p]
+    top, foot = min(ys), max(ys)            # Y down
+    heights = [(top + foot) / 2] + ([foot - 20, top + 20] if foot - top >= 60 else [])
+    return not any(sweep_stops(grid_blocks, side_a, side_b, y) or sweep_stops(grid_blocks, side_b, side_a, y)
+                   for y in heights)
 
 
 def no_collision_kind(grid_blocks: list[HeightmapBlock], corner_points, trap_zones=()) -> str | None:
@@ -298,7 +347,10 @@ def settle_objects(lvl: dict, grid_blocks) -> list[tuple]:
 # (Ground, Hard walls, Fake walls): all in game coordinates, Y down
 
 SUBCELLS_PER_CELL = CELL_UNITS // SUBCELL      # 8
-HARD_WALL_HEIGHT = 640                       # how tall a hard wall is drawn (5 m)
+# how far over the ground (5 m) a visible face counts as showing a hard wall
+# (hard_walls: `visible`). The wall itself is drawn to the ceiling of its
+# block, not to a fixed height
+HARD_WALL_HEIGHT = 640
 
 
 def subcell_map(b: HeightmapBlock) -> tuple[int, int, bytearray]:
@@ -452,6 +504,31 @@ def raster_vertical(face_points) -> dict[tuple[int, int], list[float]]:
     return out
 
 
+def _edge_bottom(b, vertical_heights, cells, floor):
+    """How far down an edge over the void really goes.
+
+    The collision knows only WHERE a floor ends, never how thick it is: a
+    0x7E sub-cell says "no ground here", nothing more. Taking the block's
+    floor as the bottom drew a 9.4 m slab under a 97 cm plank (the dock edge
+    of Hey... What's up, Dock? 1 at x = 20000). So the panel is clipped to
+    the face the game really draws on
+    that plane: the lowest point of the visible near-vertical faces that
+    pass through the edge's own two sub-cells, below the floor. Where the
+    game draws nothing there, the collision has nothing to say either, and
+    the panel is one sub-cell thick -- the smallest thickness the 40-unit
+    grid can tell apart, drawn so the edge can be seen at all."""
+    bottom = floor + EDGE_MIN_THICKNESS
+    if vertical_heights is None:
+        return bottom
+    for gx, gz in cells:
+        kx = int((b.ox + gx * SUBCELL) // SUBCELL)
+        kz = int((b.oz + gz * SUBCELL) // SUBCELL)
+        for yv in vertical_heights.get((kx, kz), ()):
+            if floor < yv <= b.y_floor and yv > bottom:
+                bottom = yv
+    return bottom
+
+
 def _seen_between(b, vertical_heights, cells, low, high):
     """A visible near-vertical face (raster_vertical) within +-2 sub-cells
     (80 units) of one of the two sub-cells, at a height between `high` and
@@ -473,17 +550,23 @@ def hard_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
     """The hard walls: vertical panels on the edges between a 0x7F sub-cell
     and one that is not, merged into continuous runs along the edge.
 
-    Returns (xa, za, xb, zb, y_base, y_top, visible, free): the base sits 16
-    units under the lowest ground next to the run, the top HARD_WALL_HEIGHT
-    over the highest, so a run is one clean panel. `visible` is True when a
+    Returns (xa, za, xb, zb, y_base, y_top, visible, free, y_ground_low,
+    y_ground_high): the base is the floor of the run's block and the top its
+    ceiling (Y down: y_top < y_base). A hard wall stops at ANY height inside
+    its block and not above it, up to the ceiling exactly and checked with
+    Bugs's feet (three recordings in the game, in Hey... What's up, Dock? 1,
+    What's cookin', Doc? 3 and Wabbit on the run! 2, stopped at ceiling + 1
+    and through at the ceiling). `y_ground_low`
+    and `y_ground_high` are the lowest and highest ground next to the run
+    (the free side), where the name is written. `visible` is True when a
     visible near-vertical face (raster_vertical) passes through one of the
-    two sub-cells at a height inside the panel: a wall you can see. The
-    others stop you with nothing drawn: the invisible walls. `free` is the
-    unit (dx, dz) from the edge towards the sub-cell that is not 0x7F: the
-    side the wall stops you from (finding 309: the sweep stops whoever
-    enters a 0x7F sub-cell, and Bugs is put back if he ends up in one).
-    Nothing between two 0x7F sub-cells; a run ends where the free side
-    changes.
+    two sub-cells within HARD_WALL_HEIGHT over the ground: a wall you can
+    see where you walk. The others stop you with nothing drawn: the
+    invisible walls. `free` is the unit (dx, dz) from the edge towards the
+    sub-cell that is not 0x7F: the side the wall stops you from (finding
+    309: the sweep stops whoever enters a 0x7F sub-cell, and Bugs is put
+    back if he ends up in one). Nothing between two 0x7F sub-cells; a run
+    ends where the free side changes.
     """
     out = []
     for b in grid_blocks:
@@ -519,13 +602,14 @@ def hard_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
                             vis = _seen_between(b, vertical_heights, cells, yb + 16, yb - HARD_WALL_HEIGHT)
                     if run and (not wall or vis != run[2] or free != run[3]):
                         j0, ys, v0, f0 = run
-                        base, top = max(ys) + 16, min(ys) - HARD_WALL_HEIGHT
+                        base, top = b.y_floor, b.y_ceiling
+                        ground_low, ground_high = max(ys), min(ys)
                         if axis == "x":
                             out.append((b.ox + i * SUBCELL, b.oz + j0 * SUBCELL, b.ox + i * SUBCELL,
-                                        b.oz + j * SUBCELL, base, top, v0, f0))
+                                        b.oz + j * SUBCELL, base, top, v0, f0, ground_low, ground_high))
                         else:
                             out.append((b.ox + j0 * SUBCELL, b.oz + i * SUBCELL, b.ox + j * SUBCELL,
-                                        b.oz + i * SUBCELL, base, top, v0, f0))
+                                        b.oz + i * SUBCELL, base, top, v0, f0, ground_low, ground_high))
                         run = None
                     if wall:
                         if run is None:
@@ -546,18 +630,38 @@ def step_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
     the hard walls are.
 
     Returns (xa, za, xb, zb, y_high, y_low, visible, low, hole): the panel
-    from the lowest low ground to the highest high ground of the run (Y
-    down: y_high < y_low). `visible` as for the hard walls, between the two
-    grounds. `low` is the unit (dx, dz) from the edge towards the low side,
-    where the step stops you; `hole` is True when the low side is a 0x7E
-    sub-cell. A run ends where visibility, low side or kind change. The
-    block sides are area_walls."""
+    between the two grounds THE EDGE REALLY HAS (Y down: y_high < y_low).
+    It used to be the box of the whole merged run, the lowest low and the
+    highest high of every sub-cell in it, and a 0x7E sub-cell counted as the
+    block's FLOOR: on the dock edge of Hey... What's up, Dock? 1 that drew a
+    panel 12.5 m tall where the plank is 97 cm, 3.1 m of it standing in the
+    air over a floor you walk on (tested in the game: the plank's edge stops
+    him, over the plank there is nothing). Now a run is cut where the ground
+    changes, so the panel
+    follows the floor sub-cell by sub-cell and never rises over it, and an
+    edge over the void goes down only as far as `_edge_bottom` says.
+    `visible` as for the hard walls, between the two grounds. `low` is the
+    unit (dx, dz) from the edge towards the low side, where the step stops
+    you; `hole` is True when the low side is a 0x7E sub-cell over nothing:
+    a platform's edge over the void. A 0x7E sub-cell
+    that is only the roof of a block below, with ground or a 0x7F wall
+    under it (`grounded`), is a step like any other: the game stops there
+    (recorded in the game: Hey... What's up, Dock? 1, held at -1920 and
+    -1925 at X 29519, the crates' top over the dock's block). A run ends
+    where visibility, low side or
+    kind change. The block sides are area_walls."""
     out = []
+    maps = {}
     for b in grid_blocks:
         w, h, m = subcell_map(b)
 
         def ground_of(v):
             return b.y_floor if v == 0x7E else height_units(b, v)
+
+        def over_nothing(gx, gz):
+            # a 0x7E sub-cell with no ground and no wall in any block below
+            return not grounded(grid_blocks, b, b.ox + gx * SUBCELL + SUBCELL // 2,
+                                b.oz + gz * SUBCELL + SUBCELL // 2, maps)
 
         for axis in ("x", "z"):
             outer, inner = (w, h) if axis == "x" else (h, w)
@@ -577,9 +681,17 @@ def step_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
                                 high, low = min(ya, yc), max(ya, yc)
                                 sign = 1 if yc > ya else -1          # towards the lower ground (Y down)
                                 side = (sign, 0) if axis == "x" else (0, sign)
-                                hole = (c if sign == 1 else a) == 0x7E
+                                low_cell = cells[1] if sign == 1 else cells[0]
+                                hole = (c if sign == 1 else a) == 0x7E and over_nothing(*low_cell)
+                                if hole:
+                                    # over the void the low ground is nothing,
+                                    # not the block's floor: the panel is as
+                                    # deep as what the game draws there
+                                    low = _edge_bottom(b, vertical_heights, cells, high)
                                 step = (high, low, _seen_between(b, vertical_heights, cells, low, high), side, hole)
-                    if run is not None and (step is None or step[2:] != tuple(run[3:])):
+                    # a run is cut where the two grounds change too: the panel
+                    # follows the floor instead of being the run's box
+                    if run is not None and (step is None or step != tuple(run[1:])):
                         j0, high, low, vis, side, hole = run
                         if axis == "x":
                             out.append((b.ox + i * SUBCELL, b.oz + j0 * SUBCELL, b.ox + i * SUBCELL,
@@ -588,12 +700,31 @@ def step_walls(grid_blocks: list[HeightmapBlock], vertical_heights=None):
                             out.append((b.ox + j0 * SUBCELL, b.oz + i * SUBCELL, b.ox + j * SUBCELL,
                                         b.oz + i * SUBCELL, high, low, vis, side, hole))
                         run = None
-                    if step is not None:
-                        if run is None:
-                            run = [j, step[0], step[1], step[2], step[3], step[4]]
-                        else:
-                            run[1], run[2] = min(run[1], step[0]), max(run[2], step[1])
+                    if step is not None and run is None:
+                        run = [j, step[0], step[1], step[2], step[3], step[4]]
     return out
+
+
+def grounded(grid_blocks: list[HeightmapBlock], b: HeightmapBlock, x: float, z: float, maps=None) -> bool:
+    """Whether a block at or below `b` (Y down: its ceiling at or under b's
+    floor) holds (x, z) with ground or a 0x7F wall there: then a 0x7E
+    sub-cell of `b` at (x, z) is only the roof of that block, not the void.
+    `maps`: the blocks' sub-cell maps (subcell_map), kept by the caller
+    across many calls."""
+    for c in grid_blocks:
+        if c is b or c.y_ceiling < b.y_floor:
+            continue
+        if not (c.ox <= x < c.ox + c.ext_x and c.oz <= z < c.oz + c.ext_z):
+            continue
+        if maps is None:
+            w, _h, m = subcell_map(c)
+        else:
+            if id(c) not in maps:
+                maps[id(c)] = subcell_map(c)
+            w, _h, m = maps[id(c)]
+        if m[int((z - c.oz) // SUBCELL) * w + int((x - c.ox) // SUBCELL)] != 0x7E:
+            return True
+    return False
 
 
 def area_walls(grid_blocks: list[HeightmapBlock]):

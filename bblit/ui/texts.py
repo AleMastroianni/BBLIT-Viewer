@@ -23,6 +23,64 @@ TEXTS: dict[str, tuple[str, str]] = {
     "status.area": ("area {n}", "area {n}"),
     "status.paused": ("animazioni ferme", "animations paused"),
     "status.pose": ("posa iniziale", "starting pose"),
+    # the frame drawn before a level is built: loading blocks the window, and
+    # without it the last frame of the level that is leaving stays on screen
+    "status.loading": ("Caricamento {name}...", "Loading {name}..."),
+    "status.pick": ("Alt+clic: cosa c'e' qui", "Alt+click: what is here"),
+
+    # the selector (Alt+click, window/picking.py)
+    "pick.title": ("Seleziona / Cosa c'e' qui", "Select / What is here"),
+    "pick.desc": ("Alt+clic su un pixel dice cosa c'e' li'. Alt+clic di nuovo sullo stesso punto "
+                  "scorre la pila, dal piu' vicino al piu' lontano. Si seleziona solo cio' che e' "
+                  "disegnato: un tratto senza faccia disegnata si prende lo stesso, perche' il suo "
+                  "pannello c'e'.",
+                  "Alt+click on a pixel says what is there. Alt+click the same spot again steps down "
+                  "the stack, nearest to farthest. Only what is drawn can be picked: a run with "
+                  "nothing drawn on it is still picked, because its panel is there."),
+    "pick.enabled": ("Seleziona con Alt+clic", "Select with Alt+click"),
+    "pick.copy": ("Copia la scheda", "Copy the card"),
+    "pick.desc_copy": ("Mette tutta la scheda negli appunti, da incollare in chat.",
+                       "Puts the whole card on the clipboard, to paste in chat."),
+    "pick.clear": ("Deseleziona", "Clear the selection"),
+    "pick.none": ("Niente selezionato: Alt+clic su un pixel.",
+                  "Nothing selected: Alt+click on a pixel."),
+    "pick.of": ("Selezione {n} di {total} su questo pixel", "Selected {n} of {total} on this pixel"),
+    "pick.group": ("Gruppo: {name}", "Group: {name}"),
+    "pick.point": ("Punto di gioco {x:.0f}, {y:.0f}, {z:.0f} - {m:.1f} m dalla camera",
+                   "Game point {x:.0f}, {y:.0f}, {z:.0f} - {m:.1f} m from the camera"),
+    "pick.run": ("Tratto: {ends}", "Run: {ends}"),
+    "pick.height": ("Alto {top:.0f}, basso {base:.0f} - dislivello {drop:.0f} unita' ({metres:.2f} m)",
+                    "Top {top:.0f}, base {base:.0f} - drop {drop:.0f} units ({metres:.2f} m)"),
+    "pick.block": ("Blocco: pavimento {floor:.0f}, soffitto {ceiling:.0f}",
+                   "Block: floor {floor:.0f}, ceiling {ceiling:.0f}"),
+    "pick.stops_wall": ("FERMA fino al soffitto del blocco ({m:.1f} m)",
+                        "STOPS you up to the block's ceiling ({m:.1f} m)"),
+    "pick.hole": ("Bordo su buco: sotto c'e' un 0x7E, non suolo",
+                  "Edge over a hole: below is a 0x7E, not ground"),
+    "pick.edge": ("EDGE, bordo del pavimento sul vuoto: sul lato libero la heightmap non ha "
+                  "suolo (0x7E). Spessore disegnato {m:.2f} m, preso dalla faccia che il gioco "
+                  "disegna qui; dove non ne disegna nessuna, una sotto-cella",
+                  "EDGE, the rim of a floor over the void: the heightmap has no ground on the "
+                  "free side (0x7E). Drawn thickness {m:.2f} m, taken from the face the game "
+                  "draws here; one sub-cell where it draws none"),
+    "pick.step_real": ("Gradino vero: sotto c'e' suolo", "A real step: below is ground"),
+    "pick.drop_wall": ("MURO da dislivello: {m:.2f} m, oltre il salto di Bugs ({jump} unita'). "
+                       "Disegnato e chiamato come muro",
+                       "WALL by drop: {m:.2f} m, more than Bugs's jump ({jump} units). "
+                       "Drawn and named as a wall"),
+    "pick.stops_step": ("FERMA: salto di {m:.2f} m, oltre il salto di Bugs",
+                        "STOPS you: a rise of {m:.2f} m, more than Bugs's jump"),
+    "pick.climbable": ("Si supera: {m:.2f} m, sotto il salto di Bugs ({jump} unita')",
+                       "You can get up: {m:.2f} m, under Bugs's jump ({jump} units)"),
+    "pick.free": ("Lato libero ({dx}, {dz})", "Free side ({dx}, {dz})"),
+    "pick.seen": ("Il gioco ci disegna qualcosa sopra", "The game draws something on it"),
+    "pick.unseen": ("INVISIBILE: il gioco non ci disegna niente",
+                    "UNSEEN: the game draws nothing on it"),
+    "pick.face": ("Faccia del gioco: {d:+.1f} dal piano, {tilt:.1f} gradi dalla verticale, "
+                  "{off:.1f} gradi fuori dal piano",
+                  "Game face: {d:+.1f} from the plane, {tilt:.1f} degrees off vertical, "
+                  "{off:.1f} degrees off the plane"),
+    "pick.face_cells": ("La faccia tiene {n} celle del tratto", "The face holds {n} cells of the run"),
 
     # main menu
     "menu.main": ("Menu", "Menu"),
@@ -72,12 +130,13 @@ TEXTS: dict[str, tuple[str, str]] = {
                              "livelli dell'eseguibile, quindi senza LevID.",
                              "{entry_name} · {file}.bze: on the disc but not in the executable's "
                              "level table, so no LevID."),
+    "load.eras": ("Ere", "Eras"),
+    "load.desc_eras": ("L'Era selector (LS01): la vista d'insieme e il centro di ogni era.",
+                       "The Era selector (LS01): the overview and the centre of each era."),
     "load.desc_era": ("I livelli dell'era, per titolo e parte.",
                         "The era's levels, by title and part."),
-    "load.desc_extra": ("L'Era selector (LS01) anche al centro di ogni era, e le "
-                          "varianti _8 fuori dalla tabella dei livelli.",
-                          "The Era selector (LS01) also at the centre of each era, and "
-                          "the _8 variants missing from the level table."),
+    "load.desc_extra": ("Le varianti _8 fuori dalla tabella dei livelli.",
+                          "The _8 variants missing from the level table."),
     "era.nowhere": ("Nowhere", "Nowhere"),
     "era.stone_age": ("Età della pietra", "Stone Age"),
     "era.medieval": ("Medioevo", "Medieval Period"),
@@ -108,7 +167,26 @@ TEXTS: dict[str, tuple[str, str]] = {
                              "cut by area of the camera's area, plus the areas reached through the "
                              "portals on screen (findings 293-295). In LS01 only the sky of the island "
                              "you are on is left. Off at every start."),
-    "level.invisible_walls": ("Muri invisibili", "Invisible walls"),
+    "level.walls": ("Muri", "Walls"),
+    "desc.walls": ("I muri della heightmap di collisione: muri duri, gradini, box delle aree, "
+                   "e da quale lato vederli.",
+                   "The walls of the collision heightmap: hard walls, steps, area boxes, and "
+                   "which side to see them from."),
+    "level.walls.off": ("No", "No"),
+    "level.walls.all": ("Tutti", "All"),
+    "level.walls.unseen": ("Solo invisibili", "Only invisible"),
+    "level.steps": ("Gradini", "Steps"),
+    "desc.steps": ("I gradini di piu' di 100 unita' della heightmap, in rosa: fermano solo "
+                   "salendo, dal lato basso (STEP WALL, sigla STP); dal lato alto STEP WALL · "
+                   "OUTSIDE. \"Tutti\" anche quelli coperti da una faccia opaca del livello (un "
+                   "gradino ferma comunque), \"Solo invisibili\" quelli senza niente davanti. "
+                   "Dove il gioco ha una faccia sul gradino si colora quella, coi suoi spigoli.",
+                   "The heightmap's steps of more than 100 units, in pink: they stop you only "
+                   "going up, from the low side (STEP WALL, short STP); from the high side STEP "
+                   "WALL · OUTSIDE. \"All\" also those an opaque face of the level covers (a "
+                   "step stops you anyway), \"Only invisible\" those with nothing drawn over "
+                   "them. Where the game has a face on the step, that face is coloured, with "
+                   "its edges."),
     "level.no_collision": ("Senza collisione", "No collision"),
     "level.collision_boxes": ("Box di collisione", "Collision boxes"),
     "level.flags": ("Flags", "Flags"),
@@ -146,16 +224,6 @@ TEXTS: dict[str, tuple[str, str]] = {
     "desc.texture": ("Mostra le texture o solo il colore dei vertici. Tasto [[textures]].",
                      "Show textures or vertex colours only. Key [[textures]]."),
     "desc.props": ("Oggetti piazzati e animati. Tasto [[props]].", "Placed and animated objects. Key [[props]]."),
-    "desc.invisible_walls": ("Cio' che ti ferma senza niente di disegnato, in magenta: i muri duri 0x7F "
-                             "della heightmap dove non c'e' una parete visibile (INVISIBLE WALL, sigla "
-                             "INV) e i gradini di piu' di 100 unita' (STEP WALL, sigla STP), che fermano "
-                             "solo salendo: dal lato alto STEP WALL · OUTSIDE. I box degli oggetti sono "
-                             "a parte (Box di collisione).",
-                             "What stops you with nothing drawn, in magenta: the heightmap's 0x7F hard "
-                             "walls where there is no visible wall (INVISIBLE WALL, short INV) and the "
-                             "steps of more than 100 units (STEP WALL, short STP), which stop you only "
-                             "going up: from the high side STEP WALL · OUTSIDE. Object boxes are "
-                             "separate (Collision boxes)."),
     "level.area_boxes": ("Box delle aree", "Area boxes"),
     "desc.area_boxes": ("Il volume di collisione di ogni mini area (i blocchi della heightmap). "
                         "I lati fermano solo chi e' dentro (AREA WALL; da fuori AREA WALL · OUTSIDE: "
@@ -165,20 +233,21 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you "
                         "pass). The top stops the head of a jump (JUMP CEILING, from below): Bugs's "
                         "origin stops about 410 lower."),
-    "level.walls_outside": ("Muri: lato di fuori", "Walls: outside side"),
-    "desc.walls_outside": ("Il lato dei muri da cui non si e' fermati (le scritte OUTSIDE): i box delle "
-                           "aree da fuori e da sopra, i gradini dal lato alto. Spento, da fuori si "
-                           "vedono le aree senza il box davanti.",
-                           "The side of the walls that does not stop you (the OUTSIDE names): the area "
-                           "boxes from outside and above, the steps from the high side. Off, from "
-                           "outside you see the areas without the box in front."),
-    "level.hole_steps": ("Muri: bordi sui buchi", "Walls: edges over holes"),
-    "desc.hole_steps": ("Con Muri invisibili, anche i gradini visti da un buco 0x7E (il suo suolo e' la "
-                        "base della lastra): i bordi delle piattaforme sul vuoto. Nel gioco fermano chi "
-                        "cade accanto alla piattaforma, ma di solito sono solo rumore.",
-                        "With Invisible walls, also the steps seen from a 0x7E hole (its ground is the "
-                        "slab's base): the edges of platforms over the void. In the game they stop "
-                        "whoever falls next to the platform, but they are mostly noise."),
+    "level.walls_outside": ("Lato di fuori", "Outside side"),
+    "desc.walls_outside": ("Il lato dei muri da cui non si e' fermati (le scritte OUTSIDE): i muri duri "
+                           "dal lato 0x7F, i gradini dal lato alto, i box delle aree da fuori e da "
+                           "sopra. Spento, da fuori si vedono le aree senza il box davanti.",
+                           "The side of the walls that does not stop you (the OUTSIDE names): the hard "
+                           "walls from the 0x7F side, the steps from the high side, the area boxes from "
+                           "outside and above. Off, from outside you see the areas without the box in "
+                           "front."),
+    "level.hole_steps": ("Gradini: bordi sui buchi", "Steps: edges over holes"),
+    "desc.hole_steps": ("Con Gradini, anche quelli visti da un buco 0x7E (il suo suolo e' la base della "
+                        "lastra): i bordi delle piattaforme sul vuoto. Nel gioco fermano chi cade "
+                        "accanto alla piattaforma, ma di solito sono solo rumore.",
+                        "With Steps, also those seen from a 0x7E hole (its ground is the slab's base): "
+                        "the edges of platforms over the void. In the game they stop whoever falls "
+                        "next to the platform, but they are mostly noise."),
     "level.gate_links": ("Chi apre cosa", "Who opens what"),
     "level.gate_links.off": ("No", "No"),
     "level.gate_links.gates": ("Solo cancelli", "Gates only"),
@@ -221,12 +290,18 @@ TEXTS: dict[str, tuple[str, str]] = {
                      "The ground you really stand on (the heightmap): faint green under what "
                      "you see, bright green where nothing is drawn (invisible ground), white "
                      "with beams the isolated 40-unit spots."),
-    "desc.hard_walls": ("I muri 0x7F della heightmap: fermano a qualunque altezza, anche dove "
-                        "non si vede niente (HARD WALL, sigla HRD). In blu, alti 5 m, visti dal lato "
-                        "da cui si entra; per Bugs fermano da ogni lato.",
-                        "The heightmap's 0x7F walls: they stop you at any height, even where "
-                        "nothing is drawn (HARD WALL, short HRD). In blue, 5 m tall, seen from the "
-                        "side you would enter from; for Bugs they stop from every side."),
+    "desc.hard_walls": ("I muri 0x7F della heightmap, in blu: fermano a qualunque altezza dentro il "
+                        "loro blocco, dal pavimento alla cima esatta (provato nel gioco), anche dove "
+                        "non si vede niente (HARD WALL, sigla HRD); visti dal lato da cui si entra. "
+                        "\"Solo invisibili\": quelli senza una parete disegnata. Dove il gioco ha una "
+                        "faccia sul muro si colora quella, coi suoi spigoli; pannelli dove non c'e' "
+                        "niente.",
+                        "The heightmap's 0x7F walls, in blue: they stop you at any height inside "
+                        "their block, from the floor to its exact top (tested in the game), even "
+                        "where nothing is drawn (HARD WALL, short HRD); seen from the side you would "
+                        "enter from. \"Only invisible\": those with no wall drawn. Where the game has "
+                        "a face on the wall, that face is coloured, with its edges; panels where "
+                        "there is nothing."),
     "desc.flags": ("Sovrapposizioni per il glitch hunting: muri, collisioni, zone di morte. Ogni "
                    "cosa ha scritto cio' che fa: un nome intero, o piu' sigle se fa piu' cose o e' "
                    "in piu' flag accese (per esempio DTH + DMG).",
@@ -298,6 +373,14 @@ TEXTS: dict[str, tuple[str, str]] = {
     "group.bridges": ("Ponti levatoi", "Drawbridges"),
     "group.water_barrels": ("Barili in acqua", "Barrels in the water"),
     "group.green_crates": ("Casse verdi", "Green crates"),
+    "level.sky_choice": ("Cielo", "Sky"),
+    "level.sky_choice.start": ("Oggetto {n} (di partenza)", "Object {n} (at the start)"),
+    "level.sky_choice.default": ("Oggetto {n} (il primo)", "Object {n} (the first)"),
+    "level.sky_choice.other": ("Oggetto {n} (l'altro)", "Object {n} (the other)"),
+    "desc.sky_choice": ("Nel gioco i due cieli non stanno mai insieme: una regola toglie uno e "
+                        "clona l'altro. Di default quello con cui il livello parte.",
+                        "In the game the two skies never stand together: a rule deletes one "
+                        "and clones the other. By default the one the level starts with."),
     "state.raised": ("Alzati", "Raised"),
     "state.one_third": ("Un terzo", "One third"),
     "state.two_thirds": ("Due terzi", "Two thirds"),
@@ -324,6 +407,13 @@ TEXTS: dict[str, tuple[str, str]] = {
     "video.uv.amd": ("PC, scheda AMD", "PC, AMD card"),
     "video.uv.psx": ("PlayStation", "PlayStation"),
     "video.fov": ("Campo visivo", "Field of view"),
+    "video.backface": ("Backface culling", "Backface culling"),
+    "desc.backface": ("Come il gioco: le facce a un lato solo non si disegnano dal retro (scoperta "
+                      "307), quelle a due lati restano. Spento, il viewer mostra ogni faccia: da "
+                      "sopra un livello si vede il tetto, acceso si vede dentro. Spento di default.",
+                      "As the game: the one-sided faces are not drawn from behind (finding 307), the "
+                      "two-sided ones stay. Off, the viewer shows every face: from above a level you "
+                      "see its roof, on you see inside. Off by default."),
     "video.fov.pc": ("(come il PC)", "(like the PC)"),
     "desc.fullscreen": ("Anche Alt+Invio.", "Also Alt+Enter."),
     "desc.filter": ("Bilineare come il PC, o i texel netti. Tasto [[filter]].",
@@ -357,6 +447,11 @@ TEXTS: dict[str, tuple[str, str]] = {
     # keys and gamepad (Help and General options, as in the CTR viewer)
     "help.keyboard": ("Tastiera", "Keyboard"),
     "help.gamepad": ("Gamepad", "Gamepad"),
+    "help.about": ("Informazioni", "About"),
+    "desc.help_about": ("Versione del viewer, autore e tipo di copia.",
+                        "Viewer version, author and kind of copy."),
+    "about.author": ("Autore", "Author"),
+    "about.build": ("Copia", "Build"),
     "desc.help_keyboard": ("Tutti i comandi di tastiera e mouse. I tasti con una sola funzione si "
                            "possono cambiare qui.",
                            "All keyboard and mouse controls. Keys with a single function can be "
@@ -413,8 +508,8 @@ TEXTS: dict[str, tuple[str, str]] = {
     "keys.row.fullscreen": ("Alt + Invio - Schermo intero", "Alt + Enter - Full screen"),
     "keys.row.quit": ("Alt + F4 - Esci", "Alt + F4 - Quit"),
     "keys.row.mouse_look": ("Mouse destro - Guarda; nel menu indietro", "Right mouse - Look; in the menu back"),
-    "keys.row.wheel": ("Rotella - Velocità della camera; nel menu cambia valore",
-                       "Wheel - Camera speed; in the menu change value"),
+    "keys.row.wheel": ("Rotella - Scorre la lista del menu (velocità della camera: menu Camera)",
+                       "Wheel - Scrolls the menu's list (camera speed: Camera menu)"),
     "keys.reverted": ("Un'azione era rimasta senza tasto: tornano i tasti dell'ultimo salvataggio.",
                       "An action was left without a key: the last saved keys are back."),
     "keys.cancelled": ("Cambio tasto annullato.", "Key change cancelled."),
@@ -438,10 +533,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                     "Clic destro: togli tasto  |  Lucchetto = bloccato",
                     "Orange = used  |  Grey = free  |  Click a row: new key  |  Right click a row: "
                     "remove key  |  Padlock = locked"),
-    "keys.mouse_help": ("Mouse: tasto destro - guarda (nel menu: indietro), rotella - velocità della "
-                        "camera (nel menu: cambia valore), tasto sinistro - clic nel menu",
-                        "Mouse: right button - look (in the menu: back), wheel - camera speed (in the "
-                        "menu: change value), left button - click in the menu"),
+    "keys.mouse_help": ("Mouse: tasto destro - guarda (nel menu: indietro), rotella - scorre la lista "
+                        "del menu, tasto sinistro - clic nel menu",
+                        "Mouse: right button - look (in the menu: back), wheel - scrolls the menu's "
+                        "list, left button - click in the menu"),
     "keys.locked": ("bloccato", "locked"),
     "keys.free": ("libero", "free"),
     "pad.title": ("Comandi gamepad (solo informativo)", "Gamepad controls (information only)"),
@@ -491,6 +586,13 @@ TEXTS: dict[str, tuple[str, str]] = {
                          "A black circle where Bugs would land from the camera: the ground the "
                          "game's query finds (collision heightmap, first slab below; no object "
                          "boxes). The rim shows through the terrain too."),
+    "camera.speed": ("Velocità camera", "Camera speed"),
+    "desc.camera_speed": ("La velocità di base della camera, in metri al secondo (nella barra di "
+                          "stato). Maiusc tenuto x5, Ctrl tenuto x0,2; col pad L2 / R2. All'apertura "
+                          "di un livello torna a un dodicesimo della sua misura.",
+                          "The camera's base speed, in metres per second (in the status bar). Shift "
+                          "held x5, Ctrl held x0.2; L2 / R2 on the pad. Opening a level sets it back "
+                          "to a twelfth of the level's size."),
     "camera.add": ("Aggiungi segnalibro qui", "Add a bookmark here"),
     "desc.camera_add": ("Salva posizione e direzione della camera nelle impostazioni, per "
                         "questo livello.",

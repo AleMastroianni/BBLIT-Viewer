@@ -75,7 +75,8 @@ def main() -> None:
     p.add_argument("--camera", help="fixed framing: x,y,z,yaw,pitch")
     p.add_argument("--no-blend", action="store_true", help="draw semi-transparent faces as opaque")
     p.add_argument("--sky", action="store_true", help="show the sky dome")
-    p.add_argument("--invisible-walls", action="store_true", help="show the invisible walls")
+    p.add_argument("--invisible-walls", action="store_true",
+                   help="the old flag: the same as --hardwalls unseen --steps all")
     p.add_argument("--nocollision", action="store_true",
                    help="show the faces without collision")
     p.add_argument("--boxes", action="store_true", help="show the collision boxes")
@@ -85,11 +86,16 @@ def main() -> None:
     p.add_argument("--damagezones", "--deathfloor", dest="deathzones", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--teleportzones", action="store_true", help="show the zones that respawn you at a fixed point")
     p.add_argument("--ground", action="store_true", help="show the collision ground")
-    p.add_argument("--hardwalls", action="store_true", help="show the heightmap's hard walls")
+    p.add_argument("--hardwalls", nargs="?", const="all", choices=("all", "unseen"),
+                   help="show the heightmap's hard walls: all, or only the invisible ones")
+    p.add_argument("--steps", nargs="?", const="all", choices=("all", "unseen"),
+                   help="show the steps that stop you: all, or only those with nothing drawn over them")
     p.add_argument("--areaboxes", action="store_true", help="show the area boxes")
     p.add_argument("--movers", action="store_true", help="move the characters the game moves")
     p.add_argument("--gates", choices=("open", "shut", "game"),
                    help="the state the gates are shown in (default: open)")
+    p.add_argument("--sky-choice", type=int, metavar="ROLE",
+                   help="where two skies take turns, the role of the one to show (Level options -> Sky)")
     p.add_argument("--gatelinks", choices=("gates", "all"),
                    help="show who opens which gate, or every link")
     p.add_argument("--faces1000", action="store_true", help="show the 0x1000 terrain faces")
@@ -108,6 +114,8 @@ def main() -> None:
                    help="texture coordinates: pc (the PC, clamped and repeated), pc_amd, psx (findings 328, 341)")
     p.add_argument("--fov", type=float,
                    help="vertical field of view in degrees (default 65; 51 is the game's, finding 327)")
+    p.add_argument("--backface", action="store_true",
+                   help="cull the one-sided faces as the game does (finding 307)")
     p.add_argument("--tick", type=int, help="freeze all animations on this tick (for screenshots)")
     p.add_argument("--tps", type=float, help="animation ticks per second (default 15, measured on the PSX)")
     p.add_argument("--scale-factor", type=int,
@@ -149,7 +157,7 @@ def main() -> None:
     if args.sky:
         v.show_sky = True
     if args.invisible_walls:
-        v.show_invisible_walls = True
+        v.show_hard_walls, v.show_steps = "unseen", "all"
     if args.nocollision:
         v.show_no_collision = True
     if args.boxes:
@@ -161,7 +169,9 @@ def main() -> None:
     if args.ground:
         v.show_ground = True
     if args.hardwalls:
-        v.show_hard_walls = True
+        v.show_hard_walls = args.hardwalls
+    if args.steps:
+        v.show_steps = args.steps
     if args.areaboxes:
         v.show_area_boxes = True
     if args.faces1000:
@@ -184,6 +194,9 @@ def main() -> None:
         v.show_movers = True
         if v.current_level is not None:
             v.load_level(v.level_files[v.index], camera=False)
+    if args.sky_choice is not None and v.current_level is not None:
+        v.session_sky[v.current_level.name] = args.sky_choice
+        v.load_level(v.level_files[v.index], camera=False)
     if args.camera_shadow:
         v.show_camera_shadow = True
     if args.wireframe is not None:
@@ -197,6 +210,8 @@ def main() -> None:
         v.uv_rule = args.uv_rule
     if args.fov is not None:
         v.fov = args.fov
+    if args.backface:
+        v.backface_culling = True
     if args.tick is not None:
         v.fixed_tick = args.tick
     if args.tps:

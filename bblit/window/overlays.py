@@ -23,20 +23,48 @@ from game import hazards  # noqa: E402
 from game import levels  # noqa: E402
 from ui import flag_labels  # noqa: E402
 from game import montage  # noqa: E402
+from game import walls  # noqa: E402
 from game import zones  # noqa: E402
 
-# the invisible walls (0x1000 sectors), when shown: a magenta the game
-# does not use, at half transparency (blend 0)
-COLOR_INVISIBLE_WALLS = (255, 40, 200)
+# the steps (flag Steps): a pink the game does not use
+COLOR_STEP_WALLS = (255, 40, 200)
+# the edges of a floor over the void (flag Steps -> edges over holes): a
+# teal the game does not use, and the word EDGE on them, because the colour
+# alone is never enough (the user is colour-blind). What the data says is
+# that the heightmap has no ground on the free side (0x7E), so the rise the
+# step rule measures there is not a rise between two floors: that is why it
+# is neither a step nor a wall. What the game does at that rim is another
+# question, and it has been tested in the game that the plank's own edge --
+# the panel drawn here -- does stop him
+COLOR_EDGE = (0, 220, 200)
 # what you go through (flag No collision): white covering about 75%, with
 # the triangle edges in black over it, so it stands out on light textures
 COLOR_NO_COLLISION = (255, 255, 255)
 COLOR_NO_COLLISION_EDGES = (0, 0, 0)
+# the outline of the walls' panels and of the game's faces they colour
+COLOR_WALL_EDGES = (0, 0, 0)
 # the blend code of an overlay covering 75% (Viewer.on_draw, set_blend)
 OVERLAY_BLEND = 4
 # and of a collision box, so the model inside it can be seen (set_blend)
 BOX_BLEND = 5
 BOX_ALPHA = 0.30
+# and of a wall (Hard walls, Steps): the fill nearly transparent, the edges
+# and the names full, so a wall reads as a block and the level stays
+# visible through it (chosen on the photos of the proposal).
+# 25%, chosen with two measures in front of us.
+# `tools/stripe_count.py`: the stripes that were two layers adding their
+# alpha are gone at either fill now that the fills are stencilled, but on a
+# framing whose own scene makes 14 boundaries, 25% adds 8 and 44% adds 64 --
+# a stronger fill carries every faint boundary of the scene over the
+# threshold. `tools/fill_contrast.py`: at 25% a tinted surface still moves
+# 23-30 levels of luminance (of 255) away from the same surface untinted,
+# about twice what it takes to read, so the fill is paler than the old two
+# layers and still plain. If it ever has to be made stronger, the COLOUR goes
+# lighter, not this: the alpha is what brings the boundaries back.
+WALL_BLEND = 6
+WALL_ALPHA = 0.25
+# a wall's name no taller than this (game units, 2 m): a hard wall is as
+# tall as its block, up to 250 m
 # a collision box is filled at BOX_ALPHA so the model inside it can be seen
 # (the user chose it on the photos: opaque buried the pirates, edges only
 # lost the colour of the kind under the red outline of what hurts)
@@ -46,20 +74,26 @@ PULLED_FORWARD = {"no_collision": (-1.0, -4.0), "no_collision_label": (-2.0, -8.
                   "no_collision_lines": (-2.0, -8.0),
                   # the names on the zone boxes' tops, over the box's own fill
                   "death_zones_label": (-2.0, -8.0), "teleport_zones_label": (-2.0, -8.0),
-                  "faces_1000_label": (-2.0, -8.0),
-                  # and on the heightmap's wall panels
-                  "hard_walls_label": (-2.0, -8.0), "hard_walls_label_unseen": (-2.0, -8.0),
-                  "invisible_walls_label": (-2.0, -8.0), "invisible_hard_walls_label": (-2.0, -8.0),
-                  "step_walls_label": (-2.0, -8.0), "step_walls_outside_label": (-2.0, -8.0),
-                  "hole_steps_label": (-2.0, -8.0), "hole_steps_outside_label": (-2.0, -8.0), "shared_zones_label": (-2.0, -8.0)}
+                  "faces_1000_label": (-2.0, -8.0), "shared_zones_label": (-2.0, -8.0)}
+# the walls (Hard walls, Steps) are drawn on the game's faces (`_faces`) or
+# on the collision plane a face may lie on: fills pulled a little, outlines
+# and names more
+WALL_PREFIXES = ("hard_walls", "invisible_walls",
+                 "step_walls", "step_walls_covered", "hole_steps", "hole_steps_covered")
+for _prefix in WALL_PREFIXES:
+    for _suffix in ("", "_outside", "_faces", "_faces_outside"):
+        PULLED_FORWARD[_prefix + _suffix] = (-1.0, -4.0)
+    for _suffix in ("_label", "_outside_label", "_lines", "_all_lines"):
+        PULLED_FORWARD[_prefix + _suffix] = (-2.0, -8.0)
 # the texture with a flag's name, painted inside its faces (flag_labels.py):
 # a texture id of its own; the names are always in English
 LABEL_NO_COLLISION = "label:NO COLLISION"
 LABEL_HARD_WALL = "label:HARD WALL"
-LABEL_INVISIBLE_WALL = "label:INVISIBLE WALL"
-LABEL_INVISIBLE_HARD_WALL = "label:" + flag_labels.combined(("INVISIBLE WALL", "HARD WALL"))
+LABEL_HARD_WALL_OUTSIDE = "label:HARD WALL · OUTSIDE"
 LABEL_STEP_WALL = "label:STEP WALL"
 LABEL_STEP_WALL_OUTSIDE = "label:STEP WALL · OUTSIDE"
+LABEL_EDGE = "label:EDGE"
+LABEL_EDGE_OUTSIDE = "label:EDGE · OUTSIDE"
 LABEL_AREA_WALL = "label:AREA WALL"
 LABEL_AREA_WALL_OUTSIDE = "label:AREA WALL · OUTSIDE"
 LABEL_JUMP_CEILING = "label:JUMP CEILING"
@@ -68,6 +102,10 @@ LABEL_JUMP_CEILING_OUTSIDE = "label:JUMP CEILING · OUTSIDE"
 LABEL_AREA = "label:AREA "
 # the area boxes are large: their names no taller than this (game units, 2 m)
 AREA_LABEL_HEIGHT = 256
+WALL_LABEL_HEIGHT = 256
+# a wall run this long or shorter (game units, 2 sub-cells) is a step of a
+# curve: no outline at the corner where it meets another short run
+SHORT_RUN = 80
 # the objects' collision boxes (flag Collision boxes), by what they do to
 # Bugs (finding 300): a bit of SOLID_MASK in the first word of opcode 0x16
 # stops him (orange, SOLID), with bit 0x8 he can also stand on it (green,
@@ -121,6 +159,8 @@ LINK_WIDTH = 4.0          # how thick a link's line is drawn
 COLOR_GROUND = (60, 170, 80)              # covered by a visible face
 COLOR_INVISIBLE_GROUND = (140, 255, 60)  # no visible face above
 COLOR_PIXEL = (255, 255, 255)              # isolated sub-cells, with the ray
+# the hard walls (flag Hard walls), blue, the invisible ones too: which ones
+# are invisible is the flag's "only the invisible ones" choice, not a colour
 COLOR_HARD_WALLS = (60, 120, 255)
 # the collision volume of each mini area (flag Area boxes)
 COLOR_AREA_BOXES = (255, 170, 60)
@@ -131,12 +171,6 @@ COLOR_FACES_1000 = (150, 150, 150)
 # group -> viewer attribute that turns it on (the menu flags)
 OVERLAYS = {
     "faces_1000": "show_faces_1000", "faces_1000_label": "show_faces_1000",
-    "invisible_walls": "show_invisible_walls",
-    "invisible_walls_label": "show_invisible_walls",
-    "step_walls": "show_invisible_walls", "step_walls_label": "show_invisible_walls",
-    "step_walls_outside": "show_invisible_walls", "step_walls_outside_label": "show_invisible_walls",
-    "hole_steps": "show_invisible_walls", "hole_steps_label": "show_invisible_walls",
-    "hole_steps_outside": "show_invisible_walls", "hole_steps_outside_label": "show_invisible_walls",
     "no_collision": "show_no_collision",
     "no_collision_lines": "show_no_collision",
     "no_collision_label": "show_no_collision",
@@ -157,31 +191,58 @@ OVERLAYS = {
     "teleport_arrows_lines": "show_teleport_zones",
     "covered_ground": "show_ground", "invisible_ground": "show_ground",
     "pixel": "show_ground", "pixel_beam": "show_ground",
-    "hard_walls": "show_hard_walls", "hard_walls_label": "show_hard_walls",
-    "hard_walls_label_unseen": "show_hard_walls", "invisible_hard_walls_label": "show_hard_walls",
 }
+# the walls (OverlayBuilder._wall_overlays): Hard walls and Steps are
+# three-way flags, "off", "all" or "unseen" (only the ones with nothing
+# drawn), so their groups are chosen by value in SHOWN_WHEN below
+WALL_SUFFIXES = ("", "_outside", "_faces", "_faces_outside", "_label", "_outside_label")
+for _prefix in ("hard_walls", "invisible_walls"):
+    for _suffix in WALL_SUFFIXES + ("_lines",):
+        OVERLAYS[_prefix + _suffix] = "show_hard_walls"
+for _prefix in ("step_walls", "step_walls_covered", "hole_steps", "hole_steps_covered"):
+    for _suffix in WALL_SUFFIXES:
+        OVERLAYS[_prefix + _suffix] = "show_steps"
+for _prefix in ("step_walls", "hole_steps"):
+    OVERLAYS[_prefix + "_lines"] = OVERLAYS[_prefix + "_all_lines"] = "show_steps"
 # the overlay families: each is built, as pieces of its own, only when one of
 # its flags is on, so a level opened with the flags off skips them all (the
 # heightmap alone was 80-93% of the first build of a level: L03A 4.0 of 4.9 s)
 FAMILIES = {
     "terrain_overlays": ("show_faces_1000", "show_no_collision"),
-    "heightmap": ("show_ground", "show_hard_walls", "show_invisible_walls", "show_area_boxes"),
+    "heightmap": ("show_ground", "show_hard_walls", "show_steps", "show_area_boxes"),
     "zones": ("show_death_zones", "show_teleport_zones"),
     "collision_boxes": ("show_collision_boxes", "show_gate_links"),
 }
 assert set(OVERLAYS.values()) == {a for flags in FAMILIES.values() for a in flags}
 # groups whose visibility depends on more than their own flag:
-# (all of these on, at least one of these on, none of these on). Written for
-# the flag names that merge: the same place in two flags
-# gets one name, "INV + HRD", instead of two texts over each other
+# (all of these on, at least one of these on, none of these on). A name
+# alone means the flag is on; "name=value" means the flag has that value
+# (Hard walls and Steps: "all" or "unseen"). Written for the flag names
+# that merge: the same place in two flags gets one name instead of two
+# texts over each other
 SHOWN_WHEN = {
-    # an invisible wall is a hard wall too: HARD WALL, INVISIBLE WALL, or both
-    "hard_walls_label_unseen": (("show_hard_walls",), (), ("show_invisible_walls",)),
-    "invisible_walls_label": (("show_invisible_walls",), (), ("show_hard_walls",)),
-    "invisible_hard_walls_label": (("show_invisible_walls", "show_hard_walls"), (), ()),
     # a zone that kills and teleports is in both zone flags: one name
     "shared_zones_label": ((), ("show_death_zones", "show_teleport_zones"), ()),
 }
+# the walls: `hard_walls*` with Hard walls "all", `invisible_walls*` with
+# "all" or "unseen"; the outline of everything with "all", of the invisible
+# ones alone with "unseen"; the `_outside` groups also need Walls -> Outside
+# side. The steps the same, with the covered ones only in "all" and the
+# steps seen from a hole also behind Edges over holes
+for _prefix, _flag, _seen in (("hard_walls", "show_hard_walls", True), ("invisible_walls", "show_hard_walls", False),
+                              ("step_walls_covered", "show_steps", True), ("step_walls", "show_steps", False),
+                              ("hole_steps_covered", "show_steps", True), ("hole_steps", "show_steps", False)):
+    _hole = ("show_hole_steps",) if _prefix.startswith("hole") else ()
+    _when = ((_flag + "=all",) + _hole, ()) if _seen else (_hole, (_flag + "=all", _flag + "=unseen"))
+    for _suffix in WALL_SUFFIXES:
+        _outside = ("show_walls_outside",) if "outside" in _suffix else ()
+        SHOWN_WHEN[_prefix + _suffix] = (_when[0] + _outside, _when[1], ())
+SHOWN_WHEN["hard_walls_lines"] = (("show_hard_walls=all",), (), ())
+SHOWN_WHEN["invisible_walls_lines"] = (("show_hard_walls=unseen",), (), ())
+for _prefix in ("step_walls", "hole_steps"):
+    _hole = ("show_hole_steps",) if _prefix.startswith("hole") else ()
+    SHOWN_WHEN[_prefix + "_all_lines"] = (("show_steps=all",) + _hole, (), ())
+    SHOWN_WHEN[_prefix + "_lines"] = (("show_steps=unseen",) + _hole, (), ())
 # the groups drawn with a thicker line (the red outline of what hurts, over
 # the box's own edge in the same place)
 THICK_LINES = {"collision_boxes_hurt_lines", "teleport_arrows_lines", "gate_links_lines"}
@@ -191,29 +252,23 @@ THROUGH_WALLS = {"teleport_arrows_lines", "gate_links_lines"}
 THICK_LINE_WIDTH = 4.0
 # names written on both sides of a wall, each drawn only from its own side,
 # so neither reads mirrored
-ONE_SIDED = {"hard_walls", "invisible_walls", "hard_walls_label", "hard_walls_label_unseen",
-             "invisible_walls_label", "invisible_hard_walls_label",
-             "step_walls", "step_walls_label", "step_walls_outside", "step_walls_outside_label",
-             "hole_steps", "hole_steps_label", "hole_steps_outside", "hole_steps_outside_label",
-             "faces_1000_label",
+ONE_SIDED = {"faces_1000_label",
              # the area walls stop you only from inside, a jump ceiling only from below:
              # each is drawn only from the side where it acts
              "area_walls", "area_walls_label", "jump_ceilings", "jump_ceilings_label",
              "area_walls_outside", "area_walls_outside_label", "jump_ceilings_outside",
              "jump_ceilings_outside_label"}
+# the walls: fills, coloured faces and names each from its own side (the
+# outlines from both)
+for _prefix in WALL_PREFIXES:
+    for _suffix in WALL_SUFFIXES:
+        ONE_SIDED.add(_prefix + _suffix)
 # groups that also need a second setting on: the outside side of the area
 # boxes (Flags -> Area boxes: outside side, on at every start)
 # the sides where a wall does not stop you: with Walls: outside side (on at every start)
 for _c in ("area_walls_outside", "area_walls_outside_label", "jump_ceilings_outside",
            "jump_ceilings_outside_label"):
     SHOWN_WHEN[_c] = (("show_area_boxes", "show_walls_outside"), (), ())
-for _c in ("step_walls_outside", "step_walls_outside_label"):
-    SHOWN_WHEN[_c] = (("show_invisible_walls", "show_walls_outside"), (), ())
-# the steps from a 0x7E hole: with Walls: edges over holes (off at every start)
-for _c in ("hole_steps", "hole_steps_label"):
-    SHOWN_WHEN[_c] = (("show_invisible_walls", "show_hole_steps"), (), ())
-for _c in ("hole_steps_outside", "hole_steps_outside_label"):
-    SHOWN_WHEN[_c] = (("show_invisible_walls", "show_hole_steps", "show_walls_outside"), (), ())
 
 
 def _box_kind(obj) -> str:
@@ -344,6 +399,13 @@ class OverlayBuilder:
                             continue
                         if j not in crossable:
                             crossable[j] = collision.wall_crossable(self.collision_blocks, corners_of[j])
+                            if crossable[j] is None:
+                                # neither a floor nor a wall (a steep slope, a
+                                # short wall, an overhang, a ceiling): the rim
+                                # under the mushroom's top in Wabbit on the
+                                # run! 2 stayed brown while Bugs fell through
+                                crossable[j] = collision.joined_face_crossable(self.collision_blocks,
+                                                                               corners_of[j])
                         if crossable[j]:
                             through.add(j)
                             queue.append(j)
@@ -644,11 +706,13 @@ class OverlayBuilder:
                         scale_factor=scale_factor, pos=pos, counted=False,
                         anim=(anim[0] + ("lines",), anim[1], anim[2]) if anim else None)
 
-    def _object_faces(self, diagonal):
+    def _object_faces(self, diagonal, solid_only=False):
         """The faces of the placed objects in game coordinates, in their
         starting pose (no animation, no clones): what the invisible-walls
         test counts as visible besides the terrain (a gate, a fence). Sky
-        domes as large as the level are left out."""
+        domes as large as the level are left out. With `solid_only` the
+        cut-out and semi-transparent faces (ropes, leaves) are left out too:
+        they do not hide a wall."""
         out = []
         models = {r["id"]: r for r in self.lvl["resources"] if r["data_kind"] == "model"}
         for o in self.lvl["objects"]:
@@ -678,7 +742,8 @@ class OverlayBuilder:
             span = max(max(q[k] for q in pts) - min(q[k] for q in pts) for k in range(3)) / geo.UNITS_PER_METER
             if span > 0.8 * diagonal:
                 continue
-            out += [[pts[h] for h in vl.corners] for vl in faces]
+            out += [[pts[h] for h in vl.corners] for vl in faces
+                    if not (solid_only and (vl.blend is not None or vl.tex_id in self.cut_outs))]
         return out
 
     def _heightmap(self):
@@ -688,14 +753,22 @@ class OverlayBuilder:
         (collision.volumes)."""
         if not self.collision_blocks:
             return
-        face_list = []
+        face_list, solid_faces = [], []
         for t in self.lvl["terrain"]:
             try:
                 vs, vl_, _ = geo.read_terrain(self.sec4, t["offset"])
             except Exception:  # noqa: BLE001
                 continue
             sp = t["translation"]
-            face_list += [[tuple(vs[h][k] + sp[k] for k in range(3)) for h in vl.corners] for vl in vl_]
+            for vl in vl_:
+                corners = [tuple(vs[h][k] + sp[k] for k in range(3)) for h in vl.corners]
+                face_list.append(corners)
+                # what hides a wall: an opaque face. A cut-out or blended one
+                # (the ropes of the boat in Era selector) does not, and used
+                # to open a gap in the STEP WALL in front of the mast where
+                # the game stops you (tools/skipped_steps.py)
+                if vl.blend is None and vl.tex_id not in self.cut_outs:
+                    solid_faces.append(corners)
         covered, invisible, pixel = collision.surfaces(self.collision_blocks, collision.raster_faces(face_list))
 
         def add_planes(rects, category, draw_color, blend, lift=16):
@@ -731,7 +804,8 @@ class OverlayBuilder:
         # "_outside" groups, shown with Walls: outside side)
         lo, hi = self.terrain_lo, self.terrain_hi
         diagonal = max(h - l for h, l in zip(hi, lo)) or 1.0
-        vertical_heights = collision.raster_vertical(face_list + self._object_faces(diagonal))
+        object_faces = self._object_faces(diagonal, solid_only=True)
+        vertical_heights = collision.raster_vertical(solid_faces + object_faces)
 
         def facing(quad, look):
             # a Z-ordered quad is drawn from the side opposite to
@@ -760,51 +834,9 @@ class OverlayBuilder:
                 self._add_faces(points, faces, category, counted=False)
             return len(faces)
 
-        # hard walls (blue), and those with nothing drawn next to them,
-        # neither terrain nor objects (magenta: the invisible walls). A 0x7F
-        # sub-cell stops whoever enters it, and Bugs from every side (he is
-        # put back if he ends up in one): drawn only from the free sub-cell,
-        # no OUTSIDE side. The same panel from two blocks that share the edge
-        # is drawn once; two facing each other (0x7F on both sides of the
-        # block border) are none
-        panels = list(dict.fromkeys(collision.hard_walls(self.collision_blocks, vertical_heights)))
-        sides = {}
-        for panel in panels:
-            sides.setdefault(panel[:7], set()).add(panel[7])
-        hard = [(facing(upright(xa, za, xb, zb, base, top), (fx, 0, fz)), visible)
-                for xa, za, xb, zb, base, top, visible, (fx, fz) in panels
-                if len(sides[(xa, za, xb, zb, base, top, visible)]) == 1]
-        seen_quads = [q for q, v in hard if v]
-        unseen_quads = [q for q, v in hard if not v]
-        self.stat["hard_walls"] = mount("hard_walls", [q for q, _v in hard], COLOR_HARD_WALLS, 0)
-        self.stat["invisible_walls"] = mount("invisible_walls", unseen_quads, COLOR_INVISIBLE_WALLS, 0)
-        # a hard wall with nothing drawn is in both wall flags: HARD WALL,
-        # INVISIBLE WALL or "INV + HRD", by which flags are on (SHOWN_WHEN)
-        mount("hard_walls_label", seen_quads, label=LABEL_HARD_WALL)
-        mount("hard_walls_label_unseen", unseen_quads, label=LABEL_HARD_WALL)
-        mount("invisible_walls_label", unseen_quads, label=LABEL_INVISIBLE_WALL)
-        mount("invisible_hard_walls_label", unseen_quads, label=LABEL_INVISIBLE_HARD_WALL)
-        # the steps of more than 100 units with nothing drawn (flag
-        # Invisible walls, magenta): a step stops you only going up, from its
-        # low side (STEP WALL); from the high side you just go down (OUTSIDE).
-        # They never share a panel with the hard walls
-        # The steps from a 0x7E hole (the hole's ground is the slab's base:
-        # a platform edge seen from the void) count too, but are mostly
-        # noise: in their own groups, behind Walls: edges over holes
-        all_steps = [s for s in collision.step_walls(self.collision_blocks, vertical_heights) if not s[6]]
-        for prefix, steps in (("step_walls", [s for s in all_steps if not s[8]]),
-                              ("hole_steps", [s for s in all_steps if s[8]])):
-            low_side = [facing(upright(xa, za, xb, zb, low, high), (sx, 0, sz))
-                        for xa, za, xb, zb, high, low, _v, (sx, sz), _hole in steps]
-            high_side = [facing(q, (-sx, 0, -sz))
-                         for q, (_xa, _za, _xb, _zb, _high, _low, _v, (sx, sz), _hole) in zip(low_side, steps)]
-            self.stat[prefix] = mount(prefix, low_side, COLOR_INVISIBLE_WALLS, 0)
-            mount(prefix + "_outside", high_side, COLOR_INVISIBLE_WALLS, 0)
-            # one name per staircase: a name on every step of a flight came
-            # out as a smudge (the stairs of L04E)
-            named = _named_steps(steps)
-            mount(prefix + "_label", [low_side[i] for i in named], label=LABEL_STEP_WALL)
-            mount(prefix + "_outside_label", [high_side[i] for i in named], label=LABEL_STEP_WALL_OUTSIDE)
+        # the hard walls and the steps, on the game's own faces where it has
+        # one on the wall, panels where it has none (walls.py)
+        self._wall_overlays(walls.ParallelFaces(solid_faces + object_faces), vertical_heights)
         # the collision volume of each mini area, as a box
         volumes = collision.volumes(self.collision_blocks)
         for x0, y0, z0, x1, y1, z1 in volumes:
@@ -814,15 +846,15 @@ class OverlayBuilder:
         # the area boxes: a side stops only who is inside (AREA WALL; from
         # outside AREA WALL · OUTSIDE), a slab top the head of a jump from
         # below (JUMP CEILING; from above JUMP CEILING · OUTSIDE)
-        walls = list(dict.fromkeys(collision.area_walls(self.collision_blocks)))
+        area_wall_runs = list(dict.fromkeys(collision.area_walls(self.collision_blocks)))
         inside = [facing(upright(xa, za, xb, zb, base, top), (dx, 0, dz))
-                  for xa, za, xb, zb, top, base, (dx, dz) in walls]
-        outside = [facing(q, (-dx, 0, -dz)) for q, (*_rest, (dx, dz)) in zip(inside, walls)]
+                  for xa, za, xb, zb, top, base, (dx, dz) in area_wall_runs]
+        outside = [facing(q, (-dx, 0, -dz)) for q, (*_rest, (dx, dz)) in zip(inside, area_wall_runs)]
         mount("area_walls", inside, COLOR_AREA_FILL, 3)
         mount("area_walls_outside", outside, COLOR_AREA_FILL, 3)
         mount("area_walls_label", inside, label=LABEL_AREA_WALL, max_height=AREA_LABEL_HEIGHT)
         mount("area_walls_outside_label", outside, label=LABEL_AREA_WALL_OUTSIDE, max_height=AREA_LABEL_HEIGHT)
-        self.stat["area_walls"] = len(walls)
+        self.stat["area_walls"] = len(area_wall_runs)
         ceilings = list(dict.fromkeys(collision.jump_ceilings(self.collision_blocks)))
         # Y down: "below" is +Y
         below = [facing([(x0, y, z0), (x0, y, z1), (x1, y, z0), (x1, y, z1)], (0, 1, 0))
@@ -835,6 +867,301 @@ class OverlayBuilder:
         self.stat["jump_ceilings"] = len(ceilings)
         self.stat["invisible_ground"] = len(invisible)
         self.stat["pixel"] = len(pixel)
+
+    def _wall_overlays(self, parallel, vertical_heights):
+        """The hard walls (flag Hard walls) and the steps (flag Steps) of the
+        heightmap: a hard wall from the floor to the ceiling of ITS block,
+        where the game stops (three
+        recordings), and every wall drawn like No collision: where the game
+        has a face on the wall, that face coloured and clipped to the run,
+        with its outline; where it has none, a panel; the fill nearly
+        transparent (WALL_ALPHA), edges and names full. One outline goes
+        round the whole uncovered region of a plane (walls.WallCover), not
+        one per run.
+
+        Groups, by run: `hard_walls*` for the hard walls a face shows,
+        `invisible_walls*` for those with nothing drawn (Hard walls: only
+        the invisible ones), each with `_faces` (the game's faces coloured),
+        `_label`, and the same from the side where the wall does not stop
+        you (`_outside`, `_faces_outside`, `_outside_label`: Walls ->
+        Outside side); `hard_walls_lines` the outline of everything,
+        `invisible_walls_lines` of the invisible ones alone. The steps the
+        same, in `step_walls` (nothing drawn over them), `step_walls_covered`
+        (an opaque face covers them: Steps: all), `hole_steps` and
+        `hole_steps_covered` (seen from a 0x7E hole: Edges over holes), with
+        `step_walls_lines` / `hole_steps_lines` the outline of the uncovered
+        ones and `_all_lines` of all.
+        """
+        pending = {}
+
+        def put(category, ring, tex_id=None, uvs=None, colour=(255, 255, 255), blend=None):
+            pts, faces = pending.setdefault(category, ([], []))
+            first = len(pts)
+            pts.extend(ring)
+            faces.append(geo.Face(tuple(range(first, first + len(ring))), tex_id, uvs, [colour] * len(ring), blend))
+
+        def put_line(category, a, b):
+            pts, faces = pending.setdefault(category, ([], []))
+            first = len(pts)
+            pts.extend([a, b])
+            faces.append(geo.Face((first, first + 1, first + 1), None, None, [COLOR_WALL_EDGES] * 3, None))
+
+        def oriented(ring, look):
+            # drawn from the side opposite to (p1 - p0) x (p2 - p0) (ONE_SIDED)
+            n = flag_labels._cross(flag_labels._sub(ring[1], ring[0]), flag_labels._sub(ring[2], ring[0]))
+            return ring[::-1] if flag_labels._dot(n, look) > 0 else ring
+
+        def z_order(ring):
+            # a quad for geo.Face is Z-ordered; anything else is a fan
+            return [ring[0], ring[1], ring[3], ring[2]] if len(ring) == 4 else list(ring)
+
+        def rect_ring(cover, a0, a1, y_top, y_base):
+            return [cover.to_3d((a0, y_base)), cover.to_3d((a1, y_base)),
+                    cover.to_3d((a1, y_top)), cover.to_3d((a0, y_top))]
+
+        def label(category, ring, look, text, max_height=None):
+            quad = z_order(oriented(ring, look))
+            uvs = flag_labels.label_uvs(quad, max_height=max_height)
+            if uvs is not None:
+                put(category, quad, tex_id=text, uvs=uvs)
+
+        def fill_and_faces(cover, wanted, prefix, colour, look, back, lines_all, lines_unseen, unseen,
+                           face_label):
+            """The panels and the coloured faces of the runs `wanted`, from
+            both sides; their outlines into `lines_all` and, for the runs
+            with nothing drawn, into `lines_unseen`."""
+            n_panels = 0
+            for a0, a1, y_top, y_base in cover.panels(wanted):
+                ring = rect_ring(cover, a0, a1, y_top, y_base)
+                put(prefix, z_order(oriented(ring, look)), colour=colour, blend=WALL_BLEND)
+                put(prefix + "_outside", z_order(oriented(ring, back)), colour=colour, blend=WALL_BLEND)
+                n_panels += 1
+            n_faces = 0
+            self.stat["wall_runs_with_faces"] = (self.stat.get("wall_runs_with_faces", 0)
+                                                 + len({r for r, _piece in cover.clipped
+                                                        if wanted(cover.runs[r][4])}))
+            for piece, key in cover.face_pieces(wanted):
+                # on the game's face itself: every corner carries its own
+                # distance from the plane, so a slanted face keeps its slant
+                ring = [cover.to_3d(p) for p in piece]
+                put(prefix + "_faces", z_order(oriented(ring, look)), colour=colour, blend=WALL_BLEND)
+                put(prefix + "_faces_outside", z_order(oriented(ring, back)), colour=colour, blend=WALL_BLEND)
+                slant = max(p[2] for p in piece) - min(p[2] for p in piece)
+                if slant > walls.FLATNESS:
+                    self.stat["wall_faces_slanted"] = self.stat.get("wall_faces_slanted", 0) + 1
+                for i in range(len(ring)):
+                    put_line(lines_all, ring[i - 1], ring[i])
+                    if unseen(key):
+                        put_line(lines_unseen, ring[i - 1], ring[i])
+                # the name goes on a face lying on the plane: on a slanted
+                # one a rectangle built from the bounding box would float off it
+                if face_label is not None and slant <= walls.FLATNESS and walls.is_rectangle(piece):
+                    d = sum(p[2] for p in piece) / len(piece)
+                    a0, a1 = min(p[0] for p in piece), max(p[0] for p in piece)
+                    y_top, y_base = min(p[1] for p in piece), max(p[1] for p in piece)
+                    box = [cover.to_3d(p, d) for p in ((a0, y_base), (a1, y_base), (a1, y_top), (a0, y_top))]
+                    label(prefix + "_label", box, look, face_label[0], WALL_LABEL_HEIGHT)
+                    label(prefix + "_outside_label", box, back, face_label[1], WALL_LABEL_HEIGHT)
+                n_faces += 1
+            return n_panels, n_faces
+
+        def keep_vertical(cover, a, y_high, y_low, ends):
+            """Whether a vertical outline line at `a` is drawn: always at a
+            free end of a wall; at a corner where another wall meets it only
+            when both are longer than SHORT_RUN. On a curved wall the
+            collision grid turns every sub-cell, and a line at every corner
+            made a curtain (seen on the photos of the proposal)."""
+            here = [length for a0, a1, length in cover.run_ends if a in (a0, a1)]
+            if not here:
+                return True         # inside the region: a face's edge next to a panel
+            x, _y, z = cover.to_3d((a, y_low))
+            others = [length for length, top, base, owner in ends.get((x, z), ())
+                      if owner is not cover and top < y_low and base > y_high]
+            return not others or (min(here) > SHORT_RUN and min(others) > SHORT_RUN)
+
+        def register_ends(covers, ends):
+            for cover in covers:
+                cover.run_ends = []
+                for a0, a1, y_top, y_base, _key in cover.runs:
+                    cover.run_ends.append((a0, a1, a1 - a0))
+                    for a in (a0, a1):
+                        x, _y, z = cover.to_3d((a, y_base))
+                        ends.setdefault((x, z), []).append((a1 - a0, y_top, y_base, cover))
+
+        def outlines(cover, ends, categories):
+            for category, wanted in categories:
+                for a, b in cover.outline(wanted):
+                    if a[0] == b[0] and not keep_vertical(cover, a[0], min(a[1], b[1]), max(a[1], b[1]), ends):
+                        continue
+                    put_line(category, cover.to_3d(a), cover.to_3d(b))
+
+        # --- hard walls: drawn from the free sub-cell (finding 309: the
+        # sweep stops whoever enters a 0x7F sub-cell, Bugs is put back if he
+        # ends up in one) and, with Outside side, from the 0x7F side, where
+        # nothing stops you. The same run from two blocks that share the
+        # edge is drawn once; two facing each other (0x7F on both sides of
+        # the block border) are none. Told apart by the ground next to them,
+        # as before the walls went up to the block's ceiling, so the set of
+        # runs is the one the old flag drew (tools/wall_flag_proof.py)
+        panels = list(dict.fromkeys(collision.hard_walls(self.collision_blocks, vertical_heights)))
+        sides = {}
+        for panel in panels:
+            sides.setdefault(panel[:4] + panel[6:7] + panel[8:10], set()).add(panel[7])
+        hard = [p for p in panels if len(sides[p[:4] + p[6:7] + p[8:10]]) == 1]
+        covers = {}
+        for xa, za, xb, zb, base, top, visible, (fx, fz), _g_low, g_high in hard:
+            axis = "x" if xa == xb else "z"
+            plane = xa if axis == "x" else za
+            a0, a1 = (min(za, zb), max(za, zb)) if axis == "x" else (min(xa, xb), max(xa, xb))
+            covers.setdefault((axis, plane, base, top, (fx, fz)), []).append((a0, a1, top, base, (visible, g_high)))
+        self.stat["hard_walls"], self.stat["invisible_walls"] = len(hard), sum(1 for p in hard if not p[6])
+        self.stat["wall_panels"] = self.stat["wall_faces"] = 0
+        hard_covers = [(walls.WallCover(axis, plane, runs, parallel, free=fx if axis == "x" else fz),
+                        (fx, 0, fz), (-fx, 0, -fz))
+                       for (axis, plane, _base, _top, (fx, fz)), runs in covers.items()]
+        # what the selector (Alt+click, picking.py) reads back: one plain
+        # record per run. It rides in the piece cache with the geometry
+        # (`self._pieces`), or a level mounted from the cache would have no
+        # records at all and the card would only name the group
+        self.wall_picks = []
+        for (axis, plane, c_base, c_top, (fx, fz)), runs in covers.items():
+            for r, (a0, a1, y_top, y_base, (visible, _g_high)) in enumerate(runs):
+                self.wall_picks.append(dict(group="hard_walls" if visible else "invisible_walls",
+                                            kind="hard", axis=axis, plane=plane, a0=a0, a1=a1,
+                                            y_top=y_top, y_base=y_base, visible=bool(visible),
+                                            hole=False, free=(fx, fz), floor=c_base, ceiling=c_top))
+        ends = {}
+        register_ends([c[0] for c in hard_covers], ends)
+        for cover, look, back in hard_covers:
+            runs = cover.runs
+            for visible in (True, False):
+                prefix = "hard_walls" if visible else "invisible_walls"
+                wanted = (lambda key, v=visible: key[0] == v)
+                n_panels, n_faces = fill_and_faces(
+                    cover, wanted, prefix, COLOR_HARD_WALLS, look, back, "hard_walls_lines",
+                    "invisible_walls_lines", lambda key: not key[0], (LABEL_HARD_WALL, LABEL_HARD_WALL_OUTSIDE))
+                self.stat["wall_panels"] += n_panels
+                self.stat["wall_faces"] += n_faces
+            # the name of a panel: in the band just over the highest ground
+            # next to its run, WALL_LABEL_HEIGHT tall, where the panel
+            # reaches it (a block can be 250 m tall: a name centred on the
+            # panel would float unreadable; a strip of panel over a coloured
+            # face gets none, the face has the name)
+            for visible in (True, False):
+                prefix = "hard_walls" if visible else "invisible_walls"
+                for a0, a1, y_top, y_base in cover.panels(lambda key, v=visible: key[0] == v):
+                    r = cover.cells.get((int(round(a0 / walls.CELL)), int((y_base - walls.EPS) // walls.CELL)))
+                    if r is None:
+                        r = next((rr for (i, _j), rr in cover.cells.items() if i == int(round(a0 / walls.CELL))), None)
+                    if r is None:
+                        continue
+                    g_high = runs[r][4][1]
+                    low = min(y_base, g_high - 16)
+                    high = max(y_top, low - WALL_LABEL_HEIGHT)
+                    if low - high < flag_labels.MIN_HEIGHT:
+                        continue
+                    ring = rect_ring(cover, a0, a1, high, low)
+                    label(prefix + "_label", ring, look, LABEL_HARD_WALL, WALL_LABEL_HEIGHT)
+                    label(prefix + "_outside_label", ring, back, LABEL_HARD_WALL_OUTSIDE, WALL_LABEL_HEIGHT)
+            outlines(cover, ends, (("hard_walls_lines", None), ("invisible_walls_lines", lambda key: not key[0])))
+        # --- the steps of more than 100 units (findings 298, 309): a step
+        # stops you only going up, from its low side (STEP WALL); from the
+        # high side you just go down (OUTSIDE). A step stops you whether or
+        # not something is drawn over it, so every step is drawn whole
+        # (around the palisade of the Pirates in Era selector the game's step
+        # goes all the way round); those an opaque
+        # face covers are the "_covered" groups (Steps: all), the steps from
+        # a 0x7E hole (the hole's ground is the slab's base: a platform edge
+        # seen from the void) are mostly noise and stay behind Edges over
+        # holes. One name per staircase (_named_steps): a name on every step
+        # of a flight came out as a smudge (the stairs of L04E)
+        all_steps = collision.step_walls(self.collision_blocks, vertical_heights)
+        named = set(_named_steps(all_steps))
+        covers = {}
+        for i, (xa, za, xb, zb, high, low, visible, (sx, sz), hole) in enumerate(all_steps):
+            axis = "x" if xa == xb else "z"
+            plane = xa if axis == "x" else za
+            a0, a1 = (min(za, zb), max(za, zb)) if axis == "x" else (min(xa, xb), max(xa, xb))
+            # the class is the DROP, not the hole byte: 101 to 383 units he
+            # clears with a jump, so it is a step;
+            # over 383 it just stops him, so it is a wall, drawn and named as
+            # one. The run itself is untouched: only its colour, its name and
+            # the flag that shows it change
+            covers.setdefault((axis, plane, (sx, sz), hole), []).append(
+                (a0, a1, high, low, (visible, i, not hole and low - high > collision.JUMP_HEIGHT)))
+        for prefix in ("step_walls", "step_walls_covered", "hole_steps", "hole_steps_covered"):
+            self.stat[prefix] = 0
+        self.stat["drop_walls"] = 0
+        step_covers = [(walls.WallCover(axis, plane, runs, parallel, free=sx if axis == "x" else sz),
+                        (sx, 0, sz), (-sx, 0, -sz), hole)
+                       for (axis, plane, (sx, sz), hole), runs in covers.items()]
+        for (axis, plane, (sx, sz), hole), runs in covers.items():
+            base_name = "hole_steps" if hole else "step_walls"
+            for r, (a0, a1, y_top, y_base, (visible, _i, is_wall)) in enumerate(runs):
+                group = (("hard_walls" if visible else "invisible_walls") if is_wall
+                         else base_name + ("_covered" if visible else ""))
+                self.wall_picks.append(dict(group=group, kind="drop" if is_wall else "step",
+                                            axis=axis, plane=plane, a0=a0, a1=a1,
+                                            y_top=y_top, y_base=y_base, visible=bool(visible),
+                                            hole=bool(hole), free=(sx, sz), floor=None, ceiling=None))
+        ends = {}
+        register_ends([c[0] for c in step_covers], ends)
+        for cover, look, back, hole in step_covers:
+            runs = cover.runs
+            base_name = "hole_steps" if hole else "step_walls"
+            for visible in (True, False):
+                # the steps he can clear: pink, STEP WALL. An edge over the
+                # void: teal, EDGE, and never a wall whatever its drop
+                prefix = base_name + ("_covered" if visible else "")
+                self.stat[prefix] += sum(1 for run in runs if run[4][0] == visible and not run[4][2])
+                fill_and_faces(cover, (lambda key, v=visible: key[0] == v and not key[2]),
+                               prefix, COLOR_EDGE if hole else COLOR_STEP_WALLS, look, back,
+                               base_name + "_all_lines", base_name + "_lines",
+                               lambda key: not key[0], None)
+                # and the drops he cannot: blue, HARD WALL, behind Hard walls,
+                # in the very groups of the walls
+                wall_prefix = "hard_walls" if visible else "invisible_walls"
+                self.stat["drop_walls"] += sum(1 for run in runs if run[4][0] == visible and run[4][2])
+                fill_and_faces(cover, (lambda key, v=visible: key[0] == v and key[2]),
+                               wall_prefix, COLOR_HARD_WALLS, look, back,
+                               "hard_walls_lines", "invisible_walls_lines", lambda key: not key[0],
+                               (LABEL_HARD_WALL, LABEL_HARD_WALL_OUTSIDE))
+            for a0, a1, y_top, y_base, (visible, i, is_wall) in runs:
+                if is_wall:
+                    # a drop's name in a band over its low side, as a hard
+                    # wall's: a 12 m drop named in the middle floats
+                    # unreadable. One name per stretch, like the steps
+                    # (_named_steps): a name on every run of a dock edge came
+                    # out as a row of small HARD WALLs
+                    if i not in named:
+                        continue
+                    prefix = "hard_walls" if visible else "invisible_walls"
+                    high = max(y_top, y_base - WALL_LABEL_HEIGHT)
+                    if y_base - high < flag_labels.MIN_HEIGHT:
+                        continue
+                    ring = rect_ring(cover, a0, a1, high, y_base)
+                    label(prefix + "_label", ring, look, LABEL_HARD_WALL, WALL_LABEL_HEIGHT)
+                    label(prefix + "_outside_label", ring, back, LABEL_HARD_WALL_OUTSIDE, WALL_LABEL_HEIGHT)
+                    continue
+                if i not in named:
+                    continue
+                prefix = base_name + ("_covered" if visible else "")
+                ring = rect_ring(cover, a0, a1, y_top, y_base)
+                name, name_out = ((LABEL_EDGE, LABEL_EDGE_OUTSIDE) if hole
+                                  else (LABEL_STEP_WALL, LABEL_STEP_WALL_OUTSIDE))
+                label(prefix + "_label", ring, look, name)
+                label(prefix + "_outside_label", ring, back, name_out)
+            outlines(cover, ends, ((base_name + "_all_lines", lambda key: not key[2]),
+                                   (base_name + "_lines", lambda key: not key[0] and not key[2]),
+                                   ("hard_walls_lines", lambda key: key[2]),
+                                   ("invisible_walls_lines", lambda key: not key[0] and key[2])))
+        self.stat["step_walls"] += self.stat["step_walls_covered"]
+        self.stat["hole_steps"] += self.stat["hole_steps_covered"]
+        # the records ride in the piece cache: a level mounted from disk gets
+        # them back without rebuilding the walls
+        self._pieces[("wall_picks",)] = self.wall_picks
+        for category, (pts, faces) in pending.items():
+            self._add_faces(pts, faces, category, counted=False)
 
     def _link(self, start, end, category, draw_color):
         """One line from `start` to `end`, ending exactly on the destination:

@@ -140,7 +140,16 @@ class Controls:
         self.held_keys.discard(symbol)
 
     def on_mouse_press(self, x, y, button, modifiers):
-        if self.screenshot or (not self.ui_hidden and self.menu.click(x, y, button)):
+        if self.screenshot:
+            return
+        # the selector: Alt+click reads what is drawn on that pixel, and
+        # clicking the same spot again steps down the stack (picking.py).
+        # The one key added since the keys were settled
+        if (button == pyglet.window.mouse.LEFT and modifiers & pyglet.window.key.MOD_ALT
+                and self.pick_enabled and self.current_level is not None):
+            self.pick_at(x, y)
+            return pyglet.event.EVENT_HANDLED
+        if not self.ui_hidden and self.menu.click(x, y, button):
             return
         if button == pyglet.window.mouse.RIGHT:
             self.looking = True
@@ -159,9 +168,12 @@ class Controls:
             self.pitch = max(-89.0, min(89.0, self.pitch + dy * 0.15))
 
     def on_mouse_scroll(self, x, y, sx, sy):
-        if self.screenshot or (not self.ui_hidden and self.menu.wheel(x, y, sy)):
+        """The wheel scrolls the menu's list and nothing else: it no longer
+        changes a value or, with the menu closed, the camera speed, which is
+        Camera and points -> Camera speed."""
+        if self.screenshot or self.ui_hidden:
             return
-        self.speed = max(1.0, self.speed * (1.2 if sy > 0 else 1 / 1.2))
+        self.menu.wheel(x, y, sy)
 
     def on_activate(self):
         self.focused = True
@@ -193,7 +205,7 @@ class Controls:
         pad = self.gamepad if (self.gamepad is not None and self.gamepad_enabled and self.focused
                                and self.gamepad.connected) else None
         if pad is not None:
-            # L2 / R2 held: camera speed down / up (like the wheel), right stick: look
+            # L2 / R2 held: camera speed down / up, right stick: look
             trigger = pad.right_trigger - pad.left_trigger
             if trigger:
                 self.speed = max(1.0, self.speed * 2.0 ** (trigger * dt * 1.5))

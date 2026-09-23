@@ -17,6 +17,7 @@ import pyglet
 from game import geometry as geo
 from support import paths
 from support import preferences
+from support.version import VERSION
 from ui import settings as settings_mod
 from ui import texts
 import viewer
@@ -77,25 +78,69 @@ probe("Flags is the first entry of Level options", labels[0] == "Flags")
 v.menu.stack[-1][2] = 0
 press(k.ENTER)
 flag = [x.label() for x in v.menu.stack[-1][1]]
-probe("Flags: the first five overlays, all off by default",
+probe("Flags: Muri first, then the overlays, all off by default",
       v.menu.stack[-1][0] == "flags"
-      and flag[:5] == ["Muri invisibili", "Senza collisione", "Box di collisione",
+      and flag[:5] == ["Muri", "Senza collisione", "Box di collisione",
                        "Zone di morte e danno", "Zone di teletrasporto"]
-      and not (v.show_invisible_walls or v.show_no_collision or v.show_collision_boxes
+      and v.show_hard_walls == "off" and v.show_steps == "off"
+      and not (v.show_no_collision or v.show_collision_boxes
                or v.show_death_zones or v.show_teleport_zones))
-i_outside = flag.index("Muri: lato di fuori") if "Muri: lato di fuori" in flag else None
-probe("Flags: the walls' outside side, on by default", i_outside is not None and v.show_walls_outside)
-if i_outside is not None:
-    v.menu.stack[-1][2] = i_outside
-    press(k.ENTER)
-    probe("Enter hides the outside side", not v.show_walls_outside)
-    press(k.ENTER)
-probe("Flags: walls' edges over holes, off by default",
-      "Muri: bordi sui buchi" in flag and not v.show_hole_steps)
-flag_attrs = ["show_invisible_walls", "show_no_collision", "show_collision_boxes", "show_death_zones",
-              "show_teleport_zones"]
+# Flags -> Muri: Hard walls and Steps three-way, edges over holes, area
+# boxes, outside side
+v.menu.stack[-1][2] = 0
+press(k.ENTER)
+walls_labels = [x.label() for x in v.menu.stack[-1][1]]
+probe("Muri: Muri duri, Gradini, bordi sui buchi, Box delle aree, Lato di fuori",
+      v.menu.stack[-1][0] == "walls"
+      and walls_labels == ["Muri duri", "Gradini", "Gradini: bordi sui buchi", "Box delle aree",
+                           "Lato di fuori", "Indietro"])
+i_outside = walls_labels.index("Lato di fuori")
+probe("Muri: the walls' outside side, on by default", v.show_walls_outside)
+v.menu.stack[-1][2] = i_outside
+press(k.ENTER)
+probe("Enter hides the outside side", not v.show_walls_outside)
+press(k.ENTER)
+probe("Muri: edges over holes, off by default", not v.show_hole_steps)
+v.menu.stack[-1][2] = 0
+press(k.RIGHT)
+probe("Muri duri -> Tutti, and the heightmap family is built",
+      v.show_hard_walls == "all" and "heightmap" in v.current_level.families)
+hard_groups = {g.category for g in v.current_level.face_groups.values() if g.category.startswith(("hard_walls", "invisible_walls"))}
+probe("hard walls: panels, coloured faces, outlines and names, from both sides",
+      {"hard_walls", "hard_walls_faces", "hard_walls_lines", "hard_walls_label", "hard_walls_outside",
+       "invisible_walls", "invisible_walls_lines"} <= hard_groups)
+shown_all = {c for c in hard_groups if v._overlay_shown(c)}
+press(k.RIGHT)
+shown_unseen = {c for c in hard_groups if v._overlay_shown(c)}
+probe("Muri duri -> Solo invisibili: only the invisible_walls groups and their outline",
+      v.show_hard_walls == "unseen" and "hard_walls" in shown_all and "invisible_walls" in shown_all
+      and "hard_walls_lines" in shown_all and "invisible_walls_lines" not in shown_all
+      and shown_unseen and all(c.startswith("invisible_walls") for c in shown_unseen)
+      and "invisible_walls_lines" in shown_unseen)
+press(k.RIGHT)
+probe("Muri duri -> No", v.show_hard_walls == "off" and not any(v._overlay_shown(c) for c in hard_groups))
+v.menu.stack[-1][2] = 1
+press(k.RIGHT)
+step_groups = {g.category for g in v.current_level.face_groups.values() if g.category.startswith(("step_walls", "hole_steps"))}
+shown_steps = {c for c in step_groups if v._overlay_shown(c)}
+probe("Gradini -> Tutti: the uncovered and the covered steps, no hole steps without the option",
+      v.show_steps == "all" and "step_walls" in shown_steps and "step_walls_covered" in shown_steps
+      and "step_walls_all_lines" in shown_steps and not any(c.startswith("hole") for c in shown_steps))
+v.show_hole_steps = True
+probe("with edges over holes the hole steps show too", v._overlay_shown("hole_steps"))
+v.show_hole_steps = False
+press(k.RIGHT)
+shown_steps = {c for c in step_groups if v._overlay_shown(c)}
+probe("Gradini -> Solo invisibili: the covered steps go", v.show_steps == "unseen"
+      and "step_walls" in shown_steps and "step_walls_lines" in shown_steps
+      and "step_walls_covered" not in shown_steps and "step_walls_all_lines" not in shown_steps)
+press(k.RIGHT)
+probe("Gradini -> No", v.show_steps == "off")
+press(k.BACKSPACE)
+probe("Backspace from Muri returns to Flags", v.menu.stack[-1][0] == "flags")
+flag_attrs = ["show_no_collision", "show_collision_boxes", "show_death_zones", "show_teleport_zones"]
 turned_on = []
-for i_f, attr in enumerate(flag_attrs):
+for i_f, attr in enumerate(flag_attrs, start=1):
     v.menu.stack[-1][2] = i_f
     press(k.ENTER)
     turned_on.append(getattr(v, attr))
@@ -111,7 +156,8 @@ probe("Backspace from Flags returns to Level options", v.menu.stack[-1][0] == "l
 v.menu.hide()
 for sym in (k.I, k.C, k.B, k.Z, k.K):
     press(sym)
-probe("the flags have no keys", not any(getattr(v, a) for a in flag_attrs))
+probe("the flags have no keys", not any(getattr(v, a) for a in flag_attrs)
+      and v.show_hard_walls == "off" and v.show_steps == "off")
 v.menu.reopen()
 
 i_bridges = labels.index("Ponti levatoi")
@@ -147,7 +193,7 @@ v.menu.stack[-1][2] = 4   # General options
 press(k.ENTER)
 press(k.RIGHT)           # Lingua -> English
 probe("English language", texts.language() == "en" and v.menu.stack[-1][1][0].label().startswith("Language"))
-probe("title translated, with build", v.caption == "BBLIT Viewer — Debug")
+probe("title translated, with version and build", v.caption == f"BBLIT Viewer {VERSION} — Debug")
 press(k.LEFT)
 probe("Italian language", texts.language() == "it")
 press(k.M)
@@ -161,8 +207,8 @@ press(k.ESCAPE)
 v.menu.stack[-1][2] = 1
 press(k.ENTER)
 era_labels = [x.label() for x in v.menu.stack[-1][1]]
-probe("Load level: the five eras, Nowhere below Dimensione X, then Extra",
-      era_labels[:6] == ["Età della pietra", "Medioevo", "Pirati", "Anni '30", "Dimensione X", "Nowhere"]
+probe("Load level: Ere first, the five eras, Nowhere below Dimensione X, then Extra",
+      era_labels[:7] == ["Ere", "Età della pietra", "Medioevo", "Pirati", "Anni '30", "Dimensione X", "Nowhere"]
       and "Extra" in era_labels)
 v.menu.stack[-1][2] = era_labels.index("Pirati")
 press(k.ENTER)
@@ -181,8 +227,9 @@ v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
 press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
 page_labels = [x.label() for x in menu_items]
-probe("Extra: Era selector, _8 variants and Cutscenes, no Nowhere (Debug build)",
-      "Nowhere" not in page_labels and
+probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere (Debug build)",
+      "Nowhere" not in page_labels and "Era selector" not in page_labels
+      and "Vista d'insieme" not in page_labels and
       "Cutscenes" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
       and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
 v.menu.stack[-1][2] = page_labels.index("Cutscenes")
@@ -194,20 +241,39 @@ probe("Extra -> Cutscenes -> CC3A cutscene loaded", v.current_level.name.upper()
 press(k.ESCAPE)
 probe("Esc reopens Cutscenes", v.menu.stack[-1][0] == "cutscenes")
 press(k.BACKSPACE)
+press(k.BACKSPACE)
+v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Ere")
+press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
 page_labels = [x.label() for x in menu_items]
-probe("Extra contains the Era selector, with the title only once",
-      "Vista d'insieme" in page_labels and page_labels.count("Era selector") == 1)
+probe("Ere: the Era selector, with the title only once, the overview and the five eras",
+      v.menu.stack[-1][0] == "eras" and page_labels.count("Era selector") == 1
+      and [x.label() for x in menu_items if x.selectable][:6] == [
+          "Vista d'insieme", "Età della pietra", "Medioevo", "Pirati", "Anni '30", "Dimensione X"])
 v.menu.stack[-1][2] = [i for i, x in enumerate(menu_items) if x.selectable and x.label() == "Pirati"][0]
 press(k.ENTER)
-probe("Era selector -> Pirati: LS01 with the camera on the pirate island",
-      v.current_level.name.upper() == "LS01" and (round(v.pos.x, 1), round(v.pos.y, 1), round(v.pos.z, 1)) == (20.0, 23.8, 17.5))
+# the pirate island is collision block 3 (its camera used to be the Stone
+# Age's)
+probe("Ere -> Pirati: LS01 with the camera on the pirate island",
+      v.current_level.name.upper() == "LS01" and (round(v.pos.x, 1), round(v.pos.y, 1), round(v.pos.z, 1)) == (62.1, 164.4, -116.2))
 before = v.current_level
+press(k.ESCAPE)
+menu_items = v.menu.stack[-1][1]
+v.menu.stack[-1][2] = [i for i, x in enumerate(menu_items) if x.selectable and x.label() == "Età della pietra"][0]
+press(k.ENTER)
+probe("Ere -> Età della pietra: the camera on the canyon (block 0)",
+      (round(v.pos.x, 1), round(v.pos.y, 1), round(v.pos.z, 1)) == (20.0, 23.8, 17.5))
+press(k.ESCAPE)
+menu_items = v.menu.stack[-1][1]
+v.menu.stack[-1][2] = [i for i, x in enumerate(menu_items) if x.selectable and x.label() == "Dimensione X"][0]
+press(k.ENTER)
+probe("Ere -> Dimensione X: the camera over the walkable ground of block 5",
+      (round(v.pos.x, 1), round(v.pos.y, 1), round(v.pos.z, 1)) == (135.2, -100.6, -141.2))
 press(k.ESCAPE)
 menu_items = v.menu.stack[-1][1]
 v.menu.stack[-1][2] = [i for i, x in enumerate(menu_items) if x.selectable and x.label() == "Medioevo"][0]
 press(k.ENTER)
-probe("Era selector -> Medioevo with LS01 already open: only moves the camera",
+probe("Ere -> Medioevo with LS01 already open: only moves the camera",
       v.current_level is before and round(v.pos.z, 1) == -4.7 and not v.menu.is_open)
 build = v.build
 v.build = "Portable"
@@ -345,8 +411,8 @@ kbp = v.keyboard_page
 v.menu.show("main")
 v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Aiuto")
 press(k.ENTER)
-probe("Aiuto: Tastiera, Gamepad, Indietro",
-      [x.label() for x in v.menu.stack[-1][1]] == ["Tastiera", "Gamepad", "Indietro"])
+probe("Aiuto: Tastiera, Gamepad, Informazioni, Indietro",
+      [x.label() for x in v.menu.stack[-1][1]] == ["Tastiera", "Gamepad", "Informazioni", "Indietro"])
 v.menu.show("main"); v.menu.open_page("general")
 glabels = [x.label() for x in v.menu.stack[-1][1]]
 probe("Opzioni generali: Tasti e gamepad (to the same page) and Gamepad yes/no",
@@ -458,24 +524,84 @@ v.gamepad = None
 
 # the flags go back to how they start when another level is loaded, and stay
 # put when the same level is rebuilt for a state chosen from the menu
-v.show_invisible_walls = v.show_death_zones = True
+v.show_hard_walls, v.show_death_zones = "unseen", True
 v.show_area_visibility = v.show_camera_shadow = True
 v.show_walls_outside = False
 v.load_level(v.level_files[v.index], camera=False)
 probe("rebuilding the same level leaves the flags where they are",
-      v.show_invisible_walls and v.show_death_zones and not v.show_walls_outside
+      v.show_hard_walls == "unseen" and v.show_death_zones and not v.show_walls_outside
       and v.show_area_visibility and v.show_camera_shadow)
 other = next(f for f in v.level_files if f != v.level_files[v.index])
 v.load_level(other)
 probe("another level puts every flag back to how it starts",
-      not v.show_invisible_walls and not v.show_death_zones
+      v.show_hard_walls == "off" and not v.show_death_zones
       and not v.show_area_visibility and not v.show_camera_shadow)
 probe("and the ones that start ON come back on, not off", v.show_walls_outside)
+# Moving characters: on at every start and at every level
+probe("Moving characters on after another level", v.show_movers)
+v.show_movers = False
 v.load_level(v.level_files[0])
+probe("Moving characters back on at the next level", v.show_movers)
+probe("Cloned templates off by default (settings.py)", settings_mod.DEFAULTS["clones"] == 0)
+
+# the wheel scrolls the list and nothing else: Level options of L03A is
+# longer than the window (a row per gate group)
+v.menu.show("main"); v.menu.open_page("level")
+v.on_draw()
+scroll_items = v.menu.stack[-1][1]
+scroll_labels = [x.label() for x in scroll_items]
+v.menu.stack[-1][2] = scroll_labels.index("Cielo")
+sky_was, start_was = v.show_sky, v.menu._start_lines[id(scroll_items)]
+v.on_mouse_scroll(10, 300, 0, -1)
+probe("wheel down: the list scrolls 3 rows and Cielo does not change",
+      v.menu._start_lines[id(scroll_items)] == start_was + 3 and v.show_sky == sky_was)
+v.on_draw()
+v.on_mouse_scroll(10, 300, 0, -1)
+probe("the cursor stays inside the visible part, on a selectable row",
+      v.menu._start_lines[id(scroll_items)] <= v.menu.stack[-1][2]
+      and scroll_items[v.menu.stack[-1][2]].selectable)
+for _ in range(50):
+    v.on_mouse_scroll(10, 300, 0, -1)
+end_start = v.menu._start_lines[id(scroll_items)]
+v.on_draw()
+probe("wheel down to the end: the last row is visible and the list is not scrolled past it",
+      0 < end_start < len(scroll_items) and any(a[2] == len(scroll_items) - 1 for a in v.menu._areas))
+for _ in range(50):
+    v.on_mouse_scroll(10, 300, 0, 1)
+probe("wheel up: back to the top", v.menu._start_lines[id(scroll_items)] == 0)
+v.menu.hide()
+speed_was = v.speed
+v.on_mouse_scroll(10, 300, 0, 1); v.on_mouse_scroll(10, 300, 0, -1)
+probe("with the menu closed the wheel leaves the camera speed alone", v.speed == speed_was)
+# Camera speed is an entry of Camera and points
+v.menu.show("main"); v.menu.open_page("level"); v.menu.open_page("camera")
+cam_labels = [x.label() for x in v.menu.stack[-1][1]]
+probe("Camera e punti: Velocità camera after Mostra l'ombra",
+      cam_labels.index("Velocità camera") == cam_labels.index("Mostra l'ombra") + 1)
+v.menu.stack[-1][2] = cam_labels.index("Velocità camera")
+v.speed = 26.0
+press(k.RIGHT)
+probe("right: the next stop, 30 m/s", v.speed == 30)
+press(k.LEFT); press(k.LEFT)
+probe("left twice: 20 then 15 m/s", v.speed == 15)
+press(k.RIGHT, k.MOD_SHIFT)
+probe("Shift + right: ten stops up, 500 m/s", v.speed == 500)
+v.speed = speed_was
+v.menu.hide()
 
 # Video options: distant textures, like the PC (no mipmaps) or smooth
 v.menu.show("main"); v.menu.open_page("video")
 video_items = v.menu.stack[-1][1]
+# Backface culling (finding 307): off by default, no key, saved with the settings
+cull_item = video_items[[x.label() for x in video_items].index("Backface culling")]
+probe("Video options: Backface culling off by default", not v.backface_culling and not settings_mod.DEFAULTS["backface_culling"])
+cull_item.change(1, v.menu)
+probe("Backface culling on: the two-sided faces of L03A are in groups of their own",
+      v.backface_culling and any(g.two_sided for g in v.current_level.face_groups.values())
+      and any(not g.two_sided for g in v.current_level.face_groups.values()))
+v.on_draw()
+cull_item.change(1, v.menu)
+probe("Backface culling off again", not v.backface_culling)
 far_item = video_items[[x.label() for x in video_items].index("Texture lontane")]
 probe("distant textures: like the PC at startup, so no mipmaps", v.mipmaps is False)
 far_item.change(1, v.menu)
@@ -525,9 +651,9 @@ v.fov = fov_was
 
 # drawing: every page is laid out without errors
 v._bookmark_i = 0
-for page in ("main", "load", "level", "video", "general", "help", "extra", "cutscenes", "flags",
+for page in ("main", "load", "level", "video", "general", "help", "eras", "extra", "cutscenes", "flags",
                "era:era.pirates", "era:era.medieval", "era:era.dimx", "camera", "bookmark",
-               "help", "keyboard", "gamepad"):
+               "help", "keyboard", "gamepad", "about"):
     v.menu.show("main")
     if page != "main":
         v.menu.open_page(page)
@@ -542,6 +668,9 @@ for language in ("en", "it"):
     texts.set_language(language)
     v.menu.show("main"); v.menu.open_page("help")
     v.on_draw()
+v.menu.show("main"); v.menu.open_page("help"); v.menu.open_page("about")
+probe("About shows the version of support/version.py",
+      any(i.value_text() == VERSION for i in v.menu.stack[-1][1] if hasattr(i, "value_text")))
 probe("settings off in photo mode", not v.user_settings.enabled)
 v.close()
 

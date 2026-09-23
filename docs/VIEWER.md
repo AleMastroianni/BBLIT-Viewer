@@ -290,7 +290,12 @@ that stops PyInstaller.
 executable with `_internal/`, `README`, `README_Ita`, `LICENSE`,
 `THIRD_PARTY_LICENSES.txt` (the licences of Python, pyglet, Pillow and
 PyInstaller's bootloader, bundled in the executable) and
-`bze_levels/README.txt`.
+`bze_levels/README.txt`. The zip is called `BBLIT-Viewer-v<version>.zip`.
+
+The version number is written in one place, `bblit/support/version.py`: the
+window title, Help -> About and the name of the release zip read it from
+there. Every build carries the number of the next release; right after a
+release, raise it there.
 
 ---
 

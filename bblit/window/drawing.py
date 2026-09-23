@@ -31,7 +31,8 @@ from game import tim  # noqa: E402
 from support import upscale  # noqa: E402
 from window.overlays import (BOX_ALPHA, BOX_BLEND, LABEL_HEIGHT, LABEL_NEAR,  # noqa: E402
                              LINK_WIDTH, ONE_SIDED, OVERLAYS, OVERLAY_BLEND,
-                             PULLED_FORWARD, THICK_LINES, THICK_LINE_WIDTH, THROUGH_WALLS)
+                             PULLED_FORWARD, THICK_LINES, THICK_LINE_WIDTH, THROUGH_WALLS,
+                             WALL_ALPHA, WALL_BLEND)
 from window.scene import FaceGroup, RULE_PASSES_PER_TICK  # noqa: E402
 from ui.texts import t  # noqa: E402
 
@@ -48,12 +49,50 @@ from pyglet.gl import (  # noqa: E402
     glCullFace, glGenVertexArrays, glGenerateMipmap, glLineWidth, glPolygonMode,
     glTexImage2D, glTexParameteri,
     glVertexAttribPointer,
+    GL_STENCIL_BUFFER_BIT, GL_STENCIL_TEST, GL_NOTEQUAL, GL_KEEP, GL_REPLACE,
+    glStencilFunc, glStencilOp, glStencilMask,
 )
 from pyglet.math import Mat4, Vec3  # noqa: E402
 
 # Level options -> Wireframe: off, Skeleton (lines only), Grid (textures and
 # the triangle edges over them, as in the CTR viewer)
 WIRE_OFF, WIRE_SKELETON, WIRE_GRID = 0, 1, 2
+# The walls' see-through fills, by kind, in drawing order: every group of one
+# kind (its panels, the game's faces it colours, and both from the outside
+# side) is drawn in one pass with the stencil, so a pixel is tinted ONCE per
+# kind. Without it two pieces of the same wall -- the staircase a diagonal
+# collision wall is made of, a panel and the face under it -- each added
+# their 25% and drew a bright line where no edge exists. Hard walls last:
+# where two kinds meet, theirs is the
+# colour on top
+STENCIL_CLASSES = ("hole_steps_covered", "hole_steps", "step_walls_covered", "step_walls",
+                   "invisible_walls", "hard_walls")
+# how far a wall's flag is pulled toward the camera, as a share of its
+# distance (the shader): the fill a little, the outlines and the names more,
+# so they stay over it. A share, not a fixed offset: a fixed one grows with
+# the distance and ends up showing the flag through the wall
+PULL_FILL = 0.001
+PULL_EDGES = 0.002
+
+
+def wall_class(category):
+    """The kind of wall a group's fill belongs to, or None if it is not one
+    (a name, an outline, another flag)."""
+    if category.endswith(("_label", "_lines")):
+        return None
+    for kind in STENCIL_CLASSES:
+        if category.startswith(kind):
+            return kind
+    return None
+
+
+def wall_pull(category):
+    """How much a group is pulled toward the camera: a wall's fill or the
+    face it colours a little, its outline and its name more. 0 for
+    everything else, which keeps the depth offset it has today."""
+    if not any(category.startswith(kind) for kind in STENCIL_CLASSES):
+        return 0.0
+    return PULL_EDGES if category.endswith(("_label", "_lines")) else PULL_FILL
 GRID_COLOR = (0.0, 0.0, 0.0, 0.7)
 
 # a sprite nearer than this to the camera is not drawn (finding 305): 150
@@ -68,6 +107,13 @@ in vec3 position;
 in vec3 color;
 in vec2 uv;
 uniform mat4 mvp;
+// the walls' flags are drawn on the surface they describe: instead of a
+// depth offset, which is fixed and lets an overlay through a wall as the
+// distance grows, the vertex is pulled toward the camera in view space by a
+// SHARE of its distance, as the CTR viewer does. 0 = no pull
+uniform mat4 view_matrix;
+uniform mat4 projection;
+uniform float pull;
 // the texture coordinate rule (finding 328): the uv in the buffer is the
 // OpenGL renderer's byte / 255, and these four turn it into the chosen one
 uniform vec2 uv_low;
@@ -77,7 +123,13 @@ uniform vec2 uv_offset;
 out vec3 v_color;
 out vec2 v_uv;
 void main() {
-    gl_Position = mvp * vec4(position, 1.0);
+    if (pull > 0.0) {
+        vec4 vp = view_matrix * vec4(position, 1.0);
+        vp.xyz *= 1.0 - min(0.25, pull * (1.0 + length(vp.xyz) * 0.0025));
+        gl_Position = projection * vp;
+    } else {
+        gl_Position = mvp * vec4(position, 1.0);
+    }
     v_color = color;
     v_uv = clamp(uv, uv_low, uv_high) * uv_scale + uv_offset;
 }
@@ -112,6 +164,8 @@ void main() {
     if (has_texture == 1 && show_textures == 1) {
         vec4 t = texture(tex_sampler, v_uv);
         if (alpha_test == 1 && t.a < 0.5) discard;
+        // the sprites: the game's glAlphaFunc(GL_GREATER, 0) (N69)
+        if (alpha_test == 2 && t.a <= 0.0) discard;
         // the alpha the renderer built into the texture when it loaded it
         // (finding 305): one blend function for every mode
         color_out = vec4(t.rgb * v_color * albedo * blend_scale, alpha * t.a);
@@ -234,6 +288,27 @@ class Drawing:
         glEnable(GL_BLEND)
         self._background.blit((self.width - b) / 2, (self.height - h) / 2, width=b, height=h)
 
+    def draw_loading(self, name):
+        """One frame saying which level is coming, drawn before the level is
+        built. Building blocks the event loop for a second or more, so
+        without this the window keeps showing the LAST frame of the level
+        that is leaving: with the camera inside the terrain of Era selector
+        that looked like a broken screen, and the status bar still named the
+        old level."""
+        self.switch_to()
+        glDisable(GL_DEPTH_TEST)
+        glClearColor(0.05, 0.06, 0.09, 1.0)
+        self.clear()
+        glEnable(GL_BLEND)
+        s = max(0.75, min(1.6, self.height / 760.0))
+        self.status_bar.font_size = 16 * s
+        self.status_bar.text = t("status.loading", name=name)
+        self.status_bar.x, self.status_bar.y = round(24 * s), round(24 * s)
+        self.status_bar.draw()
+        self.flip()
+        self.status_bar.x, self.status_bar.y = round(10 * s), round(7 * s)
+        glEnable(GL_DEPTH_TEST)
+
     def tick(self) -> int:
         """The animation tick: frozen with P or with --tick."""
         if self.fixed_tick is not None:
@@ -259,7 +334,7 @@ class Drawing:
             return None
         # the cache is per source, not per slot: several slots and several frames
         # can point to the same TIM
-        blend = None if blend in (OVERLAY_BLEND, BOX_BLEND) else blend
+        blend = None if blend in (OVERLAY_BLEND, BOX_BLEND, WALL_BLEND) else blend
         lookup_key = (id(source[0]), source[1], blend)
         if lookup_key in self.textures:
             return self.textures[lookup_key]
@@ -460,6 +535,9 @@ class Drawing:
         self._uv_pushed = None
         self._uniform_cache = {}
         self.program["mvp"] = proj @ view
+        # the two halves apart, for the groups drawn with the pull
+        self.program["view_matrix"] = view
+        self.program["projection"] = proj
         self.program["show_textures"] = 1 if self.show_textures else 0
         self.program["albedo"] = self.albedo
         # every face of the game goes through the same blend function now
@@ -499,6 +577,16 @@ class Drawing:
                      and not (g.category == "clones_at_start" and self.show_clones < 1)
                      and g.category != "sky_dome"]
 
+        # face culling is switched only when it changes from one group to the
+        # next: 573 groups each turning it on and off cost milliseconds
+        cull_state = [False]
+        glCullFace(GL_BACK)
+
+        def set_cull(on):
+            if on != cull_state[0]:
+                (glEnable if on else glDisable)(GL_CULL_FACE)
+                cull_state[0] = on
+
         def draw_face_group(face_group):
             tex = (self._gl_texture(face_group.tex_id, face_group.blend)
                    if face_group.tex_id is not None else None)
@@ -515,7 +603,15 @@ class Drawing:
                 pivot, step = face_group.spin
                 angle = -step * rule_passes * 2 * math.pi / 4096.0
                 p = Vec3(*pivot)
-                self.program["mvp"] = (proj @ view @ Mat4.from_translation(p)
+                mvp = proj @ view
+                if face_group.category == "sky_dome":
+                    # a spinning object carried with the camera (the streaks
+                    # of the night sky of Magic Hare Blower, object 262) turns
+                    # around the camera, like the sky pass places it: without
+                    # this it turned around the level's origin, 100 m away,
+                    # and was never seen from where Bugs stands
+                    mvp = mvp @ Mat4.from_translation(self.pos)
+                self.program["mvp"] = (mvp @ Mat4.from_translation(p)
                                        @ Mat4.from_rotation(angle, Vec3(0.0, 1.0, 0.0))
                                        @ Mat4.from_translation(-p))
             elif face_group.mover is not None and face_group.mover in mover_mvp:
@@ -526,16 +622,20 @@ class Drawing:
             # the alpha test is only for the viewer's own names (see the
             # shader): everything of the game's is cut out by its alpha
             self.uniform("alpha_test", 1 if face_group.category.endswith("_label") else 0)
-            one_sided = face_group.category in ONE_SIDED
-            if one_sided:
-                glEnable(GL_CULL_FACE)
-                glCullFace(GL_BACK)
+            # the game's own faces, culled as the game culls them (finding
+            # 307) with Video options -> Backface culling; the two-sided ones
+            # (bit 0x02) stay. The flags' one-sided groups have a rule of
+            # their own (ONE_SIDED), with the same front face
+            set_cull(face_group.category in ONE_SIDED or (
+                self.backface_culling and face_group.category not in OVERLAYS and not face_group.two_sided))
             # a link's line is drawn through the geometry, so it can be
             # followed to where it goes even behind a wall
             through = face_group.category in THROUGH_WALLS
             if through:
                 glDisable(GL_DEPTH_TEST)
-            pulled = PULLED_FORWARD.get(face_group.category)
+            pull = wall_pull(face_group.category)
+            self.uniform("pull", pull)
+            pulled = None if pull else PULLED_FORWARD.get(face_group.category)
             if pulled:
                 # drawn on the terrain face itself (the walls of a piece
                 # without collision): pulled toward the camera in the depth
@@ -544,6 +644,19 @@ class Drawing:
                 glEnable(GL_POLYGON_OFFSET_LINE if face_group.category.endswith("_lines")
                          else GL_POLYGON_OFFSET_FILL)
                 glPolygonOffset(*pulled)
+            # a flag's see-through fill (a wall, a box) writes no depth:
+            # drawn after the game's faces, it would else cut out every flag,
+            # name and shadow drawn after it that stands behind it, in its
+            # whole face (the flags made holes behind themselves). The
+            # opaque fills, the zones, keep hiding
+            # what is behind them, as an opaque thing does; and so does No
+            # collision, at 75%: without the depth write the inner faces of
+            # a piece (the mushroom of Wabbit on the run! 2) showed through
+            # its top and the white grew denser, not clearer
+            see_through = (face_group.category in OVERLAYS
+                           and face_group.blend in (BOX_BLEND, WALL_BLEND))
+            if see_through:
+                glDepthMask(GL_FALSE)
             if face_group.category.endswith("_lines"):
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
                 # the red outline of what hurts is drawn thicker, or a red line
@@ -557,15 +670,16 @@ class Drawing:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe == WIRE_SKELETON else GL_FILL)
             else:
                 glDrawArrays(GL_TRIANGLES, first_idx, item_count)
+            if see_through:
+                glDepthMask(GL_TRUE)
             if pulled:
                 glDisable(GL_POLYGON_OFFSET_FILL)
                 glDisable(GL_POLYGON_OFFSET_LINE)
-            if one_sided:
-                glDisable(GL_CULL_FACE)
             if through:
                 glEnable(GL_DEPTH_TEST)
             if face_group.spin or face_group.mover is not None:
-                self.program["mvp"] = proj @ view
+                self.program["mvp"] = (proj @ view @ Mat4.from_translation(self.pos)
+                                       if face_group.category == "sky_dome" else proj @ view)
             return item_count // 3
 
         def set_blend(blend):
@@ -580,6 +694,9 @@ class Drawing:
             elif blend == BOX_BLEND:
                 # a collision box: the model inside it has to be visible
                 alpha = BOX_ALPHA
+            elif blend == WALL_BLEND:
+                # a wall's fill: nearly transparent, the edges and names full
+                alpha = WALL_ALPHA
             self.uniform("alpha", alpha)
             self.uniform("blend_scale", 1.0)
 
@@ -598,11 +715,14 @@ class Drawing:
                        if face_group.tex_id is not None else None)
                 self.uniform("has_texture", 1 if tex else 0)
                 self.uniform("alpha_test", 0)
+                self.uniform("pull", 0.0)
                 self.push_uv_rule(face_group.tex_id)
                 glBindTexture(GL_TEXTURE_2D, tex or 0)
                 set_blend(face_group.blend)
+                set_cull(self.backface_culling and not face_group.two_sided)
                 glDrawArrays(GL_TRIANGLES, first_idx, item_count)
                 n += item_count // 3
+            set_cull(False)
             return n
 
         cut_outs = self.current_level.cut_outs
@@ -652,11 +772,17 @@ class Drawing:
             if face_group.blend is None and face_group.tex_id not in cut_outs:
                 drawn_triangles += draw_face_group(face_group)
 
-        drawn_triangles += self._draw_sprites(forward, set_blend)
+        set_cull(False)
         set_blend(None)
 
-        # then the semi-transparent ones, without writing depth: the still
-        # ones back to front (BlendSorter), then the moving ones and the overlays
+        # then the semi-transparent ones: the still ones back to front
+        # (BlendSorter), then the moving ones and the overlays; the sprites
+        # come last of all, as the game's flush draws them (N69)
+        # the walls' fills are drawn apart, one pass per kind with the
+        # stencil (STENCIL_CLASSES): here they are taken out of the ordinary
+        # passes and the rest goes on as before
+        wall_fills = [g for g in visible_groups if wall_class(g.category)]
+        wall_fill_ids = {id(g) for g in wall_fills}
         if self.show_blending:
             # the PC never turns depth writes off (finding 306): the still
             # faces come back to front from the BlendSorter, so a nearer one
@@ -664,6 +790,8 @@ class Drawing:
             drawn_triangles += draw_sorted(self._blend_sorter, {id(g) for g in visible_groups},
                                            self.pos)
             for face_group in visible_groups:
+                if id(face_group) in wall_fill_ids:
+                    continue
                 if not face_group.sorted and (face_group.blend is not None
                                               or face_group.tex_id in cut_outs):
                     set_blend(face_group.blend)
@@ -671,8 +799,34 @@ class Drawing:
             set_blend(None)
         else:
             for face_group in visible_groups:
+                if id(face_group) in wall_fill_ids:
+                    continue
                 if face_group.blend is not None or face_group.tex_id in cut_outs:
                     drawn_triangles += draw_face_group(face_group)
+
+        # the walls, kind by kind: the stencil is cleared for each kind and a
+        # fragment is kept only where that kind has not been drawn yet, so
+        # its 25% is laid on a pixel once and never doubles
+        if wall_fills:
+            by_kind = {}
+            for face_group in wall_fills:
+                by_kind.setdefault(wall_class(face_group.category), []).append(face_group)
+            glEnable(GL_STENCIL_TEST)
+            glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
+            glStencilMask(0xFF)
+            glStencilFunc(GL_NOTEQUAL, 1, 0xFF)
+            for kind in STENCIL_CLASSES:
+                groups = by_kind.get(kind)
+                if not groups:
+                    continue
+                glClear(GL_STENCIL_BUFFER_BIT)
+                for face_group in groups:
+                    set_blend(face_group.blend)
+                    drawn_triangles += draw_face_group(face_group)
+            glDisable(GL_STENCIL_TEST)
+            glStencilMask(0x00)
+            self.uniform("pull", 0.0)
+            set_blend(None)
 
         if self.wireframe == WIRE_GRID:
             # Grid: the edges of every triangle drawn, in one dark colour, on
@@ -691,6 +845,7 @@ class Drawing:
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
             self.program["override"] = (0.0, 0.0, 0.0, 0.0)
 
+        set_cull(False)
         # the collision boxes' names: last, facing the camera, over the boxes
         if self.show_collision_boxes and self.show_textures:
             set_blend(None)
@@ -698,6 +853,22 @@ class Drawing:
 
         if self.show_camera_shadow:
             self._draw_camera_shadow()
+
+        # the selected run, drawn through everything so it is found at once
+        if self.picked:
+            self._draw_pick_highlight()
+
+        # the sprites (torch flames, glows) last, as the game's last pass
+        # (N69): unsorted, in the level's order, depth written, and the alpha
+        # test GL_GREATER 0 so a transparent texel writes nothing. Nothing of
+        # the game's comes after them, so a sprite cannot cut a hole in it;
+        # the viewer's own names and shadow are drawn before them for the
+        # same reason
+        set_cull(False)
+        self.program.use()
+        for sp in self._sprites_in_view(forward):
+            drawn_triangles += self._draw_sprite(sp, forward, set_blend)
+        set_blend(None)
 
         glBindVertexArray(0)
         self.program.stop()
@@ -711,6 +882,8 @@ class Drawing:
         self.drawn_triangles = drawn_triangles
         if not self.ui_hidden:
             # the drawn pages (Keyboard, Gamepad) take the whole window
+            if self.picked and self.menu.custom() is None:
+                self._draw_pick_panel()
             if self.show_status_bar and self.menu.custom() is None:
                 self._draw_status_bar()
             if self.menu.is_open and self.menu.stack and self.menu.stack[-1][0] == "main":
@@ -744,6 +917,8 @@ class Drawing:
         state = self._animation_state()
         if state != "playing":
             pieces.append(t("status.paused") if state == "paused" else t("status.pose"))
+        if self.pick_enabled:
+            pieces.append(t("status.pick"))
         pieces.append(t("status.menu"))
         s = max(0.75, min(1.6, self.height / 760.0))
         self.status_bar.font_size = 11 * s
@@ -753,6 +928,84 @@ class Drawing:
         glEnable(GL_BLEND)
         self._status_background.draw()
         self.status_bar.draw()
+
+    def _draw_pick_panel(self):
+        """The selector's card, top left: what was picked, in words."""
+        lines = self.picked_card()
+        if not lines:
+            return
+        s = max(0.75, min(1.6, self.height / 760.0))
+        self.pick_text.font_size = 11 * s
+        self.pick_text.text = chr(10).join(lines)
+        self.pick_text.width = round(740 * s)
+        self.pick_text.x = round(14 * s)
+        self.pick_text.y = self.height - round(14 * s)
+        height = round(len(lines) * 16.5 * s) + round(16 * s)
+        self._pick_background.width = round(764 * s)
+        self._pick_background.height = height
+        self._pick_background.x, self._pick_background.y = round(6 * s), self.height - height - round(6 * s)
+        glEnable(GL_BLEND)
+        self._pick_background.draw()
+        self.pick_text.draw()
+
+    def _draw_pick_highlight(self):
+        """The selected run's rectangle, drawn through the geometry: the
+        colour alone is not enough to say what was taken, so the card names
+        it, and this says where it is."""
+        entry = self.picked[self.picked_i % len(self.picked)]
+        info = entry.get("run")
+        u = geo.UNITS_PER_METER
+        if info is not None:
+            a0, a1, y_top, y_base = info["a0"], info["a1"], info["y_top"], info["y_base"]
+            if info["axis"] == "x":
+                corners = [(info["plane"], y_base, a0), (info["plane"], y_base, a1),
+                           (info["plane"], y_top, a1), (info["plane"], y_top, a0)]
+            else:
+                corners = [(a0, y_base, info["plane"]), (a1, y_base, info["plane"]),
+                           (a1, y_top, info["plane"]), (a0, y_top, info["plane"])]
+        else:
+            corners = [entry["tri"][0], entry["tri"][1], entry["tri"][2], entry["tri"][2]]
+            corners = [(c[0] * u, -c[1] * u, -c[2] * u) for c in corners]
+        pts = [(c[0] / u, -c[1] / u, -c[2] / u) for c in corners]
+        data = []
+        for a, b, c in ((0, 1, 2), (0, 2, 3)):
+            for i in (a, b, c):
+                data += [pts[i][0], pts[i][1], pts[i][2], 1.0, 1.0, 0.2, 0.0, 0.0]
+        if self._pick_vao is None:
+            vao, vbo = ctypes.c_uint(), ctypes.c_uint()
+            glGenVertexArrays(1, ctypes.byref(vao))
+            glGenBuffers(1, ctypes.byref(vbo))
+            glBindVertexArray(vao.value)
+            glBindBuffer(GL_ARRAY_BUFFER, vbo.value)
+            for name, measure, offset in (("position", 3, 0), ("color", 3, 12), ("uv", 2, 24)):
+                place = self.program.attributes[name]["location"]
+                glEnableVertexAttribArray(place)
+                glVertexAttribPointer(place, measure, GL_FLOAT, False, 32, ctypes.c_void_p(offset))
+            self._pick_vao, self._pick_vbo = vao.value, vbo.value
+        self.program.use()
+        glBindVertexArray(self._pick_vao)
+        glBindBuffer(GL_ARRAY_BUFFER, self._pick_vbo)
+        arr = (ctypes.c_float * len(data))(*data)
+        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(arr), arr, GL_DYNAMIC_DRAW)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        self.program["has_texture"], self.program["blend_scale"] = 0, 1.0
+        self.program["alpha_test"] = 0
+        self.program["pull"] = 0.0
+        glDisable(GL_DEPTH_TEST)
+        glDepthMask(GL_FALSE)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        self.program["alpha"] = 0.28
+        glDrawArrays(GL_TRIANGLES, 0, len(data) // 8)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        glLineWidth(3.0)
+        self.program["alpha"] = 1.0
+        glDrawArrays(GL_TRIANGLES, 0, len(data) // 8)
+        glLineWidth(1.0)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe == WIRE_SKELETON else GL_FILL)
+        glDepthMask(GL_TRUE)
+        glEnable(GL_DEPTH_TEST)
+        glBindVertexArray(0)
+        self.program.stop()
 
     def _draw_camera_shadow(self):
         """Camera and points -> Show the shadow: a black disc on the ground
@@ -825,49 +1078,60 @@ class Drawing:
             glVertexAttribPointer(place, measure, GL_FLOAT, False, 32, ctypes.c_void_p(offset))
         self._sprite_vao, self._sprite_vbo = vao.value, vbo.value
 
-    def _draw_sprites(self, forward, set_blend):
-        """The sprites (torch flames, ...) as squares facing the camera."""
-        visible_groups = [sp for sp in self.current_level.sprites
-                     if not (sp["category"] == "clones" and self.show_clones < 2)
-                     and not (sp["category"] == "clones_at_start" and self.show_clones < 1)]
-        if not visible_groups:
-            return 0
+    def _sprites_in_view(self, forward):
+        """The sprites (torch flames, ...) drawn this frame, in the level's
+        order (the game draws them by texture bucket, never sorted: N69).
+        The game does not draw a sprite nearer than 150 units to the camera
+        (finding 305, the projection at 0x4383f0), measured along the view
+        direction as the projection does."""
+        out = []
+        for sp in self.current_level.sprites:
+            if (sp["category"] == "clones" and self.show_clones < 2) or \
+                    (sp["category"] == "clones_at_start" and self.show_clones < 1):
+                continue
+            if (Vec3(*sp["pos"]) - self.pos).dot(forward) >= NEAR_SPRITE:
+                out.append(sp)
+        return out
+
+    def _draw_sprite(self, sp, forward, set_blend):
+        """One sprite as a square facing the camera: depth written, alpha
+        test GL_GREATER 0, as the game's last pass (N69)."""
         self._make_sprite_buffer()
         right_vec = forward.cross(Vec3(0.0, 1.0, 0.0)).normalize()
         op = right_vec.cross(forward).normalize()
         glBindVertexArray(self._sprite_vao)
         glBindBuffer(GL_ARRAY_BUFFER, self._sprite_vbo)
-        n = 0
-        for sp in visible_groups:
-            # the game does not draw a sprite nearer than 150 units to the
-            # camera (finding 305, the projection at 0x4383f0), measured
-            # along the view direction as the projection does
-            c = Vec3(*sp["pos"])
-            if (c - self.pos).dot(forward) < NEAR_SPRITE:
-                continue
-            set_blend(sp["blend"] if self.show_blending else None)
-            f = self.current_level.sprite_frame(sp, self.tick())
-            tex = self._gl_texture(f, sp["blend"] if self.show_blending else None)
-            self.program["has_texture"] = 1 if tex else 0
-            self.push_uv_rule(f)
-            glBindTexture(GL_TEXTURE_2D, tex or 0)
-            # the sprite RESTS on the attachment point, it is not centered on it:
-            # the torch flame in the game sits above the top (observed in the
-            # game; record 0x64 carries no origin)
-            c = Vec3(*sp["pos"])
-            b, h = sp["size"][0] / 2, sp["size"][1]
-            corners = [c - right_vec * b, c + right_vec * b,
-                      c - right_vec * b + op * h, c + right_vec * b + op * h]
-            uvs = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)]
-            data = []
-            for i in (0, 1, 2, 1, 3, 2):
-                p = corners[i]
-                data += [p.x, p.y, p.z, 1.0, 1.0, 1.0, uvs[i][0], uvs[i][1]]
-            arr = (ctypes.c_float * len(data))(*data)
-            glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(arr), arr, GL_DYNAMIC_DRAW)
-            glDrawArrays(GL_TRIANGLES, 0, 6)
-            n += 2
-        return n
+        set_blend(sp["blend"] if self.show_blending else None)
+        self.uniform("alpha_test", 2)
+        f = self.current_level.sprite_frame(sp, self.tick())
+        tex = self._gl_texture(f, sp["blend"] if self.show_blending else None)
+        self.uniform("has_texture", 1 if tex else 0)
+        self.push_uv_rule(f)
+        glBindTexture(GL_TEXTURE_2D, tex or 0)
+        # the sprite RESTS on the attachment point (the torch flame in the
+        # game sits above the top), unless its template carries the
+        # centring bit of finding 338: then it is centred on it (the glow)
+        c = Vec3(*sp["pos"])
+        b, h = sp["size"][0] / 2, sp["size"][1]
+        if sp.get("centred"):
+            c = c - op * (h / 2)
+        corners = [c - right_vec * b, c + right_vec * b,
+                   c - right_vec * b + op * h, c + right_vec * b + op * h]
+        # the texture's first row is its top (v = 0), so the bottom corners
+        # take v = 1: drawn the other way up, the flame's body sat at the top
+        # of its square and its loose tips at the bottom, a metre over the
+        # torch's head, while in the game it rests on it (the photo
+        # Torch2_Docks.png)
+        uvs = [(0.0, 1.0), (1.0, 1.0), (0.0, 0.0), (1.0, 0.0)]
+        data = []
+        for i in (0, 1, 2, 1, 3, 2):
+            p = corners[i]
+            data += [p.x, p.y, p.z, 1.0, 1.0, 1.0, uvs[i][0], uvs[i][1]]
+        arr = (ctypes.c_float * len(data))(*data)
+        glBufferData(GL_ARRAY_BUFFER, ctypes.sizeof(arr), arr, GL_DYNAMIC_DRAW)
+        glDrawArrays(GL_TRIANGLES, 0, 6)
+        self.uniform("alpha_test", 0)
+        return 2
 
     def _draw_box_labels(self, forward):
         """The collision boxes' names, floating above each object and facing

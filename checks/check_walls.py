@@ -107,7 +107,9 @@ def one_level(entry_name):
 def main():
     name_list = [a for a in sys.argv[1:] if not a.startswith("--")]
     one_at_a_time = "--one-at-a-time" in sys.argv
-    name_list = name_list or sorted({v[1] for v in levels.all_entries()})
+    # the Extra files (cutscenes, menu, credits, `_8` variants) are not
+    # part of a run over the whole disc
+    name_list = name_list or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
     if one_at_a_time or len(name_list) < 2:
         answers = [one_level(entry_name) for entry_name in name_list]
     else:

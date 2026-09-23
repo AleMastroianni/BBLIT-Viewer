@@ -22,11 +22,13 @@ pyglet.options["debug_gl"] = False
 from support import cache_warmer  # noqa: E402
 from game import collision  # noqa: E402
 from game import geometry as geo  # noqa: E402
+from game import levels  # noqa: E402
 from ui import gamepad as gamepadmod  # noqa: E402
 from ui import keybinds  # noqa: E402
 from support import level_cache  # noqa: E402
 from ui import menu as menumod  # noqa: E402
 from support import paths  # noqa: E402
+from support import version  # noqa: E402
 from ui import settings as settings_mod  # noqa: E402
 from game import textures as texmod  # noqa: E402
 from ui import texts  # noqa: E402
@@ -37,6 +39,7 @@ from window.drawing import (BlendSorter, Drawing, FRAGMENT_SHADER, SIGNATURE, VE
                      WIRE_OFF)  # noqa: E402
 from window.menu_pages import MenuPages  # noqa: E402
 from window.overlays import FAMILIES, OVERLAYS, SHOWN_WHEN  # noqa: E402
+from window import picking  # noqa: E402
 from window.points import Points  # noqa: E402
 from window.scene import Level, levels_in  # noqa: E402
 
@@ -62,11 +65,18 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         user_settings = self.user_settings
         texts.set_language(language or user_settings["language"])
         self.build = settings_mod.build()
+        # a stencil buffer: the flags' see-through fills tint a pixel once per
+        # kind of wall, so two pieces of the same wall cannot add their alpha
+        # and draw a line that is not there (drawing.py, STENCIL_CLASSES)
         super().__init__(1280, 760, resizable=True, vsync=user_settings["vsync"],
-                         caption=t('title') + (f" — {self.build}" if self.build else ""))
+                         caption=version.window_title(t('title'), self.build),
+                         config=pyglet.gl.Config(double_buffer=True, depth_size=24, stencil_size=8))
         if level_files is None:
             self.folder = paths.find_levels_folder(data or user_settings["levels_folder"] or None)
-            level_files = levels_in(self.folder)
+            # Extra (the cutscenes, the menu, the credits, the `_8` variants)
+            # is in the Debug build only: the other copies do not even list
+            # those files
+            level_files = levels_in(self.folder, extra=self.build == "Debug")
             names = [os.path.splitext(os.path.basename(p))[0].lower() for p in level_files]
             # without a requested level (or if it is missing) no level: start
             # from the main menu over the background
@@ -99,6 +109,10 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         # the glitch-hunting flags: always off at every start, never saved
         for attr in set(OVERLAYS.values()):
             setattr(self, attr, False)
+        # Walls -> Hard walls and Steps have three values: "off", "all" and
+        # "unseen" (only those with nothing drawn over them)
+        self.show_hard_walls = "off"
+        self.show_steps = "off"
         # Walls: outside side, the sides where a wall does not stop you: shown, at every start
         self.show_walls_outside = True
         # Walls: edges over holes, the steps seen from a 0x7E hole: hidden, at every start
@@ -108,10 +122,12 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         # no collision block
         self.show_area_visibility = False
         self.area_in_use = None
-        # "Moving characters" (finding 317): off at every start and at every
-        # level, no key; on, the level is rebuilt with the movers' triangles
-        # around their own origin (Level.movers)
-        self.show_movers = False
+        # "Moving characters" (finding 317): ON at every start and at every
+        # level (the animations are still to be worked on, and on Nowhere
+        # the wizard's helpers barely showed), no
+        # key; on, the level is rebuilt with the movers' triangles around
+        # their own origin (Level.movers)
+        self.show_movers = True
         # "Who opens what" (findings 323, 331): off at every start and at every
         # level, like the flags; on, a line goes from each switch to the gate
         # it opens
@@ -125,6 +141,12 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self.session_gate_choices = {}
         # Camera and points: the shadow circle is off at every start, like the flags
         self.show_camera_shadow = False
+        # the selector (Alt+click, picking.py): the stack found on the last
+        # pixel, which of them is shown, and where it was clicked
+        self.pick_enabled = True
+        self.picked = []
+        self.picked_i = 0
+        self._pick_at = (-1, -1)
         # The flags, and the options that go with them, go back to these
         # values every time another level is loaded: what you switched on for one level does not follow
         # you into the next. Taken from the attributes themselves, so the ones
@@ -141,6 +163,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self._gate_state_at_start = self.gate_state
         self._shadow_area = None      # the area of the last shadow query (the game's hint)
         self._shadow_vao = self._shadow_vbo = None
+        self._pick_vao = self._pick_vbo = None
         self._feedback = None         # (menu item, text key, time): "copied ✓" for a moment
         self._bookmark_i = 0          # the bookmark whose page is open
         self._delete_armed = False    # the first Enter on Delete
@@ -155,6 +178,8 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         # an old settings file has True/False: Skeleton/off
         self.wireframe = max(WIRE_OFF, min(WIRE_GRID, int(user_settings["wireframe"])))
         self.fov = user_settings["field_of_view"]
+        # Video options -> Backface culling (finding 307): off by default
+        self.backface_culling = user_settings["backface_culling"]
         self.show_status_bar = user_settings["status_bar"]
         self.speed = 20.0
         self.held_keys = set()
@@ -179,9 +204,16 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self._uniform_cache = {}   # uniforms pushed only when they change
         # entity states chosen from the menu, per level: model -> role
         self.session_poses: dict[str, dict[int, int]] = {}
+        # the sky chosen from the menu where two take turns, per level: role
+        self.session_sky: dict[str, int] = {}
         self.status_bar = pyglet.text.Label("", x=10, y=8, font_name=menumod.FONT, font_size=11,
                                        color=(225, 228, 235, 255))
         self._status_background = pyglet.shapes.Rectangle(0, 0, 1, 26, color=(0, 0, 0, 150))
+        # the selector's card (Alt+click): a panel top left
+        self.pick_text = pyglet.text.Label("", x=14, y=10, font_name=menumod.FONT, font_size=11,
+                                           color=(235, 238, 245, 255), multiline=True, width=520,
+                                           anchor_y="top")
+        self._pick_background = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 185))
         # as in the CTR viewer: name and author on the main menu background
         self.signature = pyglet.text.Label(SIGNATURE, font_name=menumod.FONT, font_size=14,
                                        color=(235, 238, 245, 210),
@@ -218,7 +250,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self.folder = folder
         current = (os.path.basename(self.level_files[self.index]).lower()
                    if self.current_level is not None and self.level_files else None)
-        self.level_files = levels_in(folder)
+        self.level_files = levels_in(folder, extra=self.build == "Debug")
         self.start_warmer()
         names = [os.path.basename(p).lower() for p in self.level_files]
         if current in names:
@@ -289,6 +321,10 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         textures: only what the chosen state changes is redone."""
         name = os.path.splitext(os.path.basename(file_path))[0]
         same_level = self.current_level is not None and self.current_level.name == name
+        if not same_level and not self.screenshot:
+            # building the level blocks the window: say what is coming, or
+            # the last frame of the level that is leaving stays on screen
+            self.draw_loading(levels.official_name(name) or name)
         if not same_level:
             # another level: the flags go back to how they start, before the
             # families are worked out from them
@@ -308,6 +344,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
             self._shadow_area = None    # the hint for the shadow: another level's area
             # the bookmark page names a bookmark of the level that is leaving
             self._bookmark_i, self._delete_armed = 0, False
+            self.clear_pick()      # the selection names a run of the level that is leaving
         self._free_gpu(texture=not same_level)
         if not same_level:
             self.textures = {}
@@ -324,7 +361,8 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
                                    families=families, split_areas=self.show_area_visibility,
                                    movers=self.show_movers, gate_state=self.gate_state,
                                    gate_choices=self.session_gate_choices,
-                                   gate_links=self.show_gate_links)
+                                   gate_links=self.show_gate_links,
+                                   sky_choice=self.session_sky.get(name))
         self.forget_uv_rule()   # the uv rule remembers each texture's size
         self.area_in_use = self.current_level.player_area
         if not same_level:
@@ -464,11 +502,15 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
                 out[2 * k + 1] += clip[k] > w
         return not any(n == 4 for n in out)
 
-    def _flag_on(self, attr):
-        """Whether a flag is on. Most are True or False; "Who opens what" has
-        three values and its off one is the string "off", which would be true
-        for a plain truth test."""
-        value = getattr(self, attr)
+    def _flag_on(self, spec):
+        """Whether a flag is on. Most are True or False; "Who opens what",
+        Hard walls and Steps have three values and their off one is the
+        string "off", which would be true for a plain truth test. A spec
+        "name=value" (SHOWN_WHEN) asks for that value."""
+        if "=" in spec:
+            attr, wanted = spec.split("=", 1)
+            return getattr(self, attr) == wanted
+        value = getattr(self, spec)
         return bool(value) and value != "off"
 
     def _overlay_shown(self, category):
@@ -484,6 +526,43 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         """The overlay families with at least one flag on."""
         return {family for family, flags in FAMILIES.items()
                 if any(self._flag_on(a) for a in flags)}
+
+    def groups_on_screen(self):
+        """The groups drawn this frame, for the selector: the same rule as
+        `on_draw` (without the cut by area, which needs the frame's matrix).
+        Only what is drawn can be picked."""
+        level = self.current_level
+        if level is None:
+            return []
+        return [g for g in level.face_groups.values()
+                if not (g.category == "props" and not self.show_props)
+                and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
+                and not (g.category.endswith("_label") and not self.show_textures)
+                and not (g.category == "clones" and self.show_clones < 2)
+                and not (g.category == "clones_at_start" and self.show_clones < 1)
+                and g.category != "sky_dome"]
+
+    def pick_at(self, x, y):
+        """Alt+click: the stack of what is drawn on that pixel. Clicking the
+        same spot again steps down it."""
+        if (abs(x - self._pick_at[0]) <= picking.SAME_PIXEL
+                and abs(y - self._pick_at[1]) <= picking.SAME_PIXEL and self.picked):
+            self.picked_i = (self.picked_i + 1) % len(self.picked)
+            return
+        self._pick_at = (x, y)
+        self.picked = picking.stack(self, x, y)
+        self.picked_i = 0
+
+    def picked_card(self):
+        """The selected thing as lines of text, or [] when nothing is."""
+        if not self.picked:
+            return []
+        entry = self.picked[self.picked_i % len(self.picked)]
+        head = [t("pick.of", n=self.picked_i % len(self.picked) + 1, total=len(self.picked))]
+        return head + picking.card(entry, self.current_level)
+
+    def clear_pick(self):
+        self.picked, self.picked_i, self._pick_at = [], 0, (-1, -1)
 
     def ensure_overlays(self):
         """After a flag is turned on: if its family is not in the level yet,

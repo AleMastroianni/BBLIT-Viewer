@@ -54,14 +54,18 @@ UNITS_PER_METER = 128.0  # 128 units = 1 meter
 
 
 class Face:
-    __slots__ = ("corners", "tex_id", "uvs", "colors", "blend")
+    __slots__ = ("corners", "tex_id", "uvs", "colors", "blend", "two_sided")
 
-    def __init__(self, corners, tex_id, uvs, colors, blend=None):
+    def __init__(self, corners, tex_id, uvs, colors, blend=None, two_sided=False):
         self.corners = corners      # indices into the global vertex list
         self.tex_id = tex_id    # texture id, or None
         self.uvs = uvs            # list of (u, v) 0..255, or None
         self.colors = colors    # list of (r, g, b)
         self.blend = blend          # None = opaque, otherwise 0..3 (see BLEND_MODES)
+        # bit 0x02 of the flag byte at +2 (finding 307): drawn from both
+        # sides; the others the game culls by the sign of the screen cross
+        # product, the visible side being where (v0 - v1) x (v2 - v1) points
+        self.two_sided = two_sided
 
 
 # The four PlayStation blend modes, selected by bits 5-6 of the word at +10
@@ -163,7 +167,7 @@ def read_primitives(data: bytes, start: int, item_count: int, index_map, *, loca
         else:
             colors = [_read_color(data, pos + 8 + 4 * i) for i in range(corners)]
 
-        faces.append(Face(points, tex_id, uvs, colors, blend))
+        faces.append(Face(points, tex_id, uvs, colors, blend, bool(flag_byte & 0x02)))
         pos += measure
         n_read += 1
     return faces, pos, rejected

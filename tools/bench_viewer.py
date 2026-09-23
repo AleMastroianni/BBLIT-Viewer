@@ -55,14 +55,14 @@ for name in LEVELS:
     v.on_draw()
     first_frame = time.perf_counter() - t0
     off = frame_ms(v)
-    setattr(v, HEAVY, True)
+    setattr(v, HEAVY, "all")
     t0 = time.perf_counter()
     v.ensure_overlays()
     heavy_on = time.perf_counter() - t0
     one = frame_ms(v)
     t0 = time.perf_counter()
     for attr in FLAGS:
-        setattr(v, attr, True)
+        setattr(v, attr, "all" if attr in ("show_hard_walls", "show_steps") else True)
     v.ensure_overlays()
     all_on = time.perf_counter() - t0
     every = frame_ms(v)

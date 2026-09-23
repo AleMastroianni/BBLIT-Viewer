@@ -87,9 +87,10 @@ class FaceGroup:
     """A group of triangles sharing texture and blending."""
 
     __slots__ = ("tex_id", "data", "vao", "vbo", "item_count", "category", "blend", "frames", "vaos",
-                 "spin", "sorted", "area", "face_tris", "mover")
+                 "spin", "sorted", "area", "face_tris", "mover", "two_sided")
 
-    def __init__(self, tex_id, category, blend=None, n_frames=0, spin=None, area=None, mover=None):
+    def __init__(self, tex_id, category, blend=None, n_frames=0, spin=None, area=None, mover=None,
+                 two_sided=False):
         self.tex_id = tex_id
         self.blend = blend            # None = opaque, otherwise 0..3
         self.category = category          # "terrain", "props", "sky_dome", a clone group or an overlay
@@ -117,6 +118,10 @@ class FaceGroup:
         # group belongs to. Its triangles are built around the object's own
         # origin and placed by the simulation when drawing (game/movers.py)
         self.mover = mover
+        # the faces the game draws from both sides (bit 0x02 of their flag,
+        # finding 307) are in groups of their own: with Video options ->
+        # Backface culling the other groups are culled as the game culls them
+        self.two_sided = two_sided
 
 
 def _condition_at_startup(cond) -> bool:
@@ -175,7 +180,7 @@ def _spin_speed(obj) -> int:
 class Level(OverlayBuilder):
     def __init__(self, bze_path: str, cache: str, table=None, session_poses=None, pieces=None,
                  families=tuple(FAMILIES), split_areas=False, movers=False,
-                 gate_state="open", gate_choices=None, gate_links="off"):
+                 gate_state="open", gate_choices=None, gate_links="off", sky_choice=None):
         self.families = frozenset(families)
         # "Visibility by area as in the game": the terrain pieces and the
         # objects cut by area go into groups of their own, one per area, so
@@ -261,9 +266,90 @@ class Level(OverlayBuilder):
         # camera is in no collision block (finding 295)
         self.player_area = next((o["area"] for o in self.lvl["objects"] if o.get("start")), None)
         self._read_gates()
+        # the skies that take turns (finding 314): which one is shown
+        self._read_sky_choices(sky_choice)
         if self.move_characters:
             self.mover_sim = moversmod.Simulation(self.lvl, self.collision_blocks)
         self._build()
+        # the selector's run records (overlays._wall_overlays): they ride in
+        # the piece cache, so a level mounted from disk has them too
+        self.wall_picks = self._pieces.get(("wall_picks",), [])
+
+    def _read_sky_choices(self, sky_choice):
+        """The skies the game alternates, and the one to show.
+
+        In three levels two skies are carried with the camera but never stand
+        together: a rule of one object deletes one sky (effect 0x4000000
+        naming its role, finding 314) and clones the other (0x100 / 0x40000).
+        Read on the whole disc with `tools/sky_rules.py`: *"Witch" way to
+        Albuquerque? 1* (`L02B1`, objects 47 and 143), *2* (`L02B2`, 39 and
+        131) and *The Carrot-henge Mystery 3* (`L02C3`, 91 and 132); nowhere
+        else does a rule delete a sky while another is cloned.
+
+        `sky_choices`: [(role, object number, at start)] of the skies that take
+        turns, the one shown first; empty where nothing alternates.
+        `sky_hidden`: the roles not built. The default is the sky the level
+        starts with (placed, or cloned by a rule true at startup); where
+        none is (`L02C3` starts in a cave, both skies arrive later) it is the
+        one `preferences.py` names, else the first by object number.
+        """
+        self.sky_choices, self.sky_hidden = [], set()
+        objects = self.lvl["objects"]
+        templates = {}
+        for o in objects:
+            if o["block_type"] == 0x08 and o["role"] not in templates:
+                templates[o["role"]] = o
+        skies = {}          # role -> first camera follower with a model
+        models = {r["id"]: r for r in self.lvl["resources"] if r["data_kind"] == "model"}
+        for n, o in enumerate(objects):
+            if not carried_by_camera(o) or not o["role"] or o["role"] <= 0:
+                continue
+            mid = next((r for r in o["resources"] if r in models), None)
+            if mid is None or models[mid]["size"] <= 12 or o["role"] in skies:
+                continue
+            skies[o["role"]] = n
+        if len(skies) < 2:
+            return
+        clones, deletes = 0x100 | 0x40000, 0x4000000
+        exclusive = set()
+        for x in objects:
+            if x["block_type"] == 0x08:
+                continue
+            group = [x] + [templates[r["field28"]] for r in x.get("rules", ())
+                           if r["effect"] & clones and r["field28"] in templates]
+            gone = {r["field28"] for g in group for r in g.get("rules", ()) if r["effect"] & deletes}
+            born = {r["field28"] for g in group for r in g.get("rules", ()) if r["effect"] & clones}
+            for a in gone & set(skies):
+                for b in born & set(skies):
+                    if a != b:
+                        exclusive |= {a, b}
+        if len(exclusive) < 2:
+            return
+        # at start: placed, or cloned by a rule true at startup, following the
+        # templates a startup clone makes in turn (as _build_clones does)
+        at_start = {role for role in exclusive
+                    if objects[skies[role]]["block_type"] != 0x08 and objects[skies[role]]["position"]}
+
+        def startup_clones(obj, depth):
+            for r in obj.get("rules", ()):
+                if r["effect"] & clones and _at_startup(r) and r["field28"] in templates:
+                    t = templates[r["field28"]]
+                    if t["role"] in exclusive:
+                        at_start.add(t["role"])
+                    if depth < 3:
+                        startup_clones(t, depth + 1)
+
+        for o in objects:
+            if o["block_type"] != 0x08 and o["position"]:
+                startup_clones(o, 1)
+        roles = sorted(exclusive, key=lambda role: skies[role])
+        default = self.pref.get("sky")
+        if default not in exclusive:
+            default = next((role for role in roles if role in at_start), roles[0])
+        chosen = sky_choice if sky_choice in exclusive else default
+        roles.sort(key=lambda role: (role != chosen, skies[role]))
+        self.sky_choices = [(role, skies[role], role in at_start) for role in roles]
+        self.sky_hidden = exclusive - {chosen}
 
     def _read_gates(self):
         """The gates of the level, the state each one is shown in, and the
@@ -371,14 +457,14 @@ class Level(OverlayBuilder):
         groups_by_key, lo, hi, _delta = piece
         if not (self.split_areas or keep_area):
             area = None
-        for lookup_key, ((tex_id, category, blend, spin, mover), data_items, frames,
+        for lookup_key, ((tex_id, category, blend, spin, mover, two_sided), data_items, frames,
                          face_tris) in groups_by_key.items():
             if area is not None:
                 lookup_key = lookup_key + (("area", area),)
             face_group = self.face_groups.get(lookup_key)
             if face_group is None:
                 face_group = self.face_groups[lookup_key] = FaceGroup(tex_id, category, blend, len(frames),
-                                                                      spin, area, mover)
+                                                                      spin, area, mover, two_sided)
             face_group.data.extend(data_items)
             face_group.face_tris.extend(face_tris)
             for target, b in zip(face_group.frames, frames):
@@ -421,14 +507,15 @@ class Level(OverlayBuilder):
             stamp = self._stamp(faces)
             self._stamps[id(faces)] = (faces, stamp)
         first_idx = anim is None or anim[1] == 0
-        for tex_id, blend, bare, tri_vertices in stamp:
+        for tex_id, blend, bare, tri_vertices, two_sided in stamp:
             if bare and first_idx:
                 self.stat["untextured"] += 1
             lookup_key = ((tex_id, category, blend) + ((anim[0],) if anim else ())
-                       + ((spin[0],) if spin else ()) + ((("mover", mover),) if mover is not None else ()))
+                       + ((spin[0],) if spin else ()) + ((("mover", mover),) if mover is not None else ())
+                       + ((("two_sided",),) if two_sided else ()))
             item = targets.get(lookup_key)
             if item is None:
-                meta = (tex_id, category, blend, (pivot, spin[1]) if spin else None, mover)
+                meta = (tex_id, category, blend, (pivot, spin[1]) if spin else None, mover, two_sided)
                 item = targets[lookup_key] = (meta, [], [[] for _ in range(anim[2] if anim else 0)], [])
             target = item[2][anim[1]] if anim else item[1]
             for h, attrs in tri_vertices:
@@ -465,7 +552,7 @@ class Level(OverlayBuilder):
                     u, v = geo.uv_to_unit(uvs[i][0], uvs[i][1]) if uvs else (0.0, 0.0)
                 vertex_attrs.append((r / 255.0, g / 255.0, b / 255.0, u, v))
             tri_vertices = [(vl.corners[i], vertex_attrs[i]) for d in geo.triangles(len(vl.corners)) for i in d]
-            output.append((tex_id, vl.blend, bare, tri_vertices))
+            output.append((tex_id, vl.blend, bare, tri_vertices, vl.two_sided))
         return output
 
     def _build(self):
@@ -489,6 +576,8 @@ class Level(OverlayBuilder):
             role = self.gate_role(n) or self.pref["pose"].get(mid)
             if self.gates.get(n, {}).get("gone"):
                 continue            # in this state the game deletes it: nothing to draw
+            if o["role"] in self.sky_hidden and carried_by_camera(o):
+                continue            # the sky the game swaps for the one shown
             moving = self.mover_sim is not None and n in self.mover_sim.by_index
             piece = self._piece(("object", n, role, moving),
                                 lambda n=n, o=o, mid=mid, role=role, moving=moving:
@@ -634,6 +723,7 @@ class Level(OverlayBuilder):
                 self.templates[o["role"]] = o
         self._models = models
         seen_keys = set()
+        self._sky_roles_built = set()
         for n, o in enumerate(self.lvl["objects"]):
             if o["block_type"] == 0x08 or not o["position"]:
                 continue
@@ -714,6 +804,15 @@ class Level(OverlayBuilder):
         if t is None:
             self.stat["clones_without_model"] += 1
             return
+        if carried_by_camera(t):
+            if t["role"] in self.sky_hidden:
+                return          # the sky the game swaps for the one shown
+            # a sky cloned by more than one rule (the rocks of The
+            # Carrot-henge Mystery 3, objects 88 and 125): one is enough,
+            # it follows the camera wherever it was cloned from
+            if t["role"] in self._sky_roles_built:
+                return
+            self._sky_roles_built.add(t["role"])
         parent_role, role = self._role_of(parent_ref), self._role_of(t)
         attach_key = ("attach_point", route, parent_role)
         if attach_key not in self._pieces:
@@ -748,7 +847,12 @@ class Level(OverlayBuilder):
             # 64 x 64 the viewer drew before.
             scale_factor = t.get("scale_factor") or [4096, 4096, 4096]
             sx, sy = scale_factor[0] / 4096.0, scale_factor[1] / 4096.0
+            # centred on its point, not resting on it, when the second dword
+            # of the template's opcode 0x16 has bit 0x8000000 (finding 338):
+            # the torch's glow sits on the flame, the flame on the torch's top
+            flags = t.get("static_flags") or [0, 0]
             self.sprites.append({"pos": geo._transform((0, 0, 0), pos=pos), "category": category,
+                                 "centred": bool(flags[1] & 0x8000000),
                                  "size": (2.0 * spr["size"][0] * sx * sx / geo.UNITS_PER_METER,
                                           2.0 * spr["size"][1] * sy * sy / geo.UNITS_PER_METER),
                                  "frames": spr["frames"], "sequence": spr["sequence"],
@@ -935,18 +1039,25 @@ class Level(OverlayBuilder):
         return None
 
 
-def levels_in(folder):
+def levels_in(folder, extra=False):
     """The .bze files in a folder that the viewer can open, in alphabetical
     order: loading screens (L_*, SCREEN*, LOADING) are left out, they have
-    no 3D environment (check_levels.py)."""
+    no 3D environment (check_levels.py).
+
+    Without `extra` the Extra files are left out too (`levels.playable`):
+    the 16 cutscenes, the menu and the credits, and the six `_8` variants.
+    That is what a run over the whole disc means, and the default is off so
+    that a tool written later gets it without
+    remembering. Only the viewer's own menu asks for `extra=True`."""
     if not folder:
         return []
     try:
         everything = sorted((f for f in os.listdir(folder) if f.lower().endswith(".bze")), key=str.lower)
     except OSError:
         return []
-    return [os.path.join(folder, f) for f in everything
-            if not f.lower().startswith(("l_", "screen", "loading"))]
+    found = [os.path.join(folder, f) for f in everything
+             if not f.lower().startswith(("l_", "screen", "loading"))]
+    return found if extra else levels.playable(found)
 
 
 def resolve_levels_folder(folder):

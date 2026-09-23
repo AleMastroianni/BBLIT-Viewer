@@ -37,6 +37,8 @@ ABBREVIATIONS = {
     "RESTART": "RST",
     "LEVEL": "LVL",
     "STEP WALL": "STP",
+    # the rim of a floor over the void (overlays.COLOR_EDGE)
+    "EDGE": "EDG",
     # the four abilities a magic device asks for (finding 336): on its box the
     # ability is written instead of what the box does
     "FAN": "FAN",

@@ -296,7 +296,12 @@ di `dis` che blocca PyInstaller.
 zip: l'eseguibile con `_internal/`, `README`, `README_Ita`, `LICENSE`,
 `THIRD_PARTY_LICENSES.txt` (le licenze di Python, pyglet, Pillow e del
 bootloader di PyInstaller, contenuti nell'eseguibile) e
-`bze_levels/README.txt`.
+`bze_levels/README.txt`. Lo zip si chiama `BBLIT-Viewer-v<versione>.zip`.
+
+Il numero di versione è scritto in un posto solo, `bblit/support/version.py`:
+da lì lo leggono il titolo della finestra, Aiuto -> Informazioni e il nome
+dello zip della release. Ogni build porta il numero della prossima release;
+subito dopo una release lo si alza lì.
 
 ---
 
