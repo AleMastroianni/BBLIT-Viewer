@@ -246,6 +246,9 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
                         # mask on the object's flag word (+4): findings 317, 321
                         "next_state": _u16(p, 2),
                         "mask": struct.unpack_from("<I", p, 4)[0],
+                        # the mask on the second flag word (+0x18): an edge
+                        # ahead, it hurt or killed Bugs (the reverse's N20)
+                        "mask2": struct.unpack_from("<I", p, 8)[0],
                         "condition": [p[12], p[13], p[14]],
                         # code, value (byte), index, and the value as s16:
                         # action 0x26 (rotate) reads it that way (finding 138)

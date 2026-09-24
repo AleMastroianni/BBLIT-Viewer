@@ -16,9 +16,11 @@ Two things are checked, both of which used to fail:
    interrupted halfway and what stayed on screen was the level before, in
    pieces.
 
-`Hey... What's up, Dock? 1` (L03A, 24 lines on the level page) and
-`Nowhere` (MERLIN, 33): the change is tried in both directions, because only
-one of them shortens the page.
+`Hey... What's up, Dock? 1` (L03A) and `Nowhere` (MERLIN): the change is
+tried in both directions, because only one of them shortens the page. The
+long page is Level options -> Gates, a line per switch: 19 lines on Nowhere
+(16 switches), 7 on the docks (4). It used to be Level options itself (33
+and 24 lines), before the gates went to a page of their own.
 """
 import hashlib
 import os
@@ -82,10 +84,13 @@ probe("the other way round too: the second level is the one opened from cold", f
 
 # ---- 2. the menu: the cursor never leaves the list
 
-# on the longer of the two (Nowhere), down to the last line of the level page
+# on the longer of the two (Nowhere), down to the last line of the gates page
 press(k.ESCAPE)
 press(k.DOWN); press(k.DOWN); press(k.ENTER)          # main -> Level options
 probe("the level page is open", v.menu.stack[-1][0] == "level")
+v.menu.stack[-1][2] = next(i for i, x in enumerate(v.menu.stack[-1][1]) if getattr(x, "page", None) == "gates")
+press(k.ENTER)                                         # Level options -> Gates
+probe("the gates page is open", v.menu.stack[-1][0] == "gates")
 for _ in range(8):
     press(k.PAGEDOWN)      # PageDown stops at the last line, Down would wrap round
 frame()                                                # the clickable areas are laid out
@@ -94,7 +99,7 @@ deep_cursor = v.menu.stack[-1][2]
 areas = list(v.menu._areas)
 lowest_row = max(i for _y0, _y1, i in areas)
 y_of_lowest = next((y0 + y1) / 2 for y0, y1, i in areas if i == lowest_row)
-probe("the cursor is deep in the page", deep_cursor > 20)
+probe("the cursor is deep in the page", deep_cursor > 10)
 
 press(k.ESCAPE)                                        # the menu closes
 open_level(0)                                          # to the level with the shorter page

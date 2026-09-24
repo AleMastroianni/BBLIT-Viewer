@@ -108,7 +108,7 @@ def main() -> None:
     p.add_argument("--camera-shadow", action="store_true", help="show the shadow point under the camera")
     p.add_argument("--wireframe", type=int, choices=(0, 1, 2), help="0 off, 1 skeleton, 2 grid")
     p.add_argument("--clones", type=int, choices=(0, 1, 2),
-                   help="cloned templates: 0 off, 1 at startup, 2 all (key G)")
+                   help="cloned templates: 0 off, 1 in the level (default), 2 all (key G)")
     p.add_argument("--albedo", type=float, help="texture x vertex color factor (default 1; 2 is the PlayStation)")
     p.add_argument("--uv-rule", choices=("pc", "pc_amd", "psx"),
                    help="texture coordinates: pc (the PC, clamped and repeated), pc_amd, psx (findings 328, 341)")

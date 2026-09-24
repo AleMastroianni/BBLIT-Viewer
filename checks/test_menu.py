@@ -217,12 +217,15 @@ i = next(i for i, x in enumerate(menu_items) if x.selectable and x.value_text().
 v.menu.stack[-1][2] = i
 probe("description with LevID 23", "LevID 23" in menu_items[i].desc())
 press(k.ENTER)
-probe("Pirati -> Parte 2: L03A2 loaded and menu closed", v.current_level.name.upper() == "L03A2" and not v.menu.is_open)
+probe("Pirati -> Parte 2: L03A2 loaded, and the menu open by itself on its main page with Level options",
+      v.current_level.name.upper() == "L03A2" and v.menu.is_open
+      and [x[0] for x in v.menu.stack] == ["main"]
+      and "Opzioni livello" in [x.label() for x in v.menu.stack[-1][1]])
 press(k.ESCAPE)
-item = v.menu.stack[-1][1][v.menu.stack[-1][2]]
-probe("Esc reopens where it was left (Pirati, on L03A2)", v.menu.stack[-1][0] == "era:era.pirates"
-      and item.value_text().startswith("L03A2") and [x[0] for x in v.menu.stack] == ["main", "load", "era:era.pirates"])
-press(k.BACKSPACE)
+probe("Esc closes it", not v.menu.is_open)
+press(k.ESCAPE)
+probe("Esc reopens where it was left (the main page)", v.menu.is_open and [x[0] for x in v.menu.stack] == ["main"])
+v.menu.open_page("load")
 v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
 press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
@@ -237,11 +240,9 @@ press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
 v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items) if x.selectable and x.value_text().startswith("CC3A"))
 press(k.ENTER)
-probe("Extra -> Cutscenes -> CC3A cutscene loaded", v.current_level.name.upper() == "CC3A")
-press(k.ESCAPE)
-probe("Esc reopens Cutscenes", v.menu.stack[-1][0] == "cutscenes")
-press(k.BACKSPACE)
-press(k.BACKSPACE)
+probe("Extra -> Cutscenes -> CC3A cutscene loaded, the menu on its main page",
+      v.current_level.name.upper() == "CC3A" and [x[0] for x in v.menu.stack] == ["main"])
+v.menu.open_page("load")
 v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Ere")
 press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
@@ -257,7 +258,8 @@ press(k.ENTER)
 probe("Ere -> Pirati: LS01 with the camera on the pirate island",
       v.current_level.name.upper() == "LS01" and (round(v.pos.x, 1), round(v.pos.y, 1), round(v.pos.z, 1)) == (62.1, 164.4, -116.2))
 before = v.current_level
-press(k.ESCAPE)
+probe("Ere -> Pirati loaded LS01: the menu on its main page", [x[0] for x in v.menu.stack] == ["main"])
+v.menu.open_page("load"); v.menu.open_page("eras")
 menu_items = v.menu.stack[-1][1]
 v.menu.stack[-1][2] = [i for i, x in enumerate(menu_items) if x.selectable and x.label() == "Età della pietra"][0]
 press(k.ENTER)
@@ -542,7 +544,7 @@ probe("Moving characters on after another level", v.show_movers)
 v.show_movers = False
 v.load_level(v.level_files[0])
 probe("Moving characters back on at the next level", v.show_movers)
-probe("Cloned templates off by default (settings.py)", settings_mod.DEFAULTS["clones"] == 0)
+probe("Cloned templates \"in the level\" by default (settings.py)", settings_mod.DEFAULTS["clones_shown"] == 1)
 
 # the wheel scrolls the list and nothing else: Level options of L03A is
 # longer than the window (a row per gate group)
@@ -651,7 +653,57 @@ v.fov = fov_was
 
 # drawing: every page is laid out without errors
 v._bookmark_i = 0
-for page in ("main", "load", "level", "video", "general", "help", "eras", "extra", "cutscenes", "flags",
+# Gates in a submenu: one row on Level options whatever the number of
+# switches, and on its page the general choice plus one per switch
+dock = next(p for p in v.level_files if os.path.basename(p).upper() == "L03A.BZE")
+v.load_level(dock)
+v.menu.show("main"); v.menu.open_page("level")
+level_labels = [x.label() for x in v.menu.stack[-1][1]]
+probe("Level options: a single Gates row, no row per switch",
+      level_labels.count("Cancelli") == 1 and not any(str(x).startswith("Cancelli di #") for x in level_labels))
+v.menu.stack[-1][2] = level_labels.index("Cancelli")
+press(k.ENTER)
+gate_items = v.menu.stack[-1][1]
+gate_labels = [x.label() for x in gate_items]
+switches = sorted(v.current_level.gate_groups)
+probe("Gates page: All gates, By switch, then one row per switch of the level",
+      v.menu.stack[-1][0] == "gates" and gate_labels[0] == "Tutti i cancelli"
+      and "Per interruttore" in gate_labels
+      and [x for x in gate_labels if x.startswith("Cancelli di #")] == [f"Cancelli di #{n}" for n in switches]
+      and len(switches) > 0)
+row = gate_labels.index(f"Cancelli di #{switches[0]}")
+v.menu.stack[-1][2] = row
+press(k.RIGHT)
+probe("a per-switch choice still holds for the session", v.session_gate_choices.get(switches[0]) == "shut")
+v.session_gate_choices = {}
+v.load_level(dock, camera=False)
+v.menu.hide()
+
+# the selector: Alt+click again on the same pixel steps down the stack and,
+# after the last, passes through "nothing selected"; a right click clears
+v.picked, v.picked_i, v._pick_at = [{"group": "a"}, {"group": "b"}], 0, (10, 10)
+steps = []
+for _ in range(4):
+    v.pick_at(10, 10)
+    steps.append(v.picked_i if v.picked_entry() is not None else None)
+probe("Alt+click round: second, nothing, first, second", steps == [1, None, 0, 1])
+v.picked_i = 2
+probe("on the nothing step there is no card", v.picked_card() == [] and v.picked_entry() is None)
+v.picked_i = 0
+v.looking, v._looked = True, False
+v.on_mouse_release(10, 10, pyglet.window.mouse.RIGHT, 0)
+probe("a right click clears the selection", not v.picked and v.picked_entry() is None)
+v.picked, v.picked_i = [{"group": "a"}], 0
+v.looking, v._looked = True, False
+shot, v.screenshot = v.screenshot, None
+v.on_mouse_motion(10, 10, 5, 0)
+v.screenshot = shot
+v.on_mouse_release(10, 10, pyglet.window.mouse.RIGHT, 0)
+probe("the right button held to turn the camera keeps the selection", v.picked_entry() is not None)
+v.yaw -= 5 * 0.15
+v.clear_pick()
+
+for page in ("main", "load", "level", "gates", "video", "general", "help", "eras", "extra", "cutscenes", "flags",
                "era:era.pirates", "era:era.medieval", "era:era.dimx", "camera", "bookmark",
                "help", "keyboard", "gamepad", "about"):
     v.menu.show("main")

@@ -31,16 +31,20 @@ TEXTS: dict[str, tuple[str, str]] = {
     # the selector (Alt+click, window/picking.py)
     "pick.title": ("Seleziona / Cosa c'e' qui", "Select / What is here"),
     "pick.desc": ("Alt+clic su un pixel dice cosa c'e' li'. Alt+clic di nuovo sullo stesso punto "
-                  "scorre la pila, dal piu' vicino al piu' lontano. Si seleziona solo cio' che e' "
+                  "scorre la pila, dal piu' vicino al piu' lontano, e dopo l'ultimo passa da "
+                  "\"niente selezionato\". Il tasto destro, cliccato senza girare la camera, "
+                  "deseleziona. Si seleziona solo cio' che e' "
                   "disegnato: un tratto senza faccia disegnata si prende lo stesso, perche' il suo "
                   "pannello c'e'.",
                   "Alt+click on a pixel says what is there. Alt+click the same spot again steps down "
-                  "the stack, nearest to farthest. Only what is drawn can be picked: a run with "
+                  "the stack, nearest to farthest, and after the last one comes \"nothing "
+                  "selected\". A right click that does not turn the camera clears the selection. "
+                  "Only what is drawn can be picked: a run with "
                   "nothing drawn on it is still picked, because its panel is there."),
     "pick.enabled": ("Seleziona con Alt+clic", "Select with Alt+click"),
     "pick.copy": ("Copia la scheda", "Copy the card"),
-    "pick.desc_copy": ("Mette tutta la scheda negli appunti, da incollare in chat.",
-                       "Puts the whole card on the clipboard, to paste in chat."),
+    "pick.desc_copy": ("Mette tutta la scheda negli appunti.",
+                       "Puts the whole card on the clipboard."),
     "pick.clear": ("Deseleziona", "Clear the selection"),
     "pick.none": ("Niente selezionato: Alt+clic su un pixel.",
                   "Nothing selected: Alt+click on a pixel."),
@@ -212,10 +216,12 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.gates.shut": ("Chiusi", "Shut"),
     "level.gates.game": ("Come nel gioco", "As the game starts"),
     "level.gates.of": ("Cancelli di #{n}", "Gates of #{n}"),
+    "level.gates.every": ("Tutti i cancelli", "All gates"),
+    "level.gates.by_switch": ("Per interruttore", "By switch"),
     "level.movers": ("Personaggi in movimento", "Moving characters"),
     "level.clones": ("Template clonati", "Cloned templates"),
     "level.clones.off": ("Spenti", "Off"),
-    "level.clones.at_start": ("All'avvio", "At start"),
+    "level.clones.in_level": ("Nel livello", "In the level"),
     "level.clones.all": ("Tutti", "All"),
     "level.no_states": ("Nessuno stato a scelta per questo livello",
                         "No selectable states for this level"),
@@ -302,10 +308,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "enter from. \"Only invisible\": those with no wall drawn. Where the game has "
                         "a face on the wall, that face is coloured, with its edges; panels where "
                         "there is nothing."),
-    "desc.flags": ("Sovrapposizioni per il glitch hunting: muri, collisioni, zone di morte. Ogni "
+    "desc.flags": ("Sovrapposizioni: muri, collisioni, zone di morte. Ogni "
                    "cosa ha scritto cio' che fa: un nome intero, o piu' sigle se fa piu' cose o e' "
                    "in piu' flag accese (per esempio DTH + DMG).",
-                   "Overlays for glitch hunting: walls, collisions, death zones. Each thing is "
+                   "Overlays: walls, collisions, death zones. Each thing is "
                    "named with what it does: a full name, or short names when it does more or is "
                    "in more flags that are on (for example DTH + DMG)."),
     "desc.death_zones": ("Le zone che ti uccidono (DEATH, sigla DTH; DEATH FLOOR, DFL, quelle grandi "
@@ -333,9 +339,9 @@ TEXTS: dict[str, tuple[str, str]] = {
     "desc.blending": ("Le quattro fusioni della PlayStation: ombre, acqua, bagliori. Tasto [[blending]].",
                      "The four PlayStation blend modes: shadows, water, glows. Key [[blending]]."),
     "desc.wireframe": ("Scheletro: solo gli spigoli dei triangoli. Griglia: le texture normali e gli "
-                       "spigoli sopra, scuri, come nel CTR viewer. Tasto [[wireframe]].",
+                       "spigoli sopra, scuri. Tasto [[wireframe]].",
                        "Skeleton: triangle edges only. Grid: normal textures with the edges over "
-                       "them, dark, as in the CTR viewer. Key [[wireframe]]."),
+                       "them, dark. Key [[wireframe]]."),
     "desc.animations": ("Ferme: tutto si blocca dov'è (tasto [[pause]]). Posa iniziale: il primo "
                         "fotogramma di ogni animazione.",
                         "Paused: everything stops where it is (key [[pause]]). Starting pose: "
@@ -360,10 +366,15 @@ TEXTS: dict[str, tuple[str, str]] = {
                     "the collision ground (finding 317). Without Bugs in the scene those "
                     "who aim at him stand still; no bumping between objects and no "
                     "wandering. Back to No at every level; the level is rebuilt."),
-    "desc.clones": ("Template che le regole degli oggetti fanno comparire. Le scelte di "
+    "desc.clones": ("Template che le regole degli oggetti fanno comparire. Nel livello: "
+                   "quelli che il gioco ha da solo, senza che Bugs faccia niente, e che "
+                   "restano (le rotaie delle miniere). Tutti: anche quelli che arrivano "
+                   "dopo un'azione di Bugs o che passano e spariscono. Le scelte di "
                    "preferences.py si vedono sempre. Tasto [[clones]].",
-                   "Templates spawned by object rules. The choices in preferences.py "
-                   "are always shown. Key [[clones]]."),
+                   "Templates spawned by object rules. In the level: those the game has "
+                   "by itself, with Bugs doing nothing, and that stay (the rails of the "
+                   "mines). All: also those that come after something Bugs does, or come "
+                   "and go. The choices in preferences.py are always shown. Key [[clones]]."),
     "desc.group": ("Solo per questa sessione: al prossimo avvio torna la scelta di "
                     "preferences.py. Il livello si ricostruisce.",
                     "This session only: the next start goes back to the choice in "

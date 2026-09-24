@@ -574,7 +574,7 @@ class Drawing:
                      # the flag names are textures: without textures they would be black quads
                      and not (g.category.endswith("_label") and not self.show_textures)
                      and not (g.category == "clones" and self.show_clones < 2)
-                     and not (g.category == "clones_at_start" and self.show_clones < 1)
+                     and not (g.category == "clones_in_level" and self.show_clones < 1)
                      and g.category != "sky_dome"]
 
         # face culling is switched only when it changes from one group to the
@@ -855,7 +855,7 @@ class Drawing:
             self._draw_camera_shadow()
 
         # the selected run, drawn through everything so it is found at once
-        if self.picked:
+        if self.picked_entry() is not None:
             self._draw_pick_highlight()
 
         # the sprites (torch flames, glows) last, as the game's last pass
@@ -882,7 +882,7 @@ class Drawing:
         self.drawn_triangles = drawn_triangles
         if not self.ui_hidden:
             # the drawn pages (Keyboard, Gamepad) take the whole window
-            if self.picked and self.menu.custom() is None:
+            if self.picked_entry() is not None and self.menu.custom() is None:
                 self._draw_pick_panel()
             if self.show_status_bar and self.menu.custom() is None:
                 self._draw_status_bar()
@@ -952,7 +952,7 @@ class Drawing:
         """The selected run's rectangle, drawn through the geometry: the
         colour alone is not enough to say what was taken, so the card names
         it, and this says where it is."""
-        entry = self.picked[self.picked_i % len(self.picked)]
+        entry = self.picked_entry()
         info = entry.get("run")
         u = geo.UNITS_PER_METER
         if info is not None:
@@ -1083,11 +1083,19 @@ class Drawing:
         order (the game draws them by texture bucket, never sorted: N69).
         The game does not draw a sprite nearer than 150 units to the camera
         (finding 305, the projection at 0x4383f0), measured along the view
-        direction as the projection does."""
+        direction as the projection does.
+
+        With Blending off a sprite that has a blend mode is not drawn: all of
+        it (a torch's glow) is light added to what is behind, it has no solid
+        pixel, and drawn without its blend its black background became an
+        opaque square. The sprites without a blend (the flames, cut out by
+        their own texture) stay."""
         out = []
         for sp in self.current_level.sprites:
             if (sp["category"] == "clones" and self.show_clones < 2) or \
-                    (sp["category"] == "clones_at_start" and self.show_clones < 1):
+                    (sp["category"] == "clones_in_level" and self.show_clones < 1):
+                continue
+            if sp["blend"] is not None and not self.show_blending:
                 continue
             if (Vec3(*sp["pos"]) - self.pos).dot(forward) >= NEAR_SPRITE:
                 out.append(sp)
@@ -1101,10 +1109,10 @@ class Drawing:
         op = right_vec.cross(forward).normalize()
         glBindVertexArray(self._sprite_vao)
         glBindBuffer(GL_ARRAY_BUFFER, self._sprite_vbo)
-        set_blend(sp["blend"] if self.show_blending else None)
+        set_blend(sp["blend"])
         self.uniform("alpha_test", 2)
         f = self.current_level.sprite_frame(sp, self.tick())
-        tex = self._gl_texture(f, sp["blend"] if self.show_blending else None)
+        tex = self._gl_texture(f, sp["blend"])
         self.uniform("has_texture", 1 if tex else 0)
         self.push_uv_rule(f)
         glBindTexture(GL_TEXTURE_2D, tex or 0)

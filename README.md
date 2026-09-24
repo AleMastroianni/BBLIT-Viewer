@@ -1,6 +1,6 @@
 <p align="center"><img src="branding/logo.png" alt="BBLIT Viewer" width="640"></p>
 
-<p align="center">A level viewer for <i>Bugs Bunny: Lost in Time</i> (PC, 1999), with glitch-hunting overlays.</p>
+<p align="center">A level viewer for <i>Bugs Bunny: Lost in Time</i> (PC, 1999).</p>
 
 <p align="center"><b><a href="../../releases/latest">Download the latest release</a></b></p>
 
@@ -41,7 +41,7 @@ changed.
   starting pose, animations at the game's 15 ticks per second, animated
   textures, the sky dome, semi-transparent blends and the template clones the
   level's rules spawn. Free camera; menus in English and Italian.
-- **Glitch-hunting overlays** (Level options → Flags): see below.
+- **Flags** (Level options → Flags): see below.
 - **Two ways to read the game's texture coordinates**, because the game
   itself has two (Video options → Texture coordinates): with an **AMD card**
   the game cuts the outer strip of every texture and the viewer can do the
@@ -80,7 +80,7 @@ The full guide is in [docs/VIEWER.md](docs/VIEWER.md).
 
 ## The flags
 
-Overlays for glitch hunting, all off at every start. Some are **read** straight
+Overlays drawn over the scene, all off at every start. Some are **read** straight
 from the level data; others are **deduced** by combining what the data says
 with what is drawn: they are a guide to where to look, not a proof.
 
@@ -146,9 +146,9 @@ the issues. Please never attach game files.
 
 ## Community
 
-The *Bugs Bunny: Lost in Time* speedrun, TAS and glitch-hunting community is
-on Discord: **https://discord.gg/PThM9ucHmu**. Thanks to everyone there for
-the help with TAS and glitch hunting.
+The *Bugs Bunny: Lost in Time* speedrun and TAS community is on Discord:
+**https://discord.gg/PThM9ucHmu**. Thanks to everyone there for their help
+over the years.
 
 ## Credits
 
@@ -156,9 +156,9 @@ the help with TAS and glitch hunting.
   of the container, load script, models, animations and terrain.
 - **quantumdude836** — [BugsDecomp](https://github.com/quantumdude836/BugsDecomp),
   the decompilation, used for reference.
-- **DCxDemo** — the CTR viewer of [CTR-tools](https://github.com/CTR-tools/CTR-tools),
-  the model for the interface (menus, options, portable settings). No code
-  was taken from it.
+- **DCxDemo** — the CTR viewer of [CTR-tools](https://github.com/CTR-tools/CTR-tools):
+  a program I have used for years and never stopped admiring. Its interface
+  (menus, options, portable settings) inspired this one. Thank you.
 - Logo font: [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)
   by Astigmatic (Apache 2.0). Logo, icon and background are drawn by the
   scripts in `branding/`.

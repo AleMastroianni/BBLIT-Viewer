@@ -174,7 +174,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self.show_blending = user_settings["blending"]
         # templates that the rules make appear (key G):
         # 0 off, 1 those appearing at startup, 2 all possible ones
-        self.show_clones = user_settings["clones"]
+        self.show_clones = user_settings["clones_shown"]
         # an old settings file has True/False: Skeleton/off
         self.wireframe = max(WIRE_OFF, min(WIRE_GRID, int(user_settings["wireframe"])))
         self.fov = user_settings["field_of_view"]
@@ -184,6 +184,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self.speed = 20.0
         self.held_keys = set()
         self.looking = False
+        self._looked = False          # the right button turned the camera (controls.py)
         self.textures = {}
         self.anim_time = 0.0
         self.animated_textures = user_settings["animated_textures"]   # animated textures (key N)
@@ -304,14 +305,20 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
     def _open_level(self, i, camera=None):
         """Loads level i. With `camera` (x, y, z, yaw, pitch) it opens it from
         there: the Era selector at the center of an era. If that level is already
-        open, only the camera moves."""
-        if not (camera and self.current_level is not None and i == self.index):
+        open, only the camera moves and the menu closes; a level that was
+        loaded opens the menu on its main page, with Level options, whatever
+        page the load started from."""
+        loads = not (camera and self.current_level is not None and i == self.index)
+        if loads:
             self.index = i
             self.load_level(self.level_files[i])
         if camera:
             x, y, z, yaw, pitch = camera
             self.pos, self.yaw, self.pitch = Vec3(x, y, z), yaw, pitch
-        self.menu.hide()
+        if loads:
+            self.menu.show("main")
+        else:
+            self.menu.hide()
 
     def load_level(self, file_path, camera=True):
         """Loads a level. `camera=False` leaves the camera where it is: used when
@@ -539,26 +546,34 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
                 and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
                 and not (g.category.endswith("_label") and not self.show_textures)
                 and not (g.category == "clones" and self.show_clones < 2)
-                and not (g.category == "clones_at_start" and self.show_clones < 1)
+                and not (g.category == "clones_in_level" and self.show_clones < 1)
                 and g.category != "sky_dome"]
 
     def pick_at(self, x, y):
         """Alt+click: the stack of what is drawn on that pixel. Clicking the
-        same spot again steps down it."""
+        same spot again steps down it; after the last one comes "nothing
+        selected" (index len(picked)), then the first again."""
         if (abs(x - self._pick_at[0]) <= picking.SAME_PIXEL
                 and abs(y - self._pick_at[1]) <= picking.SAME_PIXEL and self.picked):
-            self.picked_i = (self.picked_i + 1) % len(self.picked)
+            self.picked_i = (self.picked_i + 1) % (len(self.picked) + 1)
             return
         self._pick_at = (x, y)
         self.picked = picking.stack(self, x, y)
         self.picked_i = 0
 
+    def picked_entry(self):
+        """The selected thing, or None: nothing picked, or the step of the
+        stack where nothing is selected."""
+        if 0 <= self.picked_i < len(self.picked):
+            return self.picked[self.picked_i]
+        return None
+
     def picked_card(self):
         """The selected thing as lines of text, or [] when nothing is."""
-        if not self.picked:
+        entry = self.picked_entry()
+        if entry is None:
             return []
-        entry = self.picked[self.picked_i % len(self.picked)]
-        head = [t("pick.of", n=self.picked_i % len(self.picked) + 1, total=len(self.picked))]
+        head = [t("pick.of", n=self.picked_i + 1, total=len(self.picked))]
         return head + picking.card(entry, self.current_level)
 
     def clear_pick(self):

@@ -36,7 +36,8 @@ def fingerprint(built_level):
     # a level mounted from the cache had them once. Sorted, because what has
     # to be the same is the SET of names, not the order they were made in.
     return (groups_by_key, dict(built_level.stat), built_level.lo, built_level.hi, built_level.terrain_lo, built_level.terrain_hi,
-            repr(built_level.sprites), sorted(repr(entry) for entry in built_level.box_labels))
+            repr(built_level.sprites), sorted(repr(entry) for entry in built_level.box_labels),
+            sorted(built_level.clone_kinds.items()))
 
 
 name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})

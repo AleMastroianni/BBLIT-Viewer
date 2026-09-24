@@ -28,7 +28,10 @@ DEFAULTS = {
     # 0 off, 1 Skeleton, 2 Grid (an old True/False reads as 1/0)
     "wireframe": 0,
     "animated_textures": True,
-    "clones": 0,
+    # Level options -> Cloned templates: 0 off, 1 in the level (what the game
+    # has there by itself, game/clone_life.py), 2 all. A new key: the old
+    # "clones" meant "at start" and a saved 0 would hide the mines' rails
+    "clones_shown": 1,
     "ticks_per_second": 15.0,
     "fullscreen": False,
     "vsync": True,
@@ -67,7 +70,7 @@ DEFAULTS = {
 # an old file is read with its values, then saved with the new keys
 OLD_KEYS = {
     "lingua": "language", "cielo": "sky", "fusioni": "blending",
-    "texture_animate": "animated_textures", "cloni": "clones",
+    "texture_animate": "animated_textures",
     "tick_al_secondo": "ticks_per_second", "schermo_intero": "fullscreen",
     "filtro_bilineare": "bilinear_filter", "scala_texture": "texture_scale",
     "campo_visivo": "field_of_view", "barra_di_stato": "status_bar",

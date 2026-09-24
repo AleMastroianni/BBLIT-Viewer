@@ -153,17 +153,24 @@ class Controls:
             return
         if button == pyglet.window.mouse.RIGHT:
             self.looking = True
+            self._looked = False
             self.set_exclusive_mouse(True)
 
     def on_mouse_release(self, x, y, button, modifiers):
         if button == pyglet.window.mouse.RIGHT and self.looking:
             self.looking = False
             self.set_exclusive_mouse(False)
+            # a right click that did not turn the camera clears the
+            # selector's choice; held and dragged, it only looks around
+            if not self._looked:
+                self.clear_pick()
 
     def on_mouse_motion(self, x, y, dx, dy):
         if self.screenshot or (not self.ui_hidden and self.menu.mouse_over(x, y)):
             return
         if self.looking:
+            if dx or dy:
+                self._looked = True
             self.yaw += dx * 0.15
             self.pitch = max(-89.0, min(89.0, self.pitch + dy * 0.15))
 

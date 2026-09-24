@@ -347,24 +347,14 @@ class MenuPages:
                     M.YesNo("level.movers", lambda: self.show_movers,
                             self._set_movers, "desc.movers"),
                     M.Choice("level.clones",
-                             [(0, "level.clones.off"), (1, "level.clones.at_start"),
+                             [(0, "level.clones.off"), (1, "level.clones.in_level"),
                               (2, "level.clones.all")],
                              lambda: self.show_clones, lambda v: setattr(self, "show_clones", v),
                              "desc.clones")]
             if self.current_level.gates:
-                menu_items.append(M.Choice("level.gates",
-                                     [("open", "level.gates.open"), ("shut", "level.gates.shut"),
-                                      ("game", "level.gates.game")],
-                                     lambda: self.gate_state, self._set_gate_state, "desc.gates"))
-                for switch in sorted(self.current_level.gate_groups):
-                    menu_items.append(M.Choice(
-                        None,
-                        [("open", "level.gates.open"), ("shut", "level.gates.shut"),
-                         ("game", "level.gates.game")],
-                        lambda sw=switch: self.session_gate_choices.get(sw, self.gate_state),
-                        lambda state, sw=switch: self._set_gate_group(sw, state),
-                        "desc.gate_group",
-                        label_text=lambda sw=switch: t("level.gates.of", n=sw)))
+                # one row, whatever the number of switches: the choices are
+                # on a page of their own (gates_page)
+                menu_items.append(M.Submenu("level.gates", "gates", desc="desc.gates"))
             for entity_group in self.current_level.pref["entity_groups"]:
                 menu_items.append(M.Choice(f"group.{entity_group['name']}",
                                      [(role, f"state.{name}") for role, name in entity_group["states"]],
@@ -384,6 +374,26 @@ class MenuPages:
                      for role, n, at_start in self.current_level.sky_choices],
                     lambda: self.current_level.sky_choices[0][0], self._set_sky_choice,
                     "desc.sky_choice"))
+            menu_items.append(M.Back())
+            return menu_items
+
+        def gates_page():
+            """Gates: the general state, then one choice per switch."""
+            if self.current_level is None or not self.current_level.gates:
+                return [M.Info(lambda: t("level.no_level")), M.Back()]
+            states = [("open", "level.gates.open"), ("shut", "level.gates.shut"),
+                      ("game", "level.gates.game")]
+            menu_items = [M.Choice("level.gates.every", states, lambda: self.gate_state,
+                                   self._set_gate_state, "desc.gates")]
+            if self.current_level.gate_groups:
+                menu_items.append(M.Section("level.gates.by_switch"))
+            for switch in sorted(self.current_level.gate_groups):
+                menu_items.append(M.Choice(
+                    None, states,
+                    lambda sw=switch: self.session_gate_choices.get(sw, self.gate_state),
+                    lambda state, sw=switch: self._set_gate_group(sw, state),
+                    "desc.gate_group",
+                    label_text=lambda sw=switch: t("level.gates.of", n=sw)))
             menu_items.append(M.Back())
             return menu_items
 
@@ -464,6 +474,7 @@ class MenuPages:
             "level": M.Page(lambda: t("level.title",
                                           n=self.current_level.name if self.current_level else "—"), level),
             "flags": M.Page(lambda: t("level.flags"), flags, 440),
+            "gates": M.Page(lambda: t("level.gates"), gates_page, 440),
             "walls": M.Page(lambda: t("level.walls"), walls, 440),
             "camera": M.Page(lambda: t("camera.title", level=self.current_level.name if self.current_level else "—"),
                              camera, 600),
@@ -569,7 +580,7 @@ class MenuPages:
         user_settings["language"] = texts.language()
         user_settings["texture"], user_settings["props"], user_settings["sky"] = self.show_textures, self.show_props, self.show_sky
         user_settings["blending"], user_settings["wireframe"] = self.show_blending, int(self.wireframe)
-        user_settings["animated_textures"], user_settings["clones"] = self.animated_textures, self.show_clones
+        user_settings["animated_textures"], user_settings["clones_shown"] = self.animated_textures, self.show_clones
         user_settings["ticks_per_second"] = float(self.tps)
         user_settings["fullscreen"], user_settings["bilinear_filter"] = self.fullscreen, self.bilinear
         user_settings["mipmaps"] = self.mipmaps

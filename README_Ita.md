@@ -1,6 +1,6 @@
 <p align="center"><img src="branding/logo.png" alt="BBLIT Viewer" width="640"></p>
 
-<p align="center">Un viewer dei livelli di <i>Bugs Bunny: Lost in Time</i> (PC, 1999), con sovrapposizioni per il glitch hunting.</p>
+<p align="center">Un viewer dei livelli di <i>Bugs Bunny: Lost in Time</i> (PC, 1999).</p>
 
 <p align="center"><b><a href="../../releases/latest">Scarica l'ultima release</a></b> · <a href="README.md">README</a></p>
 
@@ -41,8 +41,7 @@ vengono solo letti, mai modificati.
   animazioni ai 15 tick al secondo del gioco, texture animate, la cupola del
   cielo, le fusioni semitrasparenti e i cloni dei template che le regole del
   livello fanno comparire. Camera libera; menu in inglese e in italiano.
-- **Sovrapposizioni per il glitch hunting** (Opzioni livello → Flags): vedi
-  sotto.
+- **Flags** (Opzioni livello → Flags): vedi sotto.
 - **Due modi di leggere le coordinate texture del gioco**, perché il gioco
   stesso ne ha due (Opzioni video → Coordinate texture): con una **scheda
   AMD** il gioco taglia la striscia esterna di ogni texture e il viewer può
@@ -81,7 +80,7 @@ la lingua...). La guida completa è in [docs/VIEWER_Ita.md](docs/VIEWER_Ita.md).
 
 ## Le flag
 
-Sovrapposizioni per il glitch hunting, tutte spente a ogni avvio. Alcune sono
+Sovrapposizioni disegnate sopra la scena, tutte spente a ogni avvio. Alcune sono
 **lette** direttamente dai dati del livello; altre sono **dedotte** combinando
 quello che dicono i dati con quello che si vede: indicano dove cercare, non
 sono una prova.
@@ -151,9 +150,9 @@ file del gioco.
 
 ## Community
 
-La community di speedrun, TAS e glitch hunting di *Bugs Bunny: Lost in Time* è
-su Discord: **https://discord.gg/PThM9ucHmu**. Grazie a tutti lì per l'aiuto
-con i TAS e il glitch hunting.
+La community di speedrun e TAS di *Bugs Bunny: Lost in Time* è su Discord:
+**https://discord.gg/PThM9ucHmu**. Grazie a tutti lì per l'aiuto in questi
+anni.
 
 ## Crediti
 
@@ -161,9 +160,9 @@ con i TAS e il glitch hunting.
   di contenitore, load script, modelli, animazioni e terreno.
 - **quantumdude836** — [BugsDecomp](https://github.com/quantumdude836/BugsDecomp),
   la decompilazione, usata come riferimento.
-- **DCxDemo** — il CTR viewer di [CTR-tools](https://github.com/CTR-tools/CTR-tools),
-  il modello per l'interfaccia (menu, opzioni, impostazioni portatili).
-  Nessun codice è stato preso da lì.
+- **DCxDemo** — il CTR viewer di [CTR-tools](https://github.com/CTR-tools/CTR-tools):
+  un programma che uso da anni e che mi ha sempre affascinato. La sua interfaccia
+  (menu, opzioni, impostazioni portatili) ha ispirato questa. Grazie.
 - Font del logo: [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)
   di Astigmatic (Apache 2.0). Logo, icona e sfondo sono disegnati dagli script
   in `branding/`.

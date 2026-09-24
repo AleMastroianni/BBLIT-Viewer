@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from array import array  # noqa: E402
 
+from game import clone_life  # noqa: E402
 from game import collision  # noqa: E402
 from game import gates as gatesmod  # noqa: E402
 from game import geometry as geo  # noqa: E402
@@ -243,7 +244,7 @@ class Level(OverlayBuilder):
         self.trap_zones = [s for z in self.lvl["zones"] if (s := zones.trap_shape(z))]
         self.face_groups: dict[tuple, FaceGroup] = {}
         self.stat = {"terrain": 0, "props": 0, "sky_dome": 0, "triangles": 0, "untextured": 0,
-                     "from_game": 0, "fallback": 0, "clones": 0, "clones_at_start": 0,
+                     "from_game": 0, "fallback": 0, "clones": 0, "clones_in_level": 0,
                      "clones_without_model": 0}
         self.lo = [1e9, 1e9, 1e9]
         self.hi = [-1e9, -1e9, -1e9]
@@ -704,16 +705,24 @@ class Level(OverlayBuilder):
         at the object's position and with its rotation (Ombelll's finding 194). The
         lit torches, the blue chests and the falling crates work like this.
 
-        Static version, and a declared approximation: the conditions
-        are not evaluated, so what CAN appear is shown. Each pair
-        (object, role) only once; the first template with the role wins,
-        as in `FUN_00448d40` (finding 68).
+        Which of them the game really has is read by `game/clone_life.py`,
+        the rules walked as the engine walks them with Bugs doing nothing:
+        what comes by itself and stays is "clones_in_level" (Cloned
+        templates -> In the level: the rails of the mines), the rest --
+        what needs Bugs, what comes and goes by itself -- is "clones" (All).
+        Each pair (object, role) only once; the first template with the role
+        wins, as in `FUN_00448d40` (finding 68).
 
         A clone can in turn clone (finding 279): the torch, cloned by
-        a trigger, clones the flame on its own top. For a freshly born
-        template only the rules of its starting step that are true at startup
-        apply; at most three levels deep.
+        a trigger, clones the flame on its own top. A freshly born template
+        clones what its own rules make come by itself, never more in the
+        level than itself; at most three levels deep.
         """
+        # the answers ride in the piece cache: a level mounted from disk
+        # does not read its rules again
+        self.clone_kinds = self._pieces.get(("clone_kinds",))
+        if self.clone_kinds is None:
+            self.clone_kinds = self._pieces[("clone_kinds",)] = clone_life.kinds(self.lvl)
         self.templates = {}
         self._clone_label_jobs = []
         self._idx = {}               # id(object) -> index in the level, for the keys
@@ -765,7 +774,8 @@ class Level(OverlayBuilder):
                     seen_keys.add(place)
                     category = "always"
                 else:
-                    category = "clones_at_start" if _at_startup(r) else "clones"
+                    kind = self.clone_kinds.get(("placed", n, i_rule), clone_life.EVENT)
+                    category = "clones_in_level" if kind == clone_life.LEVEL else "clones"
                 self._spawn_clone(o, r, tuple(o["position"]), rot, category, 1, (n, i_rule))
 
     def _attach_point(self, parent_ref, rule, pos, rot):
@@ -862,11 +872,17 @@ class Level(OverlayBuilder):
             self.stat["clones_without_model"] += 1
         if depth >= 3:
             return
-        lookup_key = montage.start_key(t)
         for i_rule, r in enumerate(t.get("rules", [])):
-            if (r["effect"] & (0x100 | 0x40000) and r["field28"] > 0
-                    and r["key"] == lookup_key and _at_startup(r)):
-                self._spawn_clone(t, r, pos, rot, category, depth + 1, route + (i_rule,))
+            if not (r["effect"] & (0x100 | 0x40000) and r["field28"] > 0):
+                continue
+            kind = self.clone_kinds.get(("template", t["role"], i_rule), clone_life.EVENT)
+            if kind == clone_life.EVENT:
+                continue          # only what the clone makes come by itself
+            # what the clone makes and loses again (the torch's puff, 508,
+            # a template with no state: deleted on its first tick) goes
+            # under All, whoever the parent is, the curated ones included
+            child = category if kind == clone_life.LEVEL else "clones"
+            self._spawn_clone(t, r, pos, rot, child, depth + 1, route + (i_rule,))
 
     def _attack_rules(self, obj):
         """The rules of the object's current step that swing something
