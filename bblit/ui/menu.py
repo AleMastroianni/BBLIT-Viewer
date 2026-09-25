@@ -36,6 +36,9 @@ TITLE_COLOR = (232, 232, 232, 255)
 LINE_COLOR = (80, 80, 80, 255)
 INFO_LEFT_COLOR = (255, 244, 176, 255)
 INFO_RIGHT_COLOR = (220, 220, 220, 255)
+# a count beside a value (Animations: how many things a category holds):
+# grey and small, on the far right
+NOTE_COLOR = (150, 150, 150, 255)
 DISABLED_COLOR = (125, 125, 125, 255)
 
 
@@ -90,6 +93,9 @@ class Item:
         self._text_fn = label_text          # computed text, instead of the key
         # greyed out: selectable (to read its description) but does nothing
         self.disabled = False
+        # a function returning a short text drawn grey and small on the far
+        # right, after the value (a count), or None
+        self.note = None
 
     def label(self) -> str:
         return self._text_fn() if self._text_fn else t(self.item_key)
@@ -239,8 +245,10 @@ class Page:
     """`menu_items` is a function: the pages that depend on the level (level list,
     entity groups) are rebuilt every time they open."""
 
-    def __init__(self, title_text, menu_items, width_units=440, custom=None):
+    def __init__(self, title_text, menu_items, width_units=440, custom=None, subtitle=None):
         self.title_text = title_text         # function that returns the title
+        # a function that returns a small line under the title (or "")
+        self.subtitle = subtitle
         self.build_items = menu_items
         self.width_units = width_units
         # a drawn page (keys_page): it takes the input and the drawing, and
@@ -258,6 +266,9 @@ class Menu:
         self._batch = None
         self._drawables = []
         self._areas = []                  # (y0, y1, item index)
+        # {item index: (x of the left end, x of the middle) of its value
+        # "‹ … ›"}: a click between them goes back, as the left key does
+        self._value_middles = {}
         # the list those areas were laid out for: a click or a hover uses them
         # only while it is still the list on top. They are indexes, and a page
         # rebuilt shorter (another level) would move the cursor past its end
@@ -463,7 +474,13 @@ class Menu:
             self.stack[-1][2] = i
             item = self._current_item()
             if item is not None:
-                item.confirm(self)
+                # on a "‹ value ›": left of its middle goes back, as the left
+                # key does; anywhere else on the row goes on
+                left, middle = self._value_middles.get(i, (None, None))
+                if middle is not None and left <= x < middle:
+                    item.change(-1, self)
+                else:
+                    item.confirm(self)
         self.dirty = True
         return True
 
@@ -539,6 +556,8 @@ class Menu:
         padding = round(16 * s)
         row, section_row_height, info_row_height = round(32 * s), round(26 * s), round(25 * s)
         font, font_section, font_title, font_info = 16 * s, 11.5 * s, 14 * s, 13.5 * s
+        subtitle = page.subtitle() if page.subtitle else ""
+        header = round((50 if subtitle else 34) * s)
         # the panel is anchored top-left and does NOT change size when moving
         # from one item to another: centring it and sizing the description to
         # its text made it jump under the mouse
@@ -567,7 +586,7 @@ class Menu:
         # and the start stays where it was (per page)
         row_heights = [section_row_height if isinstance(v, Section) else info_row_height if isinstance(v, Info) else row
                    for v in menu_items]
-        space_avail = y_top - bottom_margin - round(34 * s) - desc_height - round(10 * s)
+        space_avail = y_top - bottom_margin - header - desc_height - round(10 * s)
         start_line = min(self._start_lines.get(id(menu_items), 0), cursor)
         # the section right above the cursor stays visible with its title
         while start_line > 0 and start_line == cursor and isinstance(menu_items[start_line - 1], Section):
@@ -583,14 +602,19 @@ class Menu:
         # a scrolling page always takes all the space: otherwise the panel
         # would change height with the visible lines
         content_height = space_avail if sum(row_heights) > space_avail else sum(row_heights[start_line:end_line])
-        panel_height = round(34 * s) + content_height + desc_height + round(10 * s)
+        panel_height = header + content_height + desc_height + round(10 * s)
         drawables.append(pyglet.shapes.Rectangle(x0, y_top - panel_height, width_units, panel_height,
                                            color=BACKGROUND_COLOR, batch=batch, group=beneath))
         # title
         drawables.append(pyglet.text.Label(page.title_text(), font_name=FONT, font_size=font_title,
                                      x=x0 + padding, y=y_top - round(20 * s), anchor_y="center",
                                      color=TITLE_COLOR, batch=batch, group=above))
-        y = y_top - round(34 * s)
+        if subtitle:
+            drawables.append(pyglet.text.Label(ellipsize(subtitle, width_units - 2 * padding, 10.5 * s),
+                                               font_name=FONT, font_size=10.5 * s,
+                                               x=x0 + padding, y=y_top - round(38 * s), anchor_y="center",
+                                               color=NOTE_COLOR, batch=batch, group=above))
+        y = y_top - header
         drawables.append(pyglet.shapes.Line(x0 + padding, y, x0 + width_units - padding, y, thickness=1,
                                       color=LINE_COLOR, batch=batch, group=above))
         if start_line > 0:
@@ -598,6 +622,7 @@ class Menu:
                                          y=y - round(8 * s), anchor_x="right", anchor_y="center",
                                          color=SECTION_COLOR, batch=batch, group=above))
         self._areas, self._areas_list = [], menu_items
+        self._value_middles = {}
         for i in range(start_line, end_line):
             v = menu_items[i]
             h = row_heights[i]
@@ -618,6 +643,16 @@ class Menu:
                 value_text = v.value_text()
                 # the label must not overlap the value: shorten it with "…"
                 text_space = width_units - 2 * padding
+                note_text = v.note() if getattr(v, "note", None) else ""
+                value_right = x0 + width_units - padding
+                if note_text:
+                    note_label = pyglet.text.Label(note_text, font_name=FONT, font_size=11 * s,
+                                                   x=value_right, y=middle, anchor_x="right",
+                                                   anchor_y="center", color=NOTE_COLOR,
+                                                   batch=batch, group=above)
+                    drawables.append(note_label)
+                    value_right -= note_label.content_width + round(8 * s)
+                    text_space -= note_label.content_width + round(8 * s)
                 if value_text:
                     value_width = pyglet.text.Label(value_text, font_name=FONT, font_size=dim).content_width
                     text_space -= value_width + round(18 * s)
@@ -629,15 +664,19 @@ class Menu:
                     value_color = SELECTED_TEXT_COLOR if selected else (INFO_RIGHT_COLOR if isinstance(v, Info) else VALUE_COLOR)
                     if v.disabled:
                         value_color = DISABLED_COLOR
-                    drawables.append(pyglet.text.Label(value_text, font_name=FONT, font_size=dim,
-                                                 x=x0 + width_units - padding, y=middle, anchor_x="right",
-                                                 anchor_y="center", color=value_color,
-                                                 batch=batch, group=above))
+                    value_label = pyglet.text.Label(value_text, font_name=FONT, font_size=dim,
+                                                    x=value_right, y=middle, anchor_x="right",
+                                                    anchor_y="center", color=value_color,
+                                                    batch=batch, group=above)
+                    drawables.append(value_label)
+                    if value_text.startswith("‹"):
+                        left = value_right - value_label.content_width
+                        self._value_middles[i] = (left - round(8 * s), left + value_label.content_width / 2)
                 if v.selectable:
                     self._areas.append((y - h, y, i))
             y -= h
         # bottom of the list: fixed even when the visible lines are shorter
-        y = y_top - round(34 * s) - content_height
+        y = y_top - header - content_height
         if end_line < len(menu_items):
             drawables.append(pyglet.text.Label("▼", font_name=FONT, font_size=9 * s, x=x0 + width_units - padding,
                                          y=y + round(8 * s), anchor_x="right", anchor_y="center",

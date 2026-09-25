@@ -34,6 +34,7 @@ from game import textures as texmod  # noqa: E402
 from ui import texts  # noqa: E402
 from ui.texts import t  # noqa: E402
 
+from window.animations_page import AnimationsPage  # noqa: E402
 from window.controls import Controls  # noqa: E402
 from window.drawing import (BlendSorter, Drawing, FRAGMENT_SHADER, SIGNATURE, VERTEX_SHADER, WIRE_GRID,
                      WIRE_OFF)  # noqa: E402
@@ -50,7 +51,7 @@ from pyglet.math import Vec3  # noqa: E402
 from ui import keys_page  # noqa: E402
 
 
-class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
+class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window.Window):
     """The window: the level in front, the menu over it."""
 
     def __init__(self, level_files, cache, index=0, screenshot=None, scale_factor=None, language=None,
@@ -184,6 +185,10 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
         self.speed = 20.0
         self.held_keys = set()
         self.looking = False
+        # Level options -> Animations: the selection, and whether the
+        # selected row frames its thing (animations_page.py)
+        self.anim_follow = True
+        self._anim_reset()
         self._looked = False          # the right button turned the camera (controls.py)
         self.textures = {}
         self.anim_time = 0.0
@@ -351,6 +356,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
             self._shadow_area = None    # the hint for the shadow: another level's area
             # the bookmark page names a bookmark of the level that is leaving
             self._bookmark_i, self._delete_armed = 0, False
+            self._anim_reset()     # the Animations page names things of the level that is leaving
             self.clear_pick()      # the selection names a run of the level that is leaving
         self._free_gpu(texture=not same_level)
         if not same_level:
@@ -369,7 +375,8 @@ class Viewer(Drawing, Controls, Points, MenuPages, pyglet.window.Window):
                                    movers=self.show_movers, gate_state=self.gate_state,
                                    gate_choices=self.session_gate_choices,
                                    gate_links=self.show_gate_links,
-                                   sky_choice=self.session_sky.get(name))
+                                   sky_choice=self.session_sky.get(name),
+                                   exceptions=self.anim_exceptions)
         self.forget_uv_rule()   # the uv rule remembers each texture's size
         self.area_in_use = self.current_level.player_area
         if not same_level:

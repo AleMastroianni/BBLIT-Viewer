@@ -87,7 +87,7 @@ def sections(bze_path: str, cache: str) -> dict[int, bytes]:
 class FaceGroup:
     """A group of triangles sharing texture and blending."""
 
-    __slots__ = ("tex_id", "data", "vao", "vbo", "item_count", "category", "blend", "frames", "vaos",
+    __slots__ = ("anim_key", "tex_id", "data", "vao", "vbo", "item_count", "category", "blend", "frames", "vaos",
                  "spin", "sorted", "area", "face_tris", "mover", "two_sided")
 
     def __init__(self, tex_id, category, blend=None, n_frames=0, spin=None, area=None, mover=None,
@@ -123,6 +123,10 @@ class FaceGroup:
         # finding 307) are in groups of their own: with Video options ->
         # Backface culling the other groups are culled as the game culls them
         self.two_sided = two_sided
+        # the animated object this group belongs to, ("anim", n) for a placed
+        # one, ("clone_anim", template, place) for a clone, or None: the
+        # Animations page can hold it on one frame (drawing.anim_holds)
+        self.anim_key = None
 
 
 def _condition_at_startup(cond) -> bool:
@@ -181,7 +185,8 @@ def _spin_speed(obj) -> int:
 class Level(OverlayBuilder):
     def __init__(self, bze_path: str, cache: str, table=None, session_poses=None, pieces=None,
                  families=tuple(FAMILIES), split_areas=False, movers=False,
-                 gate_state="open", gate_choices=None, gate_links="off", sky_choice=None):
+                 gate_state="open", gate_choices=None, gate_links="off", sky_choice=None,
+                 exceptions=None):
         self.families = frozenset(families)
         # "Visibility by area as in the game": the terrain pieces and the
         # objects cut by area go into groups of their own, one per area, so
@@ -206,6 +211,19 @@ class Level(OverlayBuilder):
         # REACTS in its name). What is in the data is not dropped, it is
         # marked and can be turned off
         self.gate_links = gate_links
+        # Level options -> Animations, what the user set by hand
+        # (window/animations_page.py): {"roles": {exemplar: role}, "shown":
+        # {route}, "hidden": {route}}. An exemplar is ("placed", n) or the
+        # route of rules that makes a clone, as game/catalog.py writes it; a
+        # clone in "shown" is drawn whatever Cloned templates says (it was
+        # touched), one in "hidden" is not built (another of its "one at a
+        # time" set is shown)
+        exceptions = exceptions or {}
+        self.exemplar_roles = dict(exceptions.get("roles", {}))
+        self.shown_routes = set(exceptions.get("shown", ()))
+        self.hidden_routes = set(exceptions.get("hidden", ()))
+        # route -> the anim key of the clone's groups, when it animates
+        self.clone_anim_keys = {}
         self.gates = {}
         self.gate_groups = {}
         self.name = os.path.splitext(os.path.basename(bze_path))[0]
@@ -466,6 +484,8 @@ class Level(OverlayBuilder):
             if face_group is None:
                 face_group = self.face_groups[lookup_key] = FaceGroup(tex_id, category, blend, len(frames),
                                                                       spin, area, mover, two_sided)
+                face_group.anim_key = next((k for k in lookup_key[3:] if isinstance(k, tuple) and k
+                                            and k[0] in ("anim", "clone_anim")), None)
             face_group.data.extend(data_items)
             face_group.face_tris.extend(face_tris)
             for target, b in zip(face_group.frames, frames):
@@ -574,7 +594,8 @@ class Level(OverlayBuilder):
             mid = next((r for r in o["resources"] if r in models), None)
             if mid is None or models[mid]["size"] <= 12:
                 continue
-            role = self.gate_role(n) or self.pref["pose"].get(mid)
+            role = (self.exemplar_roles.get(("placed", n)) or self.gate_role(n)
+                    or self.pref["pose"].get(mid))
             if self.gates.get(n, {}).get("gone"):
                 continue            # in this state the game deletes it: nothing to draw
             if o["role"] in self.sky_hidden and carried_by_camera(o):
@@ -756,7 +777,13 @@ class Level(OverlayBuilder):
                                                      mover=n if moving else None, boxes_on=boxes_on))
             for i_rule, r in enumerate(o.get("rules", [])):
                 role = r["field28"]
-                if not (r["effect"] & (0x100 | 0x40000)) or role <= 0 or (n, role) in seen_keys:
+                croute = ((("placed", n), i_rule),)
+                chosen = croute in self.shown_routes
+                if not (r["effect"] & (0x100 | 0x40000)) or role <= 0:
+                    continue
+                if croute in self.hidden_routes:
+                    continue          # another of its "one at a time" set is shown
+                if (n, role) in seen_keys and not chosen:
                     continue
                 if role in swung:
                     continue          # already there, hanging from its bone
@@ -776,7 +803,9 @@ class Level(OverlayBuilder):
                 else:
                     kind = self.clone_kinds.get(("placed", n, i_rule), clone_life.EVENT)
                     category = "clones_in_level" if kind == clone_life.LEVEL else "clones"
-                self._spawn_clone(o, r, tuple(o["position"]), rot, category, 1, (n, i_rule))
+                if chosen:
+                    category = "chosen"
+                self._spawn_clone(o, r, tuple(o["position"]), rot, category, 1, (n, i_rule), croute)
 
     def _attach_point(self, parent_ref, rule, pos, rot):
         """Where a clone appears. With bit 0x80 of the effect, field +24
@@ -805,7 +834,7 @@ class Level(OverlayBuilder):
         mid = next((x for x in obj["resources"] if x in self._models), None)
         return self.pref["pose"].get(mid) if mid is not None else None
 
-    def _spawn_clone(self, parent_ref, rule, pos, rot, category, depth, route):
+    def _spawn_clone(self, parent_ref, rule, pos, rot, category, depth, route, croute=()):
         """A clone. `route` identifies the clone stably: parent and
         rule, also for clones of clones; its piece key adds the
         roles chosen for the parent (the attachment depends on its pose) and for
@@ -824,6 +853,7 @@ class Level(OverlayBuilder):
                 return
             self._sky_roles_built.add(t["role"])
         parent_role, role = self._role_of(parent_ref), self._role_of(t)
+        role = self.exemplar_roles.get(croute) or role
         attach_key = ("attach_point", route, parent_role)
         if attach_key not in self._pieces:
             self._pieces[attach_key] = self._attach_point(parent_ref, rule, pos, rot)
@@ -835,6 +865,7 @@ class Level(OverlayBuilder):
         if mid is not None and models[mid]["size"] > 12:
             self._piece(("clone", route, category, parent_role, role),
                         lambda: self._clone(t, n_t, models[mid], role, pos, rot, category))
+            self.clone_anim_keys[croute] = ("clone_anim", n_t, pos)
             # the box only for the clones the viewer always shows
             # (preferences.py: torches, crates, barrels, anchors) and for what
             # an attacker swings: the ones behind the flag Cloned templates
@@ -876,13 +907,19 @@ class Level(OverlayBuilder):
             if not (r["effect"] & (0x100 | 0x40000) and r["field28"] > 0):
                 continue
             kind = self.clone_kinds.get(("template", t["role"], i_rule), clone_life.EVENT)
-            if kind == clone_life.EVENT:
+            child_route = croute + ((("template", t["role"]), i_rule),)
+            if child_route in self.hidden_routes:
+                continue
+            chosen = child_route in self.shown_routes
+            if kind == clone_life.EVENT and not chosen:
                 continue          # only what the clone makes come by itself
             # what the clone makes and loses again (the torch's puff, 508,
             # a template with no state: deleted on its first tick) goes
             # under All, whoever the parent is, the curated ones included
             child = category if kind == clone_life.LEVEL else "clones"
-            self._spawn_clone(t, r, pos, rot, child, depth + 1, route + (i_rule,))
+            if chosen:
+                child = "chosen"
+            self._spawn_clone(t, r, pos, rot, child, depth + 1, route + (i_rule,), child_route)
 
     def _attack_rules(self, obj):
         """The rules of the object's current step that swing something

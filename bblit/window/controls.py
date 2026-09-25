@@ -199,6 +199,7 @@ class Controls:
     def update(self, dt):
         if not self.paused:
             self.anim_time += dt
+        self.anim_follow_tick()      # Animations: the selected row frames its thing
         if self.screenshot:
             # in screenshot mode the window can steal focus from another
             # instance: keys pressed there would move this camera

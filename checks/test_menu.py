@@ -19,6 +19,7 @@ from support import paths
 from support import preferences
 from support.version import VERSION
 from ui import settings as settings_mod
+from ui import menu as menumod
 from ui import texts
 import viewer
 
@@ -169,14 +170,23 @@ probe("bridges raised for the session (118)", v.current_level.pref["pose"][217] 
 probe("preferences.py not touched", preferences.for_level("L03A")["pose"][217] == 121)
 probe("menu still on Level options after the rebuild", v.menu.stack[-1][0] == "level")
 
-i_anim = labels.index("Animazioni")
-v.menu.stack[-1][2] = i_anim
+# the animations of the whole level moved into Level options -> Animations
+# (one place to change a thing, not two)
+probe("Level options: Animations is a submenu now, not a choice",
+      isinstance(v.menu.stack[-1][1][labels.index("Animazioni")], menumod.Submenu))
+v.menu.stack[-1][2] = labels.index("Animazioni")
+press(k.ENTER)
+anim_labels = [x.label() for x in v.menu.stack[-1][1]]
+probe("the Animations page opens", v.menu.stack[-1][0] == "animations")
+v.menu.stack[-1][2] = anim_labels.index("Tutte le animazioni")
 press(k.RIGHT)
-probe("Animazioni -> Ferme (frozen)", v.paused and v.fixed_tick is None)
+probe("Tutte le animazioni -> Ferme (frozen)", v.paused and v.fixed_tick is None)
 press(k.RIGHT)
-probe("Animazioni -> Posa iniziale (initial pose)", v.fixed_tick == 0 and not v.paused)
+probe("Tutte le animazioni -> Posa iniziale (initial pose)", v.fixed_tick == 0 and not v.paused)
 press(k.RIGHT)
-probe("Animazioni -> In movimento (moving)", v.fixed_tick is None and not v.paused)
+probe("Tutte le animazioni -> In movimento (moving)", v.fixed_tick is None and not v.paused)
+press(k.BACKSPACE)
+probe("back on Level options", v.menu.stack[-1][0] == "level")
 
 i_tps = labels.index("Tick al secondo")
 v.menu.stack[-1][2] = i_tps
@@ -678,6 +688,124 @@ probe("a per-switch choice still holds for the session", v.session_gate_choices.
 v.session_gate_choices = {}
 v.load_level(dock, camera=False)
 v.menu.hide()
+
+# Level options -> Animations, step 2 (read only): the catalogue of the
+# level as horizontal selectors, a count beside each, the selected row framed
+from game import catalog as catalogmod  # noqa: E402
+nowhere = os.path.join(paths.DATA_BZE, "Merlin.bze")
+v.load_level(nowhere)
+v.menu.show("main"); v.menu.open_page("level"); v.menu.open_page("animations")
+anim_items = v.menu.stack[-1][1]
+anim_labels = [x.label() for x in anim_items]
+cat_row = anim_items[anim_labels.index("Categoria")]
+cat = v._anim_catalogue()
+fam_row = anim_items[anim_labels.index("Famiglia")]
+probe("Animations: the grey number is the selector's positions (7 categories, the families of Characters)",
+      cat_row.note() == "7"
+      and fam_row.note() == str(len(catalogmod.menu_families(cat, "characters")))
+      and anim_items[anim_labels.index("Esemplare")].note is None)
+probe("the Category row's description says who is in it and how many",
+      cat_row.desc().startswith("Entità: chi ha una testa")
+      and f"{sum(len(f['exemplars']) for f in cat.families['characters'])} esemplari" in cat_row.desc())
+merlin = next(i for i, f in enumerate(catalogmod.menu_families(cat, "characters")) if f[2]["model"] == 229)
+v.anim_sel = {"category": "characters", "family": merlin, "which": 1}
+v.menu.rebuild()
+probe("the page's title is the family's name, the model and the parts under it",
+      v._anim_title() == "Merlino" and v._anim_subtitle() == "Animazioni · Modello 229 · 31 parti")
+# a click on the value's left arrow goes back, on the right one goes on
+v.menu.stack[-1][2] = anim_labels.index("Famiglia")
+v.on_draw()
+row = anim_labels.index("Famiglia")
+y0, y1, _i = next(a for a in v.menu._areas if a[2] == row)
+left, middle = v.menu._value_middles[row]
+v.menu.click(left + 2, (y0 + y1) / 2, pyglet.window.mouse.LEFT)
+went_back = v.anim_sel["family"] == (merlin - 1) % len(catalogmod.menu_families(cat, "characters"))
+v.on_draw()
+y0, y1, _i = next(a for a in v.menu._areas if a[2] == row)
+left, middle = v.menu._value_middles[row]
+v.menu.click(middle + 4, (y0 + y1) / 2, pyglet.window.mouse.LEFT)
+probe("a click on ‹ goes back, a click on › goes on", went_back and v.anim_sel["family"] == merlin)
+v.menu.stack[-1][2] = anim_labels.index("Categoria")
+while v.anim_sel["category"] != "collectables":
+    press(k.RIGHT)
+probe("changing category starts its families from the first, exemplar 1",
+      v.anim_sel["family"] == 0 and v.anim_sel["which"] == 1
+      and v.menu.stack[-1][1][anim_labels.index("Categoria")].note() == "7")
+v.anim_sel = {"category": "rest", "family": 0, "which": 1}
+v.menu.rebuild()
+anim_items = v.menu.stack[-1][1]
+anim_labels = [x.label() for x in anim_items]
+probe("The rest has the two families Scenery and Invisible logic",
+      [f[0] for f in catalogmod.menu_families(cat, "rest")] == [("rest", "scenery"), ("rest", "logic")])
+v.menu.stack[-1][2] = anim_labels.index("Esemplare")
+press(k.RIGHT, k.MOD_SHIFT)
+probe("Shift + arrow on Which one jumps ten", v.anim_sel["which"] == 11)
+helpers = next(i for i, f in enumerate(catalogmod.menu_families(cat, "characters")) if f[2]["model"] == 272)
+v.anim_sel = {"category": "characters", "family": helpers, "which": 1}
+v.menu.rebuild()
+v.anim_follow = True
+v.anim_follow_tick()
+e = v._anim_exemplar()
+target = Vec3(*geo._transform((0, 0, 0), pos=catalogmod.place_of(cat, e))) + Vec3(0.0, 1.0, 0.0)
+probe("the selected thing is framed: the camera 6 m from the first helper's place, 1 m up",
+      abs((v.pos - target).length() - 6.0) < 0.01)
+probe("a helper is not there at the start, and the why goes back to Merlin's sign (#58, zone 3: N75)",
+      not e["at_start"] and "#58" in v._anim_why(e) and "zona 3" in v._anim_why(e))
+# step 3: where the game keeps one alive at a time (N75, trigger 101's
+# helpers) choosing an exemplar shows it and hides the other two
+sets = catalogmod.one_at_a_time(cat)
+probe("Nowhere: one 'one at a time' set, trigger 101's three helpers (N75)",
+      len(sets) == 1 and {r[0][0][1] for r in sets[0]} == {101} and len(sets[0]) == 3)
+second = next(i for i, x in enumerate(catalogmod.menu_families(cat, "characters")[helpers][1])
+              if x["route"] == ((("placed", 101), 6),)) + 1
+v._anim_set(which=second)
+shown, hidden = v.anim_exceptions["shown"], v.anim_exceptions["hidden"]
+probe("choosing the second helper shows it and hides the other two",
+      shown == {((("placed", 101), 6),)} and hidden == set(sets[0]) - shown
+      and any(g.category == "chosen" for g in v.current_level.face_groups.values()))
+e = v._anim_exemplar()
+roles = v._anim_object_roles(e)
+v._anim_set_role(e, roles[2])
+e = v._anim_exemplar()
+frames = v._anim_frames(e)
+probe("Animation: the helper plays its third role, with its frames", v._anim_current_role(e) == roles[2] and frames > 1)
+v._anim_set_frame(e, 10)
+probe("Frame 10: the helper is held on frame index 9", v.anim_holds.get(v._anim_key(e)) == 9)
+v._anim_set_flow(e, "loop")
+probe("How it runs -> loop: the hold goes", v._anim_key(e) not in v.anim_holds)
+v.anim_sel = {"category": "characters", "family": helpers, "which": 1}
+v.menu.rebuild()
+pos_before = Vec3(*v.pos)
+v.anim_follow = False
+v.anim_sel["which"] = 2
+v.anim_follow_tick()
+probe("with Follow off the camera stays", v.pos == pos_before)
+v.anim_follow = True
+drawn = True
+for c in catalogmod.CATEGORIES:
+    v.anim_sel = {"category": c, "family": 0, "which": 1}
+    v.menu.rebuild()
+    try:
+        v.on_draw()
+    except Exception as error:  # noqa: BLE001
+        print(error)
+        drawn = False
+probe("the page draws on every category of Nowhere", drawn)
+mine = os.path.join(paths.DATA_BZE, "L03C1.bze")
+v.load_level(mine)
+probe("another level: the selection back to the top", v.anim_sel["category"] == "characters")
+v.anim_sel = {"category": "carried", "family": 0, "which": 1}
+v.menu.rebuild()
+try:
+    v.on_draw()
+    drawn = True
+except Exception as error:  # noqa: BLE001
+    print(error)
+    drawn = False
+probe("an empty category (Carried and pushed in Mine or mine? 2) says none and draws",
+      drawn and any(isinstance(x, menumod.Info) and x.value_text() == "nessuna" for x in v.menu.stack[-1][1]))
+v.menu.hide()
+v.load_level(dock)
 
 # the selector: Alt+click again on the same pixel steps down the stack and,
 # after the last, passes through "nothing selected"; a right click clears

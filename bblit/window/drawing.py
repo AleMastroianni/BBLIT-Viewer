@@ -594,7 +594,10 @@ class Drawing:
             self.push_uv_rule(face_group.tex_id)
             glBindTexture(GL_TEXTURE_2D, tex or 0)
             if face_group.vaos:
-                vao, _vbo, first_idx, item_count = face_group.vaos[self.tick() % len(face_group.vaos)]
+                # an object held on one frame (Level options -> Animations)
+                hold = self.anim_holds.get(face_group.anim_key) if face_group.anim_key else None
+                frame = self.tick() if hold is None else hold
+                vao, _vbo, first_idx, item_count = face_group.vaos[frame % len(face_group.vaos)]
             else:
                 vao, first_idx, item_count = face_group.vao, 0, face_group.item_count
             if face_group.spin:

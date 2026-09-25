@@ -14,17 +14,22 @@ N10-N13, N20, N30):
   is true; it moves the object to the state in +2 unless effect 0x10, and
   without effect 0x8000 the walk stops there;
 * a **type 16** trigger (and the other small handlers that carry rules) walks
-  its whole list every tick; with bit 4 of the second static flag word it runs
-  only while Bugs is within 2000 in plan;
+  its whole list every tick; when a rule's condition is false, its word +6 is
+  a skip label: 0 goes to the next rule, else the walk jumps forward to the
+  first rule whose key is that word (the reverse's N73 section 3; bit 4 of
+  the second static flag word, "within 2000 of Bugs", does not gate the
+  rules);
 * effect 0x10000 (third parameter not 1) deletes the object that fired; a step
   with control bit 4 deletes it at its end; types 31 (bullet) and 32 (text)
   always end by themselves (N13a), a type 4 sprite with an 0x10000 rule after
   one cycle.
 
 What runs **by itself** is read without Bugs doing anything: Bugs stands where
-the level starts him, nobody touches, hits, carries or presses anything, the
-level and save bytes start at zero and take every value that the rules able
-to fire by themselves write into them (a fixed point: the ride of Mine or
+the level starts him, in his first series (the first slot of his start state:
+4 in the main levels, N74), nobody touches, hits, carries or presses
+anything, the level bytes start at zero and the save bytes at a new game's
+(byte 0 = 3, 1 = 6, 2 = 6, 14 = 56: N74), and they take every value that the
+rules able to fire by themselves write into them (a fixed point: the ride of Mine or
 mine? 3 is a trigger that writes byte 49 = 40 at its first tick, and each
 stretch writes the next number at the end of its animation). Time passes, so
 frames, animation ends, clocks and draws do come. The camera is free, so
@@ -67,8 +72,9 @@ HIT_BY_ID, SIDE_TEST = 0x2000, 0x20
 END_MARKER = 0xFFF0
 LOOP, ONCE_HOLD = 0x1, 0x802
 DELETED_AT_END = 0x4             # step control bit
-NEAR_BUGS_ONLY = 0x4             # second static flag word of a type 16
-NEAR_BUGS_RANGE = 2000
+# the save bytes of a new game that are not 0 (the reverse's N74: the save
+# service's defaults; byte 16, the language, is left at 0)
+NEW_GAME = {0: 3, 1: 6, 2: 6, 14: 56}
 
 ALL = frozenset(range(256))
 
@@ -112,6 +118,15 @@ _STEPS = {0x03, 0x05, 0x04, 0x17, 0x06, 0x16, 0x24, 0x25, 0x27, 0x28}
 _SHORT_LIVED = {31, 32}
 
 
+def _first_slot(obj):
+    """The key of the first slot of an object's start state (2, else 1)."""
+    states = {s["number"]: s for s in obj.get("states", ())}
+    state = states.get(2) or states.get(1)
+    if state is None:
+        return None
+    return next((k for k in state["slots"][:1] if k != END_MARKER), None)
+
+
 def _s8(v):
     return v - 256 if v >= 128 else v
 
@@ -151,7 +166,10 @@ class Reading:
         player = next((o for o in objects if o.get("start") and o.get("position")), None)
         self.bugs = tuple(player["position"]) if player else None
         self.bugs_area = player.get("area") if player else None
-        self.tables = {"level": {}, "save": {}}
+        # Bugs's series at the first tick: the key of the first slot of his
+        # start state (N74: 4 in the main levels); conditions 0x0c and 0x4e
+        self.bugs_series = _first_slot(player) if player else None
+        self.tables = {"level": {}, "save": {i: {v} for i, v in NEW_GAME.items()}}
         # a template read as if cloned changes nothing (_actor_for)
         self._dry = False
         # the work queue of the fixed point, and who reads each byte
@@ -202,6 +220,9 @@ class Reading:
             return True in results, results == {True}
         if op in _ALWAYS:
             return True, op not in _CLOCK
+        if op in (0x0C, 0x4E):            # Bugs's series / step key == a
+            holds = self.bugs_series == a
+            return holds, holds
         if op in (0x0E, 0x2C):            # Bugs's area == / != a
             same = self.bugs_area == a
             holds = same if op == 0x0E else not same
@@ -276,6 +297,56 @@ class Reading:
                 break
         return changed
 
+    def _walk_list(self, actor, rules) -> bool:
+        """A trigger's walk (and the other small handlers'): the whole list,
+        and when a rule's condition is false its word +6 is a skip label (N73
+        section 3). Read over every way through the list: a rule that may
+        fail leads to its label (or the next rule), a rule that fires goes on
+        only with 0x8000, and dies with 0x10000."""
+        changed = False
+        reachable = [False] * (len(rules) + 1)
+        if rules:
+            reachable[0] = True
+        for pos, (i, rule) in enumerate(rules):
+            if not reachable[pos]:
+                continue
+            can, certain = self._gates(actor, rule)
+            if can:
+                can, sure = self._condition(actor, rule)
+                certain = certain and sure
+            if not certain:
+                label = rule["next_state"]
+                if label:
+                    jump = next((p for p in range(pos + 1, len(rules)) if rules[p][1]["key"] == label), None)
+                    if jump is not None:
+                        reachable[jump] = True
+                else:
+                    reachable[pos + 1] = True
+            if not can:
+                continue
+            if i not in actor.fired:
+                actor.fired.add(i)
+                changed = True
+            changed |= self._fire(actor, rule)
+            effect = rule["effect"]
+            if effect & DELETES_SELF and rule["field28"] != 1:
+                continue
+            if effect & GO_ON:
+                reachable[pos + 1] = True
+        return changed
+
+    def _next_state(self, actor, rule):
+        """The state a fired rule sends its object to, or None when it stays:
+        with 0x8000 or 0x10 the state does not change (a "next" with 0x8000 is
+        never applied), a rule that deletes its object ends there, and a
+        "next" of 0 is the first state stored in the object (N73 section 1)."""
+        effect = rule["effect"]
+        if not actor.walker or effect & (GO_ON | STAYS | SIDE_TEST):
+            return None
+        if effect & DELETES_SELF and rule["field28"] != 1:
+            return None
+        return rule["next_state"] or actor.obj["states"][0]["number"]
+
     def _act(self, actor, rule) -> bool:
         """The rule's action on the tables: whether a byte took a new value."""
         changed = False
@@ -336,10 +407,10 @@ class Reading:
                 if target.walker and rule["field24"] not in target.states:
                     target.states.add(rule["field24"])
                     self._enqueue(target)
-        if actor.walker and rule["next_state"] and not effect & STAYS:
-            if rule["next_state"] not in actor.states:
-                actor.states.add(rule["next_state"])
-                changed = True
+        target = self._next_state(actor, rule)
+        if target is not None and target not in actor.states:
+            actor.states.add(target)
+            changed = True
         return changed
 
     def _clone(self, actor, role) -> bool:
@@ -366,12 +437,7 @@ class Reading:
         if obj.get("category") == 14 and not actor.walker:
             return False                  # a type 14 with no state walks nothing
         if not actor.walker:
-            if obj.get("category") == 16 and (obj.get("static_flags") or [0, 0])[1] & NEAR_BUGS_ONLY:
-                if self.bugs is None or not any(
-                        math.hypot(p[0] - self.bugs[0], p[2] - self.bugs[2]) <= NEAR_BUGS_RANGE
-                        for p in actor.places):
-                    return False
-            return self._walk(actor, rules)
+            return self._walk_list(actor, rules)
         changed = False
         for number, step in list(self._groups(actor)):
             group = step.get("rules")
@@ -437,9 +503,9 @@ class Reading:
                 continue
             if effect & GO_ON:
                 continue
-            target = here
-            if actor.walker and rule["next_state"] and not effect & STAYS:
-                target = rule["next_state"]
+            target = self._next_state(actor, rule)
+            if target is None:
+                target = here
             if target == here or target in alive:
                 return True
             if certain:

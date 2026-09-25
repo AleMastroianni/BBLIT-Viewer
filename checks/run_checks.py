@@ -55,6 +55,7 @@ CHECKS = [
     "check_part_meshes",
     "check_ground_snap",
     "check_gates",
+    "check_catalog",
     "check_sky",
     "check_collision",
     "check_ground_below",

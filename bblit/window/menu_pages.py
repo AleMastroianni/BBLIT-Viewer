@@ -36,6 +36,7 @@ from pyglet.gl import (GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR_MIPMAP_NEAR
                        glDeleteTextures, glTexParameteri)  # noqa: E402
 
 from window.drawing import WIRE_GRID, WIRE_OFF, WIRE_SKELETON  # noqa: E402
+from window.animations_page import PAGE_WIDTH  # noqa: E402
 from window.scene import resolve_levels_folder  # noqa: E402
 
 try:
@@ -336,10 +337,9 @@ class MenuPages:
                     M.YesNo("level.area_visibility", lambda: self.show_area_visibility,
                             self._set_area_visibility, "desc.area_visibility"),
                     M.Section("level.entities"),
-                    M.Choice("level.animations",
-                             [("playing", "level.anim.playing"), ("paused", "level.anim.paused"),
-                              ("pose", "level.anim.pose")],
-                             self._animation_state, self._set_animation_state, "desc.animations"),
+                    # the animations of the whole level moved to Animations:
+                    # one place to change a thing, not two
+                    M.Submenu("menu.anim", "animations", desc="desc.anim_page"),
                     M.Number("level.tps", lambda: self.tps, self._set_tps, 1, 60,
                              desc="desc.tps"),
                     M.YesNo("level.texanim", lambda: self.animated_textures,
@@ -475,6 +475,8 @@ class MenuPages:
                                           n=self.current_level.name if self.current_level else "—"), level),
             "flags": M.Page(lambda: t("level.flags"), flags, 440),
             "gates": M.Page(lambda: t("level.gates"), gates_page, 440),
+            "animations": M.Page(self._anim_title, self._anim_items, PAGE_WIDTH,
+                                 subtitle=self._anim_subtitle),
             "walls": M.Page(lambda: t("level.walls"), walls, 440),
             "camera": M.Page(lambda: t("camera.title", level=self.current_level.name if self.current_level else "—"),
                              camera, 600),
