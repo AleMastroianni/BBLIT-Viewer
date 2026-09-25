@@ -44,7 +44,10 @@ def press(s, mod=0):
     return v.on_key_press(s, mod)
 
 
-probe("title with the build", v.caption.endswith("Debug"))
+# the kind of copy is in the title: "Debug" here, the folder's kind in the
+# other copies (Current, Development, Portable)
+probe("title with the build", v.build == settings_mod.build() and v.build != ""
+      and v.caption.endswith(v.build))
 probe("flags off at startup: no overlay family built",
       not v.current_level.families
       and not any(g.category in viewer.OVERLAYS for g in v.current_level.face_groups.values()))
@@ -218,7 +221,7 @@ v.menu.stack[-1][2] = 4   # General options
 press(k.ENTER)
 press(k.RIGHT)           # Lingua -> English
 probe("English language", texts.language() == "en" and v.menu.stack[-1][1][0].label().startswith("Language"))
-probe("title translated, with version and build", v.caption == f"BBLIT Viewer {VERSION} — Debug")
+probe("title translated, with version and build", v.caption == f"BBLIT Viewer {VERSION} — {v.build}")
 press(k.LEFT)
 probe("Italian language", texts.language() == "it")
 press(k.M)
