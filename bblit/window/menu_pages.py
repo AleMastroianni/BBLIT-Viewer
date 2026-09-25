@@ -24,8 +24,10 @@ import ctypes  # noqa: E402
 from game import geometry as geo  # noqa: E402
 from game import levels  # noqa: E402
 from ui import menu as menumod  # noqa: E402
+from support import level_cache  # noqa: E402
 from support import paths  # noqa: E402
 from support import preferences  # noqa: E402
+from support import upscale_cache  # noqa: E402
 from support import version  # noqa: E402
 from ui import texts  # noqa: E402
 from ui.texts import t  # noqa: E402
@@ -37,12 +39,19 @@ from pyglet.gl import (GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR_MIPMAP_NEAR
 
 from window.drawing import WIRE_GRID, WIRE_OFF, WIRE_SKELETON  # noqa: E402
 from window.animations_page import PAGE_WIDTH  # noqa: E402
+from window.overlays import OVERLAYS  # noqa: E402
+from ui import settings as settings_mod  # noqa: E402
 from window.scene import resolve_levels_folder  # noqa: E402
 
 try:
     from support import private_export  # noqa: E402  (private copies only: left out of the public version)
 except ImportError:
     private_export = None
+if private_export is not None:
+    # its words (its entry, the area boxes' description with its y): lost
+    # when viewer.py was split into modules (c0700ff), so the entry showed
+    # its raw key "camera.copy_ce"
+    texts.TEXTS.update(private_export.TEXTS)
 
 # The vertical field of view of the PC game, 51,28 degrees (finding 327):
 # 51 in the menu, next to the round values the viewer had before.
@@ -74,7 +83,12 @@ class MenuPages:
         def main_items():
             resume_item = M.Action("menu.resume", resume)
             resume_item.disabled = self.current_level is None    # nothing to resume
-            return [resume_item,
+            # a level that did not build: said first (window/app.py, load_level)
+            error = getattr(self, "load_error", None)
+            warning = ([M.Info(lambda: t("menu.load_error", n=error[0])),
+                        M.Info(lambda: error[1][:60]),
+                        M.Section(None, label_text=lambda: "")] if error else [])
+            return warning + [resume_item,
                     M.Submenu("menu.load", "load"),
                     M.Submenu("menu.level", "level"),
                     M.Submenu("menu.video", "video"),
@@ -123,8 +137,10 @@ class MenuPages:
                 desc = lambda f=file: t("load.missing", file=f)
             item = M.Action(None, lambda i=i, c=extra.get("camera"): self._open_level(i, c),
                             desc=desc, label_text=label_text,
-                            right_text=lambda f=file, i=i: f + ("  ●" if i == self.index
-                                                            and self.current_level is not None else ""))
+                            right_text=lambda f=file, i=i, c=extra.get("camera"): f + (
+                                "  ●" if i == self.index and self.current_level is not None
+                                and (tuple(c) if c else None) == getattr(self, "opened_camera", None)
+                                else ""))
             item.disabled = i is None
             return item
 
@@ -157,6 +173,14 @@ class MenuPages:
             if self.build == "Debug":
                 menu_items += [M.Section(None, label_text=lambda: ""),
                          M.Submenu("extra.title", "extra", desc="load.desc_extra")]
+            # the keys [ and ] in the menu too, in this page's order
+            # (Controls.step_level)
+            if self.current_level is not None:
+                menu_items += [M.Section(None, label_text=lambda: ""),
+                               M.Action("load.previous", lambda: self._step_from_menu(-1),
+                                        desc="desc.load_previous"),
+                               M.Action("load.next", lambda: self._step_from_menu(1),
+                                        desc="desc.load_next")]
             menu_items += [M.Back()]
             return menu_items
 
@@ -192,17 +216,25 @@ class MenuPages:
                     setattr(self, attr_name, v)
                     self.ensure_overlays()
                 return M.YesNo(item_key, lambda: getattr(self, attr_name), set_flag, desc)
-            return [M.Submenu("level.walls", "walls", desc="desc.walls"),
+            def gap():
+                return M.Section(None, label_text=lambda: "")
+            # in groups: all off first; the ground and what does not stop
+            # you; the zones; the boxes and who opens what
+            return [M.Action("level.flags_off", self._all_flags_off, desc="desc.flags_off"),
+                    gap(),
+                    M.Submenu("level.walls", "walls", desc="desc.walls"),
+                    item("level.ground", "show_ground", "desc.ground"),
                     item("level.no_collision", "show_no_collision", "desc.no_collision"),
-                    item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
+                    item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
+                    gap(),
                     item("level.death_zones", "show_death_zones", "desc.death_zones"),
                     item("level.teleport_zones", "show_teleport_zones", "desc.teleport_zones"),
-                    item("level.ground", "show_ground", "desc.ground"),
+                    gap(),
+                    item("level.collision_boxes", "show_collision_boxes", "desc.collision_boxes"),
                     M.Choice("level.gate_links",
                              [("off", "level.gate_links.off"), ("gates", "level.gate_links.gates"),
                               ("all", "level.gate_links.all")],
                              lambda: self.show_gate_links, self._set_gate_links, "desc.gate_links"),
-                    item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
                     # apart from the flags: it changes only their words
                     M.Section(None, label_text=lambda: ""),
                     M.YesNo("level.flag_labels", lambda: self.show_flag_labels,
@@ -217,6 +249,7 @@ class MenuPages:
                 def set_flag(v):
                     setattr(self, attr_name, v)
                     self.ensure_overlays()
+                    self.menu.rebuild()      # the entries below may turn grey or back
                 return M.Choice(item_key, [("off", "level.walls.off"), ("all", "level.walls.all"),
                                            ("unseen", "level.walls.unseen")],
                                 lambda: getattr(self, attr_name), set_flag, desc)
@@ -224,13 +257,26 @@ class MenuPages:
             def set_area_boxes(v):
                 self.show_area_boxes = v
                 self.ensure_overlays()
+                self.menu.rebuild()
+
+            def depends(item, needed, reason_key):
+                """Grey while it can change nothing (it can still be set, for
+                when it will), and the description says what it waits for."""
+                item.disabled = not needed
+                words = item.desc
+                item.desc = lambda: (t(reason_key) + " " if not needed else "") + t(words)
+                return item
+            steps_on = self.show_steps != "off"
+            walls_on = steps_on or self.show_hard_walls != "off" or self.show_area_boxes
             return [three_way("level.hard_walls", "show_hard_walls", "desc.hard_walls"),
                     three_way("level.steps", "show_steps", "desc.steps"),
-                    M.YesNo("level.hole_steps", lambda: self.show_hole_steps,
-                            lambda v: setattr(self, "show_hole_steps", v), "desc.hole_steps"),
+                    depends(M.YesNo("level.hole_steps", lambda: self.show_hole_steps,
+                                    lambda v: setattr(self, "show_hole_steps", v), "desc.hole_steps"),
+                            steps_on, "level.needs_steps"),
                     M.YesNo("level.area_boxes", lambda: self.show_area_boxes, set_area_boxes, "desc.area_boxes"),
-                    M.YesNo("level.walls_outside", lambda: self.show_walls_outside,
-                            lambda v: setattr(self, "show_walls_outside", v), "desc.walls_outside"),
+                    depends(M.YesNo("level.walls_outside", lambda: self.show_walls_outside,
+                                    lambda v: setattr(self, "show_walls_outside", v), "desc.walls_outside"),
+                            walls_on, "level.needs_walls"),
                     M.Back()]
 
         def copy_item(item_key, desc, make_text, disabled=False):
@@ -273,6 +319,10 @@ class MenuPages:
                           M.Number("camera.speed", lambda: self.speed, lambda v: setattr(self, "speed", float(v)),
                                    CAMERA_SPEEDS[0], CAMERA_SPEEDS[-1], number_format="{:.0f} m/s",
                                    desc="desc.camera_speed", stops=CAMERA_SPEEDS),
+                          # the key R in the menu too
+                          M.Action("camera.reset", self.reset_camera, desc="desc.camera_reset"),
+                          M.Action("camera.paste", self._go_to_clipboard_point, desc="desc.camera_paste",
+                                   right_text=lambda: self._paste_words()),
                           M.Action("camera.add", self._add_bookmark, desc="desc.camera_add"),
                           *([copy_item("camera.copy_ce", "desc.copy_ce",
                                        lambda: self._point_text("private", self.pos, t("camera.now")))]
@@ -305,6 +355,8 @@ class MenuPages:
             return [M.Info(lambda: t("camera.now"), lambda: self._coords_text((mark["x"], mark["y"], mark["z"]))),
                     M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(pos)),
                     M.Action("bookmark.go", self._go_to_bookmark, desc="desc.bookmark_go"),
+                    M.TextField("bookmark.name", lambda: mark.get("name") if isinstance(mark.get("name"), str) else "",
+                                self._rename_bookmark, desc="desc.bookmark_name"),
                     M.Action("bookmark.replace", lambda: self._replace_bookmark("bookmark.replace"),
                              right_text=lambda: self._feedback_text("bookmark.replace", "bookmark.replaced")),
                     *([copy_item("camera.copy_ce", "desc.copy_ce", lambda: self._point_text("private", pos, name))]
@@ -323,15 +375,33 @@ class MenuPages:
         def level():
             if self.current_level is None:
                 return [M.Info(lambda: t("level.no_level")), M.Back()]
+            sky_choice = []
+            if self.current_level.sky_choices:
+                # the skies the game alternates (finding 314): one at a time,
+                # in the file's order; "(the first)" is the level's own
+                # default, whichever is chosen. Right under Sky
+                default = self.current_level.sky_default
+                sky_choice = [M.Choice(
+                    "level.sky_choice",
+                    [(role, lambda n=n, at_start=at_start, role=role:
+                        t("level.sky_choice.start" if at_start else
+                          "level.sky_choice.default" if role == default and not at_start else
+                          "level.sky_choice.other", n=n))
+                     for role, n, at_start in self.current_level.sky_choices],
+                    lambda: self.current_level.sky_chosen, self._set_sky_choice,
+                    "desc.sky_choice")]
             menu_items = [M.Submenu("level.flags", "flags", desc="desc.flags"),
                     M.Submenu("level.camera", "camera", desc="desc.camera"),
                     M.Section("level.rendering"),
                     M.YesNo("level.texture", lambda: self.show_textures,
                            lambda v: setattr(self, "show_textures", v), "desc.texture"),
+                    M.YesNo("level.texanim", lambda: self.animated_textures,
+                           lambda v: setattr(self, "animated_textures", v), "desc.texanim"),
                     M.YesNo("level.props", lambda: self.show_props,
                            lambda v: setattr(self, "show_props", v), "desc.props"),
                     M.YesNo("level.sky", lambda: self.show_sky,
                            lambda v: setattr(self, "show_sky", v), "desc.sky"),
+                    *sky_choice,
                     M.YesNo("level.blending", lambda: self.show_blending,
                            lambda v: setattr(self, "show_blending", v), "desc.blending"),
                     M.Choice("level.wireframe",
@@ -346,8 +416,6 @@ class MenuPages:
                     M.Submenu("menu.anim", "animations", desc="desc.anim_page"),
                     M.Number("level.tps", lambda: self.tps, self._set_tps, 1, 60,
                              desc="desc.tps"),
-                    M.YesNo("level.texanim", lambda: self.animated_textures,
-                           lambda v: setattr(self, "animated_textures", v), "desc.texanim"),
                     M.YesNo("level.movers", lambda: self.show_movers,
                             self._set_movers, "desc.movers"),
                     M.Choice("level.clones",
@@ -365,19 +433,6 @@ class MenuPages:
                                      lambda g=entity_group: self._group_state(g),
                                      lambda role, g=entity_group: self._set_group_state(g, role),
                                      "desc.group"))
-            if self.current_level.sky_choices:
-                # the skies the game alternates (finding 314): one at a time,
-                # the level's starting one first, like the states above
-                default = self.current_level.sky_choices[0][0]
-                menu_items.append(M.Choice(
-                    "level.sky_choice",
-                    [(role, lambda n=n, at_start=at_start, role=role:
-                        t("level.sky_choice.start" if at_start else
-                          "level.sky_choice.default" if role == default and not at_start else
-                          "level.sky_choice.other", n=n))
-                     for role, n, at_start in self.current_level.sky_choices],
-                    lambda: self.current_level.sky_choices[0][0], self._set_sky_choice,
-                    "desc.sky_choice"))
             menu_items.append(M.Back())
             return menu_items
 
@@ -402,26 +457,33 @@ class MenuPages:
             return menu_items
 
         def video():
-            return [M.YesNo("video.fullscreen", lambda: self.fullscreen,
+            # three groups: the screen, the textures, what imitates the game
+            return [M.Section("video.section.screen"),
+                    M.YesNo("video.fullscreen", lambda: self.fullscreen,
                            lambda v: self.set_fullscreen(v), "desc.fullscreen"),
-                    M.YesNo("video.vsync", lambda: self.user_settings["vsync"], self._toggle_vsync),
-                    M.YesNo("video.filter", lambda: self.bilinear, self._set_filter, "desc.filter"),
-                    M.Choice("video.scale", [(n, lambda n=n: f"x{n}") for n in (1, 2, 3, 4)],
-                             lambda: self.scale_factor, self._set_texture_scale, "desc.scale"),
-                    M.Choice("video.color", [(1.0, "video.color.pc"), (2.0, "video.color.psx")],
-                             lambda: self.albedo, lambda v: setattr(self, "albedo", v),
-                             "desc.color"),
-                    M.Choice("video.uv", [(geo.UV_PC, "video.uv.pc"),
-                                          (geo.UV_PC_AMD, "video.uv.amd"), (geo.UV_PSX, "video.uv.psx")],
-                             lambda: self.uv_rule, self._set_uv_rule, "desc.uv"),
-                    M.Choice("video.distant", [(False, "video.distant.pc"), (True, "video.distant.smooth")],
-                             lambda: self.mipmaps, self._set_mipmaps, "desc.distant"),
+                    M.YesNo("video.vsync", lambda: self.user_settings["vsync"], self._toggle_vsync,
+                            "desc.vsync"),
                     M.Number("video.fov", lambda: self.fov, lambda v: setattr(self, "fov", v),
                              40, 100, increment=5, number_format="{:.0f}°",
                              desc="desc.fov", stops=FIELD_OF_VIEW_STOPS,
                              labels={PC_FIELD_OF_VIEW: "video.fov.pc"}),
+                    M.Section("video.section.textures"),
+                    M.YesNo("video.filter", lambda: self.bilinear, self._set_filter, "desc.filter"),
+                    M.Choice("video.distant", [(False, "video.distant.pc"), (True, "video.distant.smooth")],
+                             lambda: self.mipmaps, self._set_mipmaps, "desc.distant"),
+                    M.Choice("video.scale", [(n, lambda n=n: f"x{n}") for n in (1, 2, 3, 4)],
+                             lambda: self.scale_factor, self._set_texture_scale, "desc.scale"),
+                    M.Choice("video.uv", [(geo.UV_PC, "video.uv.pc"),
+                                          (geo.UV_PC_AMD, "video.uv.amd"), (geo.UV_PSX, "video.uv.psx")],
+                             lambda: self.uv_rule, self._set_uv_rule, "desc.uv"),
+                    M.Section("video.section.game"),
+                    M.Choice("video.color", [(1.0, "video.color.pc"), (2.0, "video.color.psx")],
+                             lambda: self.albedo, lambda v: setattr(self, "albedo", v),
+                             "desc.color"),
                     M.YesNo("video.backface", lambda: self.backface_culling,
                             lambda v: setattr(self, "backface_culling", v), "desc.backface"),
+                    M.Section(None, label_text=lambda: ""),
+                    M.Action("video.defaults", self._video_defaults, desc="desc.video_defaults"),
                     M.Back()]
 
         def general_items():
@@ -430,13 +492,21 @@ class MenuPages:
                              texts.language, self._set_language, "desc.language"),
                     M.YesNo("general.status_bar", lambda: self.show_status_bar,
                            lambda v: setattr(self, "show_status_bar", v), "desc.status_bar"),
-                    M.Submenu("general.keys", "help", desc="desc.general_keys"),
+                    # straight to the two drawn pages, not to Help (which has About too)
+                    M.Submenu("help.keyboard", "keyboard", desc="desc.help_keyboard"),
+                    M.Submenu("general.gamepad_page", "gamepad", desc="desc.help_gamepad"),
                     M.YesNo("general.gamepad", lambda: self.gamepad_enabled, self._set_gamepad,
                             "desc.general_gamepad"),
                     M.Action("general.folder", self._choose_levels_dir,
-                             desc=lambda: t("general.desc_folder", c=self.folder or "—"),
-                             right_text=lambda: os.path.basename(self.folder or "") or "—"),
-                    M.Action("data.open", self._open_levels_dir, desc="data.desc_open"),
+                             desc=lambda: self._folder_words(t("general.desc_folder", c=self.folder or "—")),
+                             right_text=lambda: (t("data.no_bze_short") if self._no_bze_folder()
+                                                 else os.path.basename(self.folder or "") or "—")),
+                    M.Action("general.open_folder", self._open_folder_in_use,
+                             desc=lambda: t("general.desc_open_folder", c=self.folder or paths.LEVELS_DIR)),
+                    M.Action("general.clean_cache", self._clean_cache, desc="desc.clean_cache",
+                             right_text=lambda: self._stale_cache_words()),
+                    M.Section(None, label_text=lambda: ""),
+                    M.Action("general.defaults", self._general_defaults, desc="desc.general_defaults"),
                     M.Back()]
 
         def data_items():
@@ -447,7 +517,9 @@ class MenuPages:
                     M.Info(lambda: t("data.line4")),
                     M.Section(None, label_text=lambda: ""),
                     M.Action("data.open", self._open_levels_dir, desc="data.desc_open"),
-                    M.Action("data.choose", self._choose_levels_dir, desc="data.desc_choose"),
+                    M.Action("data.choose", self._choose_levels_dir,
+                             desc=lambda: self._folder_words(t("data.desc_choose")),
+                             right_text=lambda: t("data.no_bze_short") if self._no_bze_folder() else ""),
                     M.Action("data.retry", self._retry, desc="data.desc_retry"),
                     M.Submenu("menu.general", "general"),
                     M.Action("menu.quit", self.close)]
@@ -522,7 +594,8 @@ class MenuPages:
         self._push_filters()
 
     def _push_filters(self):
-        for name in self.texture_names():
+        # the flags' words keep their own filter (Drawing.game_texture_names)
+        for name in self.game_texture_names():
             glBindTexture(GL_TEXTURE_2D, name)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
                             GL_LINEAR if self.bilinear else GL_NEAREST)
@@ -536,7 +609,8 @@ class MenuPages:
         self.uv_rule = rule
         self.forget_uv_rule()
         wrap = self.uv_wrap()
-        for name in self.texture_names():
+        # the flags' words stay clamped: their uvs go past 0..1 on purpose
+        for name in self.game_texture_names():
             glBindTexture(GL_TEXTURE_2D, name)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap)
@@ -579,6 +653,33 @@ class MenuPages:
         if self.gamepad is not None:
             self.gamepad.release()
 
+    def _step_from_menu(self, step):
+        """Load level -> Previous / Next level: as the keys, then the menu on
+        the new level's main page, as after any load."""
+        self.step_level(step)
+        self.menu.show("main")
+
+    def _all_flags_off(self):
+        """Flags -> All flags off: every flag of the page (and of Walls) back
+        to how it starts, as at a level change; Flag labels and the Level
+        options stay as they are."""
+        for attr in set(OVERLAYS.values()):
+            if attr in self._flags_at_start:
+                setattr(self, attr, self._flags_at_start[attr])
+        if self.show_gate_links != self._flags_at_start.get("show_gate_links", "off"):
+            self._set_gate_links(self._flags_at_start.get("show_gate_links", "off"))
+        self.ensure_overlays()
+        self.menu.rebuild()
+
+    def _no_bze_folder(self):
+        """The folder last chosen that had no .bze files, or None."""
+        return getattr(self, "_no_bze", None)
+
+    def _folder_words(self, words):
+        """A description, with first the folder that had no levels."""
+        bad = self._no_bze_folder()
+        return (t("data.no_bze", c=bad) + " " + words) if bad else words
+
     def _save_settings(self):
         """The current state into the settings: what was changed with the
         shortcut keys also persists to the next run."""
@@ -619,13 +720,88 @@ class MenuPages:
             return
         folder = resolve_levels_folder(os.path.normpath(selected))
         if folder is None:
-            print(t("data.no_bze", c=selected))
+            # said in the menu, beside the entry and in its description: the
+            # executable has no console, a print was never seen
+            self._no_bze = selected
+            self.menu.dirty = True
             return
+        self._no_bze = None
         self.user_settings["levels_folder"] = folder
         self.user_settings.persist()
         self._use_levels_dir(folder)
         if self.current_level is not None:
             self.menu.hide()
+
+    def _video_defaults(self):
+        """Video options -> Restore defaults: every entry of the page as a
+        new installation has it (ui/settings.py, DEFAULTS)."""
+        d = settings_mod.DEFAULTS
+        if self.fullscreen != d["fullscreen"]:
+            self.set_fullscreen(d["fullscreen"])
+        if self.user_settings["vsync"] != d["vsync"]:
+            self._toggle_vsync(d["vsync"])
+        self.fov = d["field_of_view"]
+        if self.bilinear != d["bilinear_filter"]:
+            self._set_filter(d["bilinear_filter"])
+        if self.mipmaps != d["mipmaps"]:
+            self._set_mipmaps(d["mipmaps"])
+        if self.scale_factor != d["texture_scale"]:
+            self._set_texture_scale(d["texture_scale"])
+        if self.uv_rule != d["uv_rule"]:
+            self._set_uv_rule(d["uv_rule"])
+        self.albedo = d["albedo"]
+        self.backface_culling = d["backface_culling"]
+        self.menu.rebuild()
+
+    def _general_defaults(self):
+        """General options -> Restore defaults: the status bar and the
+        gamepad. The language and the levels folder stay as they are: they
+        are choices, not display settings."""
+        d = settings_mod.DEFAULTS
+        self.show_status_bar = d["status_bar"]
+        if self.gamepad_enabled != d["gamepad"]:
+            self._set_gamepad(d["gamepad"])
+        self.menu.rebuild()
+
+    def _stale_cache_files(self, refresh=False):
+        """What Clean the cache sends to the Recycle Bin: the pieces nobody
+        reads any more, and the texture scale's enlargements (they would only
+        grow), all but those of the level open at the scale in use."""
+        cached = getattr(self, "_stale_cache", None)
+        if cached is None or refresh:
+            keep = []
+            if self.current_level is not None and self.scale_factor != 1:
+                keep.append(upscale_cache.path_of(self.cache, self.current_level.name, self.scale_factor))
+            cached = self._stale_cache = (level_cache.stale_pieces(self.cache, self.folder)
+                                          + upscale_cache.files(self.cache, keep))
+        return cached
+
+    def _stale_cache_words(self):
+        """Beside General options -> Clean the cache: how much it frees."""
+        files = self._stale_cache_files()
+        if not files:
+            return t("general.clean_cache.none")
+        size = sum(os.path.getsize(f) for f in files if os.path.exists(f)) / 2**20
+        return t("general.clean_cache.size", n=len(files), mb=size)
+
+    def _clean_cache(self):
+        """General options -> Clean the cache: the saved pieces written by
+        other code or for another file go to the Recycle Bin (the user
+        empties it); they would be rewritten anyway when their level opens."""
+        files = self._stale_cache_files(refresh=True)
+        if files:
+            level_cache.to_recycle_bin(files)
+        self._stale_cache_files(refresh=True)
+        self.menu.rebuild()
+
+    def _open_folder_in_use(self):
+        """General options: opens in Explorer the folder the levels are read
+        from now (the chosen one), not always bze_levels."""
+        folder = self.folder if self.folder and os.path.isdir(self.folder) else None
+        if folder is None:
+            self._open_levels_dir()
+            return
+        os.startfile(folder)
 
     def _open_levels_dir(self):
         os.makedirs(paths.LEVELS_DIR, exist_ok=True)

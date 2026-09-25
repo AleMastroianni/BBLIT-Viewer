@@ -1,4 +1,4 @@
-"""The level names in the menu (tools/levels.py) against the game's own texts.
+"""The level names in the menu (bblit/game/levels.py) against the game's own texts.
 
     .venv/Scripts/python checks/check_official_names.py
 

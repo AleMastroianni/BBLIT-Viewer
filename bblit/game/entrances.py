@@ -67,6 +67,23 @@ def _level_changes(folder: str, cache: str) -> list[tuple[str, str, int, int]]:
     return output
 
 
+def folder_signature(folder: str) -> str:
+    """Name, size and date of the folder's level files: what the ENTRANCE
+    names are read from. It goes into the key of the zones' piece
+    (window/scene.py), so that another levels folder, or a file changed in
+    it, rebuilds the names instead of showing those of the folder before."""
+    import hashlib
+    h = hashlib.sha1()
+    try:
+        for entry in sorted(os.listdir(folder)):
+            if entry.lower().endswith(".bze") and not os.path.splitext(entry)[0].lower().endswith("_8"):
+                st = os.stat(os.path.join(folder, entry))
+                h.update(f"{entry.lower()}|{st.st_size}|{st.st_mtime_ns};".encode())
+    except OSError:
+        return ""
+    return h.hexdigest()[:16]
+
+
 def sources_of(rule: dict, level_name: str, folder: str, cache: str) -> list[str]:
     """The files of the levels an entrance rule can be entered from: those
     whose level change leads to `level_name` and writes the byte the rule's

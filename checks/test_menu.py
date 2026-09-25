@@ -82,16 +82,18 @@ probe("Flags is the first entry of Level options", labels[0] == "Flags")
 v.menu.stack[-1][2] = 0
 press(k.ENTER)
 flag = [x.label() for x in v.menu.stack[-1][1]]
-probe("Flags: Muri first, then the overlays, all off by default",
+probe("Flags: All off first, then in groups (walls and ground, zones, boxes), all off by default",
       v.menu.stack[-1][0] == "flags"
-      and flag[:5] == ["Muri", "Senza collisione", "Box di collisione",
-                       "Zone di morte e danno", "Zone di teletrasporto"]
+      and [x for x in flag if x] == ["Spegni tutte le flag", "Muri", "Terreno di collisione",
+                                     "Senza collisione", "Portali", "Zone di morte e danno",
+                                     "Zone di teletrasporto", "Box di collisione", "Chi apre cosa",
+                                     "Etichette flag", "Indietro"]
       and v.show_hard_walls == "off" and v.show_steps == "off"
       and not (v.show_no_collision or v.show_collision_boxes
                or v.show_death_zones or v.show_teleport_zones))
 # Flags -> Muri: Hard walls and Steps three-way, edges over holes, area
 # boxes, outside side
-v.menu.stack[-1][2] = 0
+v.menu.stack[-1][2] = flag.index("Muri")
 press(k.ENTER)
 walls_labels = [x.label() for x in v.menu.stack[-1][1]]
 probe("Muri: Muri duri, Gradini, bordi sui buchi, Box delle aree, Lato di fuori",
@@ -143,14 +145,25 @@ probe("Gradini -> No", v.show_steps == "off")
 press(k.BACKSPACE)
 probe("Backspace from Muri returns to Flags", v.menu.stack[-1][0] == "flags")
 flag_attrs = ["show_no_collision", "show_collision_boxes", "show_death_zones", "show_teleport_zones"]
+flag_rows = ["Senza collisione", "Box di collisione", "Zone di morte e danno", "Zone di teletrasporto"]
 turned_on = []
-for i_f, attr in enumerate(flag_attrs, start=1):
-    v.menu.stack[-1][2] = i_f
+for row, attr in zip(flag_rows, flag_attrs):
+    v.menu.stack[-1][2] = flag.index(row)
     press(k.ENTER)
     turned_on.append(getattr(v, attr))
     press(k.ENTER)
 probe("Enter turns each flag on and off again", all(turned_on)
       and not any(getattr(v, a) for a in flag_attrs))
+# Spegni tutte le flag: every flag back off, Flag labels untouched
+v.show_no_collision, v.show_death_zones, v.show_hard_walls = True, True, "all"
+v.ensure_overlays()
+v.show_flag_labels = False
+v.menu.stack[-1][2] = flag.index("Spegni tutte le flag")
+press(k.ENTER)
+probe("All flags off: the flags and Walls back off, Flag labels as it was",
+      not v.show_no_collision and not v.show_death_zones and v.show_hard_walls == "off"
+      and not v.show_flag_labels)
+v.show_flag_labels = True
 probe("turning a flag on builds its family; off only hides it",
       v.current_level.families == set(viewer.FAMILIES)
       and {g.category for g in v.current_level.face_groups.values()} >= {
@@ -265,9 +278,9 @@ if debug_build:
     probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere (Debug build)",
           "Nowhere" not in page_labels and "Era selector" not in page_labels
           and "Vista d'insieme" not in page_labels and
-          "Cutscenes" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
+          "Filmati" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
           and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
-    v.menu.stack[-1][2] = page_labels.index("Cutscenes")
+    v.menu.stack[-1][2] = page_labels.index("Filmati")
     press(k.ENTER)
     menu_items = v.menu.stack[-1][1]
     v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items)
@@ -314,7 +327,7 @@ build = v.build
 v.build = "Portable"
 v.menu.show("main"); v.menu.open_page("extra")
 probe("in another build Extra does not show Cutscenes but keeps the _8 variants",
-      "Cutscenes" not in [x.label() for x in v.menu.stack[-1][1]]
+      "Filmati" not in [x.label() for x in v.menu.stack[-1][1]]
       and any((x.value_text() or "").startswith("L03A_8") for x in v.menu.stack[-1][1]))
 v.build = build
 
@@ -450,9 +463,11 @@ probe("Aiuto: Tastiera, Gamepad, Informazioni, Indietro",
       [x.label() for x in v.menu.stack[-1][1]] == ["Tastiera", "Gamepad", "Informazioni", "Indietro"])
 v.menu.show("main"); v.menu.open_page("general")
 glabels = [x.label() for x in v.menu.stack[-1][1]]
-probe("Opzioni generali: Tasti e gamepad (to the same page) and Gamepad yes/no",
-      "Tasti e gamepad" in glabels and "Gamepad" in glabels
-      and v.menu.stack[-1][1][glabels.index("Tasti e gamepad")].page == "help")
+probe("Opzioni generali: Tastiera and Gamepad straight to their pages, Gamepad yes/no, "
+      "the cache and the defaults",
+      v.menu.stack[-1][1][glabels.index("Tastiera")].page == "keyboard"
+      and any(getattr(x, "page", None) == "gamepad" for x in v.menu.stack[-1][1])
+      and "Pulisci la cache" in glabels and "Ripristina i predefiniti" in glabels)
 defaults = keybinds.defaults()
 probe("default keys by position on the active layout: E Q T M, levels on VK_OEM_4 / VK_OEM_6",
       v.bindings.key("camera_up") == k.E and v.bindings.key("camera_down") == k.Q
@@ -904,6 +919,47 @@ w.close()
 w = viewer.Viewer(None, "extracted", screenshot="nessuna.png", level="L03A2")
 probe("startup with a requested level: that one", w.current_level is not None and w.current_level.name.upper() == "L03A2")
 w.close()
+# Camera and points: a bookmark's name written from the keyboard, and a point
+# pasted from the clipboard
+w = viewer.Viewer([os.path.join(paths.DATA_BZE, "L03A.bze")], "extracted", 0, screenshot="nessuna.png")
+w.screenshot = None   # the keyboard works again; the settings stay off
+texts.set_language("it")
+w.user_settings["bookmarks"] = {}
+w._add_bookmark()
+w._bookmark_i = 0
+w.menu.show("main"); w.menu.open_page("level"); w.menu.open_page("camera"); w.menu.open_page("bookmark")
+blabels = [x.label() for x in w.menu.stack[-1][1]]
+w.menu.stack[-1][2] = blabels.index("Nome")
+w.on_key_press(k.ENTER, 0)
+w.on_text("Porto")
+w.on_key_press(k.BACKSPACE, 0)
+w.on_text("i")
+w.on_key_press(k.ENTER, 0)
+named = w._mark_name(w._bookmarks()[0])
+w.menu.stack[-1][2] = blabels.index("Nome")
+w.on_key_press(k.ENTER, 0)
+w.on_text("xyz")
+w.on_key_press(k.ESCAPE, 0)
+probe("a bookmark's name: typed, Backspace, Enter saves; Esc leaves it as it was, the menu still open",
+      named == "Porti" and w._mark_name(w._bookmarks()[0]) == "Porti" and w.menu.is_open
+      and w.menu.editing is None)
+w.set_clipboard_text("{ X = 20000, Y = -1500, Z = 16000 }, -- BBLIT L03A, test")
+w._go_to_clipboard_point()
+at = (round(w.pos.x * 128), round(-(w.pos.y - 1.6) * 128), round(-w.pos.z * 128))
+w.set_clipboard_text("BBLIT L01A x=1 y=2 z=3")
+before_other = (w.pos.x, w.pos.y, w.pos.z)
+w._go_to_clipboard_point()
+probe("Go to the point in the clipboard: 1.6 m above it; a point of another level is said, not used",
+      at == (20000, -1500, 16000) and (w.pos.x, w.pos.y, w.pos.z) == before_other
+      and w._paste_result[0] == "camera.paste.other")
+w.close()
+# a value too long for its row gives way, not the label: shortened with its
+# arrows kept
+long_value = menumod.fit_value("‹ " + "NVIDIA/Intel " * 8 + "›", 120, 16)
+probe("a value too long is shortened with its arrows kept, to the room it has",
+      long_value.startswith("‹ ") and long_value.endswith("… ›")
+      and menumod.text_width(long_value, 16) <= 120
+      and menumod.fit_value("‹ PC ›", 120, 16) == "‹ PC ›")
 from window import app as appmod  # noqa: E402
 probe("the saved window size is taken back; a broken or too small one gives 1280 x 760",
       appmod._window_size([1500, 900]) == (1500, 900) and appmod._window_size([300, 200]) == (1280, 760)

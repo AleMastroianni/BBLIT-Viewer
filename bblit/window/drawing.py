@@ -8,6 +8,7 @@ it).
 
 from __future__ import annotations
 
+import functools
 import os
 import sys
 
@@ -29,6 +30,7 @@ from ui import flag_labels  # noqa: E402
 from support import paths  # noqa: E402
 from game import tim  # noqa: E402
 from support import upscale  # noqa: E402
+from support import upscale_cache  # noqa: E402
 from window.overlays import (BOX_ALPHA, BOX_BLEND, LABEL_HEIGHT, LABEL_NEAR,  # noqa: E402
                              LINK_WIDTH, ONE_SIDED, OVERLAYS, OVERLAY_BLEND,
                              PULLED_FORWARD, THICK_LINES, THICK_LINE_WIDTH, THROUGH_WALLS,
@@ -75,6 +77,9 @@ PULL_FILL = 0.001
 PULL_EDGES = 0.002
 
 
+# wall_class and wall_pull depend on the category's name only: kept per
+# category, they are asked for every group of every frame
+@functools.lru_cache(maxsize=None)
 def wall_class(category):
     """The kind of wall a group's fill belongs to, or None if it is not one
     (a name, an outline, another flag)."""
@@ -86,6 +91,7 @@ def wall_class(category):
     return None
 
 
+@functools.lru_cache(maxsize=None)
 def wall_pull(category):
     """How much a group is pulled toward the camera: a wall's fill or the
     face it colours a little, its outline and its name more. 0 for
@@ -318,6 +324,22 @@ class Drawing:
             return max(0, min(self.tick() - level.once_from, n_frames - 1))
         return self.tick()
 
+    def shown_groups(self, areas=None):
+        """The level's groups drawn this frame, less the sky dome (drawn on
+        its own). One rule for the drawing and for the selector (Alt+click),
+        which passes no areas: two copies of it had drifted apart."""
+        return [g for g in self.current_level.face_groups.values()
+                if (areas is None or g.area is None or g.area in areas)
+                and not (g.category == "props" and not self.show_props)
+                and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
+                # the flag names are textures: without textures they would be black quads
+                and not (g.category.endswith("_label") and not self.show_textures)
+                # Flags -> Flag labels off: the words go, colours and outlines stay
+                and not (isinstance(g.tex_id, str) and not self.show_flag_labels)
+                and not (g.category == "clones" and self.show_clones < 2)
+                and not (g.category == "clones_in_level" and self.show_clones < 1)
+                and g.category != "sky_dome"]
+
     def tick(self) -> int:
         """The animation tick: frozen with P or with --tick."""
         if self.fixed_tick is not None:
@@ -350,7 +372,7 @@ class Drawing:
         try:
             b, h, rgba = tim.read_tim(source[0], source[1], tim.pc_colour(blend))
             if self.scale_factor != 1:
-                b, h, rgba = upscale.enlarge((b, h, rgba), self.scale_factor)
+                b, h, rgba = self._enlarged(b, h, rgba)
         except Exception:  # noqa: BLE001
             self.textures[lookup_key] = None
             return None
@@ -369,6 +391,32 @@ class Drawing:
         glGenerateMipmap(GL_TEXTURE_2D)
         self.textures[lookup_key] = name.value
         return name.value
+
+    def _enlarged(self, b, h, rgba):
+        """A texture enlarged to the texture scale: from the level's file of
+        enlargements if it is there (support/upscale_cache.py), else made
+        and kept, the file written a moment after the last one made."""
+        level, factor = self.current_level.name, self.scale_factor
+        held = getattr(self, "_upscale", None)
+        if held is None or held[0] != (level, factor):
+            self._save_enlarged()       # another level or scale: what was made is written first
+            held = self._upscale = [(level, factor), upscale_cache.load(self.cache, level, factor), False]
+        key = upscale_cache.key_of(b, h, rgba)
+        hit = held[1].get(key)
+        if hit is not None:
+            return hit
+        B, H, big = upscale.enlarge((b, h, rgba), factor)
+        held[1][key] = (B, H, bytes(big))
+        held[2] = True
+        pyglet.clock.unschedule(self._save_enlarged)
+        pyglet.clock.schedule_once(self._save_enlarged, 2.0)
+        return held[1][key]
+
+    def _save_enlarged(self, dt=0):
+        held = getattr(self, "_upscale", None)
+        if held is not None and held[2]:
+            upscale_cache.store(self.cache, held[0][0], held[0][1], held[1])
+            held[2] = False
 
     def _label_texture(self, tid):
         """A flag's name as a texture (flag_labels), always in English."""
@@ -423,6 +471,10 @@ class Drawing:
             glVertexAttribPointer(place, measure, GL_FLOAT, False, step, ctypes.c_void_p(offset))
         glBindVertexArray(0)
         face_group.vao, face_group.vbo, face_group.item_count = vao.value, vbo.value, len(face_group.data) // 8
+        data = face_group.data
+        if len(data):
+            xs, ys, zs = data[0::8], data[1::8], data[2::8]
+            face_group.extent = (min(xs), min(ys), min(zs), max(xs), max(ys), max(zs))
         face_group.data = array("f")
 
     def _upload_sorter(self, sorter):
@@ -576,17 +628,7 @@ class Drawing:
                                           @ Mat4.from_rotation(angle, Vec3(0.0, 1.0, 0.0)))
 
         areas = self._visible_areas(proj @ view) if self.show_area_visibility else None
-        visible_groups = [g for g in self.current_level.face_groups.values()
-                     if (areas is None or g.area is None or g.area in areas)
-                     and not (g.category == "props" and not self.show_props)
-                     and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
-                     # the flag names are textures: without textures they would be black quads
-                     and not (g.category.endswith("_label") and not self.show_textures)
-                     # Flags -> Flag labels off: the words go, colours and outlines stay
-                     and not (isinstance(g.tex_id, str) and not self.show_flag_labels)
-                     and not (g.category == "clones" and self.show_clones < 2)
-                     and not (g.category == "clones_in_level" and self.show_clones < 1)
-                     and g.category != "sky_dome"]
+        visible_groups = self.shown_groups(areas)
 
         # face culling is switched only when it changes from one group to the
         # next: 573 groups each turning it on and off cost milliseconds
@@ -905,12 +947,22 @@ class Drawing:
             self.menu.draw_menu(self)
         glEnable(GL_DEPTH_TEST)
 
+    @staticmethod
+    def _set_label(label, **values):
+        """Sets a pyglet Label's properties only where they change: every
+        assignment of font_size, x, y or text redoes the label's layout even
+        with the same value (1.3 ms a frame for the status bar alone). The
+        label drawn is the same."""
+        for name, value in values.items():
+            if getattr(label, name) != value:
+                setattr(label, name, value)
+
     def _draw_signature(self):
         """Bottom right, above the status bar."""
         s = max(0.75, min(1.6, self.height / 760.0))
-        self.signature.font_size = 14 * s
         status_bar = round(26 * s) if (self.current_level is not None and self.show_status_bar) else 0
-        self.signature.x, self.signature.y = self.width - round(16 * s), status_bar + round(12 * s)
+        self._set_label(self.signature, font_size=14 * s,
+                        x=self.width - round(16 * s), y=status_bar + round(12 * s))
         glEnable(GL_BLEND)
         self.signature.draw()
         self.signature_drawn = True    # for test_menu.py
@@ -935,9 +987,8 @@ class Drawing:
             pieces.append(t("status.pick"))
         pieces.append(t("status.menu"))
         s = max(0.75, min(1.6, self.height / 760.0))
-        self.status_bar.font_size = 11 * s
-        self.status_bar.x, self.status_bar.y = round(10 * s), round(7 * s)
-        self.status_bar.text = "   ·   ".join(pieces)
+        self._set_label(self.status_bar, font_size=11 * s, x=round(10 * s), y=round(7 * s),
+                        text="   ·   ".join(pieces))
         self._status_background.width, self._status_background.height = self.width, round(26 * s)
         glEnable(GL_BLEND)
         self._status_background.draw()
@@ -949,11 +1000,8 @@ class Drawing:
         if not lines:
             return
         s = max(0.75, min(1.6, self.height / 760.0))
-        self.pick_text.font_size = 11 * s
-        self.pick_text.text = chr(10).join(lines)
-        self.pick_text.width = round(740 * s)
-        self.pick_text.x = round(14 * s)
-        self.pick_text.y = self.height - round(14 * s)
+        self._set_label(self.pick_text, font_size=11 * s, text=chr(10).join(lines), width=round(740 * s),
+                        x=round(14 * s), y=self.height - round(14 * s))
         height = round(len(lines) * 16.5 * s) + round(16 * s)
         self._pick_background.width = round(764 * s)
         self._pick_background.height = height
@@ -1236,6 +1284,23 @@ class Drawing:
             if value:
                 yield value
 
+    # the keys of the flags' words in the texture cache: their filter (mipmaps,
+    # linear) and their edge (clamped: the words' uvs go past 0..1 on
+    # purpose, flag_labels.label_uvs) are their own, whatever Video options say
+    WORD_TEXTURES = ("label", "floating")
+
+    def game_texture_names(self):
+        """The GL names of the game's textures only, without the flags' words:
+        what Video options (filter, distant textures, texture coordinates)
+        may change."""
+        for key, value in self.textures.items():
+            if isinstance(key, tuple) and key and key[0] in self.WORD_TEXTURES:
+                continue
+            if isinstance(value, tuple):
+                value = value[0]
+            if value:
+                yield value
+
     def _floating_label(self, text):
         """(texture, width, height) of a name floating above an object, made
         once per text (flag_labels.floating_texture_rgba)."""
@@ -1256,6 +1321,21 @@ class Drawing:
         return self.textures[lookup_key]
 
     def _screenshot(self, dt):
-        pyglet.image.get_buffer_manager().get_color_buffer().save(self.screenshot)
+        self.save_frame(self.screenshot)
+        self._save_enlarged()           # the window closes before the timer would write them
         print(f"screenshot written to {self.screenshot}")
         self.close()
+
+    def save_frame(self, file_path):
+        """The frame on screen as a PNG. Read as BGRA straight from the
+        card: pyglet's own path reads RGBA and its Windows encoder then turns
+        every pixel into BGRA with a regular expression, 1.15 s a photo. The
+        same encoder with the same pixels writes the same file."""
+        from pyglet.gl import GL_BACK, GL_BGRA, GL_PACK_ALIGNMENT, glPixelStorei, glReadBuffer, glReadPixels
+        color = pyglet.image.get_buffer_manager().get_color_buffer()
+        width, height = color.width, color.height
+        data = (ctypes.c_ubyte * (width * height * 4))()
+        glReadBuffer(GL_BACK)
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, data)
+        pyglet.image.ImageData(width, height, "BGRA", bytes(data)).save(file_path)

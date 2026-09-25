@@ -23,8 +23,11 @@ from support import level_cache
 from game import levels
 
 
-def order(folder: str) -> list[str]:
-    """The .bze files of the folder that the menu opens, in menu order."""
+def order(folder: str, extra: bool = True) -> list[str]:
+    """The .bze files of the folder that the menu opens, in menu order.
+    Without `extra` the Extra files (cutscenes, menu, credits, `_8`
+    variants) are left out: only the Debug build's menu lists them, and the
+    other copies would build and save 24 files nobody opens."""
     try:
         on_disc = {os.path.splitext(f)[0].upper(): os.path.join(folder, f)
                    for f in os.listdir(folder) if f.lower().endswith(".bze")}
@@ -33,6 +36,8 @@ def order(folder: str) -> list[str]:
     seen, output = set(), []
     for item in levels.all_entries():
         name = item[1].upper()
+        if not extra and levels.is_extra(name):
+            continue
         if name in on_disc and name not in seen:
             seen.add(name)
             output.append(on_disc[name])
@@ -61,8 +66,9 @@ def parent_alive(pid: int | None) -> bool:
 
 def run(folder: str, cache: str, parent_pid: int | None = None) -> None:
     from game import textures as texmod
+    from ui import settings as settings_mod
     from viewer import Level
-    for file_path in order(folder):
+    for file_path in order(folder, extra=settings_mod.build() == "Debug"):
         if not parent_alive(parent_pid):
             return
         name = os.path.splitext(os.path.basename(file_path))[0]
@@ -72,7 +78,9 @@ def run(folder: str, cache: str, parent_pid: int | None = None) -> None:
         pieces = {}
         try:
             table = texmod.construct(folder, name, cache)
-            Level(file_path, cache, table, None, pieces, families=set())
+            # as the viewer opens it: the characters that move are on
+            # (app.py, show_movers), and their pieces have keys of their own
+            Level(file_path, cache, table, None, pieces, families=set(), movers=True)
         except Exception:  # noqa: BLE001
             continue   # a level that does not build: the viewer will say so when opened
         # the viewer may have opened and saved it meanwhile, maybe with more
@@ -125,15 +133,52 @@ def run_flags(file_path: str, cache: str, parent_pid: int | None = None) -> None
     before = len(pieces)
     try:
         table = texmod.construct(folder, name, cache)
-        Level(file_path, cache, table, None, pieces, families=tuple(FAMILIES))
+        Level(file_path, cache, table, None, pieces, families=tuple(FAMILIES), movers=True)
     except Exception:  # noqa: BLE001
         return
-    if len(pieces) <= before or not parent_alive(parent_pid):
+    if len(pieces) <= before:
+        _mark_flags_done(file_path, cache)   # everything was there already
+        return
+    if not parent_alive(parent_pid):
         return
     # whoever else saved meanwhile keeps its pieces: the union is stored
     saved = level_cache.fetch(cache, name, signature) or {}
     saved.update(pieces)
     level_cache.store(cache, name, signature, saved)
+    if level_cache.is_current(cache, name, signature):
+        _mark_flags_done(file_path, cache)
+
+
+FLAGS_DONE = "flags_done.txt"
+
+
+def flags_key(file_path: str) -> str:
+    """What the flag families of a level depend on: the level's piece
+    signature (its file and the code) and the folder's levels (the ENTRANCE
+    names, game/entrances.py)."""
+    from game import entrances
+    return level_cache.signature(file_path) + "|" + entrances.folder_signature(os.path.dirname(file_path))
+
+
+def flags_done(file_path: str, cache: str) -> bool:
+    """Whether the flag families of this level are already saved for this
+    very key: then the viewer does not start the builder again (it cost
+    1-3 s of processor at every level change for nothing)."""
+    name = os.path.splitext(os.path.basename(file_path))[0]
+    try:
+        with open(os.path.join(cache, name, FLAGS_DONE), encoding="ascii") as f:
+            return f.read().strip() == flags_key(file_path)
+    except (OSError, ValueError):
+        return False
+
+
+def _mark_flags_done(file_path: str, cache: str) -> None:
+    name = os.path.splitext(os.path.basename(file_path))[0]
+    try:
+        with open(os.path.join(cache, name, FLAGS_DONE), "w", encoding="ascii") as f:
+            f.write(flags_key(file_path))
+    except OSError:
+        pass
 
 
 def start_flags(file_path: str, cache: str):

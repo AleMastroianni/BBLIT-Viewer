@@ -34,24 +34,31 @@ except (ImportError, AttributeError, OSError):      # not Windows
 MAPVK_VSC_TO_VK = 1
 MAPVK_VK_TO_CHAR = 2
 
-# (action, text key of what it does, context, default virtual-key code)
+# (action, text key of what it does, context, default virtual-key code), in
+# groups: the camera, the levels, how the level is drawn, the animations,
+# the interface (Help -> Keyboard lists them in this order)
 ACTIONS = [
+    # camera
     ("camera_up", "keys.camera_up", "scene", 0x45),          # E
     ("camera_down", "keys.camera_down", "scene", 0x51),      # Q
     ("reset_camera", "help.reset", "scene", 0x52),           # R
+    # levels
     ("level_prev", "keys.level_prev", "scene", 0xDB),        # VK_OEM_4: [ on US
     ("level_next", "keys.level_next", "scene", 0xDD),        # VK_OEM_6: ] on US
+    # rendering
     ("textures", "level.texture", "scene", 0x54),            # T
+    ("texanim", "level.texanim", "scene", 0x4E),             # N
     ("props", "level.props", "scene", 0x4F),                 # O
     ("sky", "level.sky", "scene", 0x48),                     # H
     ("blending", "level.blending", "scene", 0x4D),           # M
     ("wireframe", "level.wireframe", "scene", 0x46),         # F
-    ("texanim", "level.texanim", "scene", 0x4E),             # N
+    ("filter", "video.filter", "scene", 0x4C),               # L
     ("clones", "level.clones", "scene", 0x47),               # G
+    # animations
     ("pause", "help.pause", "scene", 0x50),                  # P
     ("tps_down", "keys.tps_down", "scene", 0xBD),            # VK_OEM_MINUS
     ("tps_up", "keys.tps_up", "scene", 0xBB),                # VK_OEM_PLUS
-    ("filter", "video.filter", "scene", 0x4C),               # L
+    # interface
     ("hide_ui", "help.hide_ui", "any", 0x70),                # F1
     ("menu_back", "keys.menu_back", "menu", 0x4D),           # M
     ("menu_back_alt", "keys.menu_back_alt", "menu", 0x08),   # Backspace

@@ -16,6 +16,7 @@ selected item at the bottom of the panel.
 
 from __future__ import annotations
 
+import functools
 import pyglet
 from pyglet.gl import (GL_BLEND, GL_DEPTH_TEST, GL_FUNC_ADD, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA,
                        glBlendEquation, glBlendFunc, glDisable, glEnable)
@@ -42,6 +43,14 @@ NOTE_COLOR = (150, 150, 150, 255)
 DISABLED_COLOR = (125, 125, 125, 255)
 
 
+@functools.lru_cache(maxsize=16384)
+def text_width(row, font_size):
+    """The width in pixels of one line of text: the same label measured as
+    before, kept per (text, size). A new pyglet Label costs 3.8 ms, and the
+    menu measures every word of every description again at each rebuild."""
+    return pyglet.text.Label(row, font_name=FONT, font_size=font_size).content_width
+
+
 def wrap_lines(label_text, width_units, font_size):
     """Split the text into lines that fit in `width_units` pixels.
 
@@ -49,13 +58,10 @@ def wrap_lines(label_text, width_units, font_size):
     layout widens the space before the last word ("Tasto T." became
     "Tasto   T."), at any width.
     """
-    def text_width(row):
-        return pyglet.text.Label(row, font_name=FONT, font_size=font_size).content_width
-
     lines, current = [], ""
     for word in label_text.split():
         probe = f"{current} {word}" if current else word
-        if current and text_width(probe) > width_units:
+        if current and text_width(probe, font_size) > width_units:
             lines.append(current)
             current = word
         else:
@@ -67,19 +73,27 @@ def wrap_lines(label_text, width_units, font_size):
 
 def ellipsize(label_text, width_units, font_size):
     """The text, shortened with "…" if it does not fit in `width_units` pixels."""
-    def text_width(t):
-        return pyglet.text.Label(t, font_name=FONT, font_size=font_size).content_width
-
-    if text_width(label_text) <= width_units:
+    if text_width(label_text, font_size) <= width_units:
         return label_text
     low, high = 0, len(label_text)
     while low < high:
         middle = (low + high + 1) // 2
-        if text_width(label_text[:middle].rstrip() + "…") <= width_units:
+        if text_width(label_text[:middle].rstrip() + "…", font_size) <= width_units:
             low = middle
         else:
             high = middle - 1
     return label_text[:low].rstrip() + "…"
+
+
+def fit_value(value_text, width_units, font_size):
+    """A value shortened with "…" to `width_units` pixels, its arrows "‹ … ›"
+    kept (they say it can be changed)."""
+    if text_width(value_text, font_size) <= width_units:
+        return value_text
+    if value_text.startswith("‹ ") and value_text.endswith(" ›"):
+        inner = ellipsize(value_text[2:-2], width_units - text_width("‹  ›", font_size), font_size)
+        return f"‹ {inner} ›"
+    return ellipsize(value_text, width_units, font_size)
 
 
 # ------------------------------------------------------------------ items
@@ -222,6 +236,26 @@ class Back(Item):
         menu.go_back()
 
 
+class TextField(Item):
+    """A line of text written from the keyboard (the name of a bookmark).
+    Enter starts writing (the menu takes the typed characters), Enter again
+    stores it, Esc gives up, Backspace deletes."""
+
+    def __init__(self, item_key, fetch, store, desc=None, max_length=40):
+        super().__init__(item_key, desc)
+        self.fetch, self.store, self.max_length = fetch, store, max_length
+        self.buffer = None             # the text being written, or None
+
+    def value_text(self):
+        if self.buffer is not None:
+            return self.buffer + "▌"
+        return self.fetch() or "—"
+
+    def confirm(self, menu):
+        self.buffer = self.fetch() or ""
+        menu.editing = self
+
+
 class Section(Item):
     selectable = False
 
@@ -261,6 +295,7 @@ class Page:
 class Menu:
     def __init__(self, pages: dict[str, Page]):
         self.pages = pages
+        self.editing = None               # the TextField being written, if any
         self.is_open = False
         self.stack: list[list] = []       # [entry_name, menu_items, cursor]
         self._batch = None
@@ -293,9 +328,35 @@ class Menu:
         return self.pages[self.stack[-1][0]].custom
 
     def capturing(self) -> bool:
-        """A drawn page is waiting for a key (Help -> Keyboard)."""
+        """A drawn page is waiting for a key (Help -> Keyboard), or a text
+        field is being written: the keys are the menu's only."""
+        if self.editing is not None:
+            return True
         c = self.custom()
         return c is not None and getattr(c, "capturing", None) is not None
+
+    def type_text(self, text) -> None:
+        """Characters typed while a text field is open (Controls.on_text)."""
+        field = self.editing
+        if field is None:
+            return
+        for ch in text:
+            if ch.isprintable() and len(field.buffer) < field.max_length:
+                field.buffer += ch
+        self.dirty = True
+
+    def _edit_key(self, symbol) -> bool:
+        k = pyglet.window.key
+        field = self.editing
+        if symbol in (k.ENTER, k.NUM_ENTER):
+            text, field.buffer, self.editing = field.buffer.strip(), None, None
+            field.store(text)
+        elif symbol == k.ESCAPE:
+            field.buffer, self.editing = None, None
+        elif symbol == k.BACKSPACE:
+            field.buffer = field.buffer[:-1]
+        self.dirty = True
+        return True
 
     def _forget_areas(self):
         """The clickable areas are no longer valid: another list is on top, or
@@ -413,6 +474,8 @@ class Menu:
     def press(self, symbol, modifiers) -> bool:
         if not self.is_open or not self.stack:
             return False
+        if self.editing is not None:
+            return self._edit_key(symbol)
         if self.custom() is not None:
             return self.custom().press(symbol, modifiers, self)
         k = pyglet.window.key
@@ -654,8 +717,15 @@ class Menu:
                     value_right -= note_label.content_width + round(8 * s)
                     text_space -= note_label.content_width + round(8 * s)
                 if value_text:
-                    value_width = pyglet.text.Label(value_text, font_name=FONT, font_size=dim).content_width
-                    text_space -= value_width + round(18 * s)
+                    # when there is no room for both, the VALUE gives way, not
+                    # the label: a cut label says nothing any more, a cut
+                    # value still does (and the description explains it).
+                    # Only when even a short value would not fit does the
+                    # label shorten too
+                    gap = round(18 * s)
+                    value_room = max(text_space - text_width(v.label(), dim) - gap, round(90 * s))
+                    value_text = fit_value(value_text, value_room, dim)
+                    text_space -= text_width(value_text, dim) + gap
                 drawables.append(pyglet.text.Label(ellipsize(v.label(), text_space, dim),
                                              font_name=FONT, font_size=dim,
                                              x=x0 + padding, y=middle, anchor_y="center",

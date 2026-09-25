@@ -1,4 +1,4 @@
-"""The background filling of the piece cache (tools/cache_warmer.py).
+"""The background filling of the piece cache (bblit/support/cache_warmer.py).
 
     .venv/Scripts/python checks/check_cache_warmer.py [L03A L01A ...]
 
@@ -21,6 +21,7 @@ import time
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "bblit"))
 os.chdir(PROJECT_DIR)
+from ui import settings as settings_mod  # noqa: E402
 from support import cache_warmer  # noqa: E402
 from support import level_cache  # noqa: E402
 from support import paths  # noqa: E402
@@ -38,7 +39,10 @@ def fingerprint(built_level):
 
 errors = 0
 wanted = {n.upper() for n in sys.argv[1:]}
-all_files = cache_warmer.order(paths.DATA_BZE)
+# what the warmer builds in this kind of copy: the Extra files only in Debug,
+# where the menu lists them (cache_warmer.run)
+EXTRA = settings_mod.build() == "Debug"
+all_files = cache_warmer.order(paths.DATA_BZE, extra=EXTRA)
 files = [f for f in all_files if not wanted or os.path.splitext(os.path.basename(f))[0].upper() in wanted]
 with tempfile.TemporaryDirectory() as tmp:
     folder = paths.DATA_BZE
@@ -53,7 +57,7 @@ with tempfile.TemporaryDirectory() as tmp:
             except OSError:
                 import shutil
                 shutil.copy2(f, target)
-        files = cache_warmer.order(folder)
+        files = cache_warmer.order(folder, extra=EXTRA)
     cache = os.path.join(tmp, "cache")
 
     # 1. a dead parent: nothing is built

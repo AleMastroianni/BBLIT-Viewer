@@ -24,6 +24,7 @@ pyglet.options["debug_gl"] = False
 from pyglet.math import Vec3  # noqa: E402
 
 from game import geometry as geo  # noqa: E402
+from game import levels  # noqa: E402
 
 import time  # noqa: E402
 
@@ -37,6 +38,11 @@ class Controls:
     def reset_camera(self):
         """The opening camera (`opening_camera`)."""
         self.pos, self.yaw, self.pitch, self.speed = opening_camera(self.current_level)
+
+    def on_text(self, text):
+        """Typed characters: only a text field of the menu takes them."""
+        if self.menu.editing is not None:
+            self.menu.type_text(text)
 
     def on_key_press(self, symbol, modifiers):
         if self.screenshot:
@@ -112,9 +118,37 @@ class Controls:
         elif action == "reset_camera":
             self.reset_camera()
         elif action in ("level_prev", "level_next"):
-            step = -1 if action == "level_prev" else 1
-            self.index = (self.index + step) % len(self.level_files)
-            self.load_level(self.level_files[self.index])
+            self.step_level(-1 if action == "level_prev" else 1)
+
+    def level_order(self):
+        """The indexes of `level_files` in the order of Load level: the Era
+        selector, the eras with their parts and bonus levels, Nowhere, then
+        (Debug only) Extra; a file the level table does not know goes last.
+        Previous / next level walk this order, not the alphabetical one of
+        the files (after "What's cookin', Doc? 1" came part 3, not part 2)."""
+        cached = getattr(self, "_level_order", None)
+        if cached is not None and cached[0] is self.level_files:
+            return cached[1]
+        index_of = {os.path.splitext(os.path.basename(p))[0].upper(): i
+                    for i, p in enumerate(self.level_files)}
+        entries = sorted(levels.all_entries(), key=lambda e: e[1].upper() != "LS01")   # the hub first
+        order = []
+        for entry in entries:
+            i = index_of.get(entry[1].upper())
+            if i is not None and i not in order:
+                order.append(i)
+        order += [i for i in range(len(self.level_files)) if i not in order]
+        self._level_order = (self.level_files, order)
+        return order
+
+    def step_level(self, step):
+        """The previous or next level in the order of Load level."""
+        order = self.level_order()
+        if not order:
+            return
+        at = order.index(self.index) if self.index in order else -1
+        self.index = order[(at + step) % len(order)]
+        self.load_level(self.level_files[self.index])
 
     def _on_pad_button(self, button):
         # out of focus the pad belongs to the other window (an emulator)

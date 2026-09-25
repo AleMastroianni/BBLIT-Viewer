@@ -1,4 +1,4 @@
-"""The piece cache (tools/level_cache.py) against building from scratch.
+"""The piece cache (bblit/support/level_cache.py) against building from scratch.
 
     .venv/Scripts/python checks/check_level_cache.py [L03A L01A ...]
 

@@ -324,6 +324,9 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
                 self._flag_warmer.terminate()
             except OSError:
                 pass
+        if cache_warmer.flags_done(file_path, self.cache):
+            self._flag_warmer = None
+            return      # all built and saved for this very code and folder
         self._flag_warmer = cache_warmer.start_flags(file_path, self.cache)
 
     def pick_up_warmed_flags(self):
@@ -344,6 +347,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         return super().on_resize(width, height)
 
     def on_close(self):
+        self._save_enlarged()           # the texture scale's enlargements not yet written
         self._save_settings()
         super().on_close()
 
@@ -353,10 +357,18 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         open, only the camera moves and the menu closes; a level that was
         loaded opens the menu on its main page, with Level options, whatever
         page the load started from."""
-        loads = not (camera and self.current_level is not None and i == self.index)
+        # the level already open is not built again: a row with a camera
+        # moves the camera there, a row without one (the Era selector's
+        # overview) goes back to the opening camera
+        loads = not (self.current_level is not None and i == self.index)
         if loads:
             self.index = i
             self.load_level(self.level_files[i])
+        elif not camera:
+            self.reset_camera()
+        # which row of Load level was opened: the ● follows it (the six rows
+        # of the Era selector are one file)
+        self.opened_camera = tuple(camera) if camera else None
         if camera:
             x, y, z, yaw, pitch = camera
             self.pos, self.yaw, self.pitch = Vec3(x, y, z), yaw, pitch
@@ -365,7 +377,38 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         else:
             self.menu.hide()
 
-    def load_level(self, file_path, camera=True):
+    def load_level(self, file_path, camera=True) -> bool:
+        """Loads a level (`_load_level`). A level that does not build no longer
+        closes the viewer: the error goes to errors.txt next to the viewer,
+        the viewer stays open with no level, on the main page, and its first
+        line says which level and why. In screenshot mode (the checks) the
+        error is raised as before, so that a check still fails loudly.
+        True when the level is open."""
+        try:
+            self._load_level(file_path, camera)
+        except Exception as e:  # noqa: BLE001
+            if self.screenshot:
+                raise
+            import traceback
+            try:
+                with open(os.path.join(paths.APP_DIR, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(traceback.format_exc() + "\n")
+            except OSError:
+                pass
+            name = os.path.splitext(os.path.basename(file_path))[0]
+            try:
+                self._free_gpu(texture=True)
+            except Exception:  # noqa: BLE001
+                pass
+            self.current_level, self.textures, self._pieces = None, {}, {}
+            self.load_error = (levels.official_name(name) or name, f"{type(e).__name__}: {e}")
+            self.menu.show("main")
+            self.menu.rebuild()
+            return False
+        self.load_error = None
+        return True
+
+    def _load_level(self, file_path, camera=True):
         """Loads a level. `camera=False` leaves the camera where it is: used when
         the same level is rebuilt for a state chosen from the menu.
 
@@ -393,6 +436,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
             # of the one before and did not look like the level opened from
             # cold (`test_level_change.py`)
             self.anim_time = 0.0
+            self.opened_camera = None   # _open_level sets it again for an Era selector row
             self._shadow_area = None    # the hint for the shadow: another level's area
             # the bookmark page names a bookmark of the level that is leaving
             self._bookmark_i, self._delete_armed = 0, False
@@ -404,6 +448,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
             # the piece memory holds one level only: RAM does not grow;
             # those built in the past come back from disk (level_cache.py)
             self._signature = level_cache.signature(file_path)
+            level_cache.remove_orphans(self.cache, name)
             self._pieces = level_cache.fetch(self.cache, name, self._signature) or {}
             self._texture_table = texmod.construct(os.path.dirname(file_path), name, self.cache)
         n_known = len(self._pieces)
@@ -426,7 +471,12 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
             # flags are built in the background, without slowing this down
             self.start_flag_warmer(file_path)
         if len(self._pieces) > n_known:
-            level_cache.store(self.cache, name, self._signature, self._pieces)
+            # in a thread of its own: the level is drawn meanwhile. A copy of
+            # the dictionary, since the pieces the flag builder saves are
+            # added to it later; not a daemon, so closing waits for the file
+            import threading
+            threading.Thread(target=level_cache.store,
+                             args=(self.cache, name, self._signature, dict(self._pieces))).start()
         self._prepare_groups()
         self.lo, self.hi = self.current_level.bounds()
         lo, hi = self.current_level.terrain_lo, self.current_level.terrain_hi
@@ -587,16 +637,9 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         """The groups drawn this frame, for the selector: the same rule as
         `on_draw` (without the cut by area, which needs the frame's matrix).
         Only what is drawn can be picked."""
-        level = self.current_level
-        if level is None:
+        if self.current_level is None:
             return []
-        return [g for g in level.face_groups.values()
-                if not (g.category == "props" and not self.show_props)
-                and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
-                and not (g.category.endswith("_label") and not self.show_textures)
-                and not (g.category == "clones" and self.show_clones < 2)
-                and not (g.category == "clones_in_level" and self.show_clones < 1)
-                and g.category != "sky_dome"]
+        return self.shown_groups()
 
     def pick_at(self, x, y):
         """Alt+click: the stack of what is drawn on that pixel. Clicking the

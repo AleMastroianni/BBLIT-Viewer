@@ -41,7 +41,7 @@ PANEL = (0, 0, 0, 150)
 
 LOCKED_ROWS = ("keys.row.esc", "keys.row.nav", "keys.row.confirm", "keys.row.move", "keys.row.shift",
                "keys.row.page", "keys.row.num_tps", "keys.row.fullscreen", "keys.row.quit",
-               "keys.row.mouse_look", "keys.row.wheel")
+               "keys.row.mouse_look", "keys.row.wheel", "keys.row.pick", "keys.row.unpick")
 
 _widths: dict = {}
 

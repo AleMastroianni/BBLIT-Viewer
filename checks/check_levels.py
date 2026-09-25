@@ -1,4 +1,4 @@
-"""Check of tools/levels.py against its two sources and against the disc.
+"""Check of bblit/game/levels.py against its two sources and against the disc.
 
     .venv/Scripts/python checks/check_levels.py
 

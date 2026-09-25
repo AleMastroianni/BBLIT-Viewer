@@ -33,11 +33,13 @@ import sys
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bblit"))
+from support import level_cache  # noqa: E402
 from support import paths  # noqa: E402
 from support.version import VERSION  # noqa: E402
 
 EXECUTABLE = "BBLIT Viewer.exe"
 DEFAULT_DIR = os.path.join(paths.PROJECT_DIR, "release", "BBLIT Viewer")
+ZIP_FOLDER = "BBLIT Viewer"
 DOCUMENTS = ("README.md", "README_Ita.md", "LICENSE")
 LEVELS_README = os.path.join("bze_levels", "README.txt")
 NOTICES = "THIRD_PARTY_LICENSES.txt"
@@ -98,12 +100,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", default=DEFAULT_DIR, help="the release folder")
     output_folder = os.path.abspath(parser.parse_args().out)
-    name = os.path.basename(output_folder)
+    # the folder inside the zip is always the same, whatever --out says: the
+    # release unpacks as "BBLIT Viewer", not as the name of a test folder
+    name = ZIP_FOLDER
     zip_path = os.path.join(output_folder, f"BBLIT-Viewer-v{VERSION}.zip")
 
     if not (os.path.exists(os.path.join(paths.PROJECT_DIR, EXECUTABLE))
             and os.path.isdir(os.path.join(paths.PROJECT_DIR, "_internal"))):
         print("no executable in the project folder: run packaging/build_exe.py first")
+        return 1
+    wrong = level_cache.executable_mismatch(paths.PROJECT_DIR)
+    if wrong:
+        print(wrong)
         return 1
     missing = [d for d in (*DOCUMENTS, LEVELS_README)
                if not os.path.exists(os.path.join(paths.PROJECT_DIR, d))]

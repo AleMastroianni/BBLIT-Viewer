@@ -50,6 +50,13 @@ TEXTS: dict[str, tuple[str, str]] = {
                   "Nothing selected: Alt+click on a pixel."),
     "pick.of": ("Selezione {n} di {total} su questo pixel", "Selected {n} of {total} on this pixel"),
     "pick.group": ("Gruppo: {name}", "Group: {name}"),
+    "pick.kind.terrain": ("Terreno", "Terrain"),
+    "pick.kind.props": ("Oggetti", "Objects"),
+    "pick.kind.sky": ("Cielo", "Sky"),
+    "pick.kind.clones": ("Template clonati", "Cloned templates"),
+    "pick.kind.flag": ("Flag", "Flag"),
+    "pick.part.label": ("scritta", "words"),
+    "pick.part.lines": ("contorno", "outline"),
     "pick.point": ("Punto di gioco {x:.0f}, {y:.0f}, {z:.0f} - {m:.1f} m dalla camera",
                    "Game point {x:.0f}, {y:.0f}, {z:.0f} - {m:.1f} m from the camera"),
     "pick.run": ("Tratto: {ends}", "Run: {ends}"),
@@ -59,8 +66,6 @@ TEXTS: dict[str, tuple[str, str]] = {
                    "Block: floor {floor:.0f}, ceiling {ceiling:.0f}"),
     "pick.stops_wall": ("FERMA fino al soffitto del blocco ({m:.1f} m)",
                         "STOPS you up to the block's ceiling ({m:.1f} m)"),
-    "pick.hole": ("Bordo su buco: sotto c'e' un 0x7E, non suolo",
-                  "Edge over a hole: below is a 0x7E, not ground"),
     "pick.edge": ("EDGE, bordo del pavimento sul vuoto: sul lato libero la heightmap non ha "
                   "suolo (0x7E). Spessore disegnato {m:.2f} m, preso dalla faccia che il gioco "
                   "disegna qui; dove non ne disegna nessuna, una sotto-cella",
@@ -72,8 +77,6 @@ TEXTS: dict[str, tuple[str, str]] = {
                        "Disegnato e chiamato come muro",
                        "WALL by drop: {m:.2f} m, more than Bugs's jump ({jump} units). "
                        "Drawn and named as a wall"),
-    "pick.stops_step": ("FERMA: salto di {m:.2f} m, oltre il salto di Bugs",
-                        "STOPS you: a rise of {m:.2f} m, more than Bugs's jump"),
     "pick.climbable": ("Si supera: {m:.2f} m, sotto il salto di Bugs ({jump} unita')",
                        "You can get up: {m:.2f} m, under Bugs's jump ({jump} units)"),
     "pick.free": ("Lato libero ({dx}, {dz})", "Free side ({dx}, {dz})"),
@@ -84,7 +87,6 @@ TEXTS: dict[str, tuple[str, str]] = {
                   "{off:.1f} gradi fuori dal piano",
                   "Game face: {d:+.1f} from the plane, {tilt:.1f} degrees off vertical, "
                   "{off:.1f} degrees off the plane"),
-    "pick.face_cells": ("La faccia tiene {n} celle del tratto", "The face holds {n} cells of the run"),
 
     # main menu
     "menu.main": ("Menu", "Menu"),
@@ -117,7 +119,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                          "The game folder works too: the viewer looks for Datas\\bze "
                          "and bze inside it. The choice is saved."),
     "data.desc_retry": ("Dopo aver copiato i file.", "After copying the files."),
-    "data.no_bze": ("Nessun file .bze in {c}", "No .bze files in {c}"),
+    "data.no_bze": ("Nessun file .bze in {c}: la cartella non è cambiata.",
+                    "No .bze files in {c}: the folder has not changed."),
+    "data.no_bze_short": ("nessun .bze", "no .bze"),
+    "menu.load_error": ("{n} non si costruisce (errors.txt)", "{n} does not build (errors.txt)"),
     "general.folder": ("Cartella dei livelli", "Levels folder"),
     "general.desc_folder": ("Dove il viewer legge i .bze: {c}", "Where the viewer reads the .bze files: {c}"),
     "load.missing": ("{file}.bze non c'è nella cartella dei livelli.",
@@ -152,7 +157,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "extra.hub": ("Era selector", "Era selector"),
     "extra.overview": ("Vista d'insieme", "Overview"),
     "extra.films": ("Filmati", "Cutscenes"),
-    "extra.cutscenes": ("Cutscenes", "Cutscenes"),
+    "extra.cutscenes": ("Filmati", "Cutscenes"),
     "extra.desc_cutscenes": ("Menu, crediti e filmati. Solo nella build Debug.",
                              "Menus, credits and cutscenes. Debug build only."),
     "extra.variants": ("Varianti _8 (senza LevID)", "_8 variants (no LevID)"),
@@ -205,7 +210,6 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.wire.skeleton": ("Scheletro", "Skeleton"),
     "level.wire.grid": ("Griglia", "Grid"),
     "level.entities": ("Entità", "Entities"),
-    "level.animations": ("Animazioni", "Animations"),
     "level.anim.playing": ("In movimento", "Playing"),
     "level.anim.paused": ("Ferme", "Paused"),
     "level.anim.pose": ("Posa iniziale", "Starting pose"),
@@ -399,8 +403,6 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.clones.off": ("Spenti", "Off"),
     "level.clones.in_level": ("Nel livello", "In the level"),
     "level.clones.all": ("Tutti", "All"),
-    "level.no_states": ("Nessuno stato a scelta per questo livello",
-                        "No selectable states for this level"),
 
     # descriptions (bottom line)
     "desc.texture": ("Mostra le texture o solo il colore dei vertici. Tasto [[textures]].",
@@ -424,6 +426,9 @@ TEXTS: dict[str, tuple[str, str]] = {
                            "outside and above. Off, from outside you see the areas without the box in "
                            "front."),
     "level.hole_steps": ("Gradini: bordi sui buchi", "Steps: edges over holes"),
+    "level.needs_steps": ("Non fa niente finché Gradini è su No.", "Does nothing while Steps is No."),
+    "level.needs_walls": ("Non fa niente finché Muri duri, Gradini e Box delle aree sono spenti.",
+                          "Does nothing while Hard walls, Steps and Area boxes are off."),
     "desc.hole_steps": ("Con Gradini, anche quelli visti da un buco 0x7E (il suo suolo e' la base della "
                         "lastra): i bordi delle piattaforme sul vuoto. Nel gioco fermano chi cade "
                         "accanto alla piattaforma, ma di solito sono solo rumore.",
@@ -436,6 +441,33 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.gate_links.all": ("Tutti i collegamenti", "All the links"),
     "level.faces_1000": ("Portali", "Portals"),
     "level.flag_labels": ("Etichette flag", "Flag labels"),
+    "level.flags_off": ("Spegni tutte le flag", "All flags off"),
+    "load.previous": ("Livello precedente", "Previous level"),
+    "load.next": ("Livello successivo", "Next level"),
+    "desc.load_previous": ("Il livello prima di questo, nell'ordine di questa pagina (come il tasto [[level_prev]]).",
+                           "The level before this one, in this page's order (as the key [[level_prev]])."),
+    "desc.load_next": ("Il livello dopo questo, nell'ordine di questa pagina (come il tasto [[level_next]]).",
+                       "The level after this one, in this page's order (as the key [[level_next]])."),
+    "camera.reset": ("Torna al punto di partenza", "Back to the starting point"),
+    "camera.paste": ("Vai al punto negli appunti", "Go to the point in the clipboard"),
+    "desc.camera_paste": ("La camera 1,6 m sopra un punto copiato dal viewer o dagli script Lua "
+                          "(una riga con X = … Y = … Z = …, in unità del gioco), guardando dove guarda adesso.",
+                          "The camera 1.6 m above a point copied by the viewer or by the Lua scripts "
+                          "(a line with X = … Y = … Z = …, in game units), looking where it looks now."),
+    "camera.paste.none": ("niente punto negli appunti", "no point in the clipboard"),
+    "camera.paste.other": ("il punto è di {n}", "the point is of {n}"),
+    "camera.paste.done": ("{x}, {y}, {z}", "{x}, {y}, {z}"),
+    "bookmark.name": ("Nome", "Name"),
+    "desc.bookmark_name": ("Invio per scrivere il nome, Invio per salvarlo, Esc per lasciare com'era. "
+                           "Vuoto torna \"Segnalibro N\".",
+                           "Enter to write the name, Enter to save it, Esc to leave it as it was. "
+                           "Empty goes back to \"Bookmark N\"."),
+    "desc.camera_reset": ("La camera di partenza del livello (come il tasto [[reset_camera]]).",
+                          "The level's opening camera (as the key [[reset_camera]])."),
+    "desc.flags_off": ("Tutte le flag di questa pagina e di Muri tornano come all'avvio. Le "
+                       "Etichette flag e le Opzioni livello restano come sono.",
+                       "Every flag of this page and of Walls goes back to how it starts. Flag "
+                       "labels and the Level options stay as they are."),
     "desc.gate_links": ("Una linea da ogni interruttore a quello che comanda (scoperte 323, 331). "
                         "\"Solo cancelli\": chi apre davvero qualcosa che sbarra la strada, e il "
                         "box dice GATE <- #78. \"Tutti i collegamenti\": anche gli oggetti che "
@@ -589,6 +621,34 @@ TEXTS: dict[str, tuple[str, str]] = {
     "video.title": ("Opzioni video", "Video options"),
     "video.fullscreen": ("Schermo intero", "Full screen"),
     "video.vsync": ("VSync", "VSync"),
+    "video.section.screen": ("Schermo", "Screen"),
+    "video.section.textures": ("Texture", "Textures"),
+    "video.section.game": ("Come il gioco", "Like the game"),
+    "desc.vsync": ("Aspetta lo schermo prima di mostrare il fotogramma: niente righe spezzate, al "
+                   "massimo tanti fotogrammi quanti ne fa lo schermo.",
+                   "Waits for the screen before showing the frame: no torn lines, at most as many "
+                   "frames as the screen shows."),
+    "video.defaults": ("Ripristina i predefiniti", "Restore defaults"),
+    "desc.video_defaults": ("Tutte le voci di questa pagina come in un'installazione nuova.",
+                            "Every entry of this page as in a new installation."),
+    "general.defaults": ("Ripristina i predefiniti", "Restore defaults"),
+    "general.clean_cache": ("Pulisci la cache", "Clean the cache"),
+    "general.clean_cache.none": ("niente da pulire", "nothing to clean"),
+    "general.clean_cache.size": ("{n} file, {mb:.0f} MB", "{n} files, {mb:.0f} MB"),
+    "desc.clean_cache": ("Manda nel Cestino i pezzi salvati da un codice vecchio o per un file che non c'è "
+                         "più, e le texture ingrandite (Scala texture) di tutti i livelli tranne quello "
+                         "aperto: si rifanno da sole quando servono.",
+                         "Sends to the Recycle Bin the pieces saved by older code or for a file that "
+                         "is gone, and the enlarged textures (Texture scale) of every level but the "
+                         "open one: they are made again when needed."),
+    "desc.general_defaults": ("Barra di stato e gamepad come in un'installazione nuova. La lingua e "
+                              "la cartella dei livelli restano come sono.",
+                              "Status bar and gamepad as in a new installation. The language and the "
+                              "levels folder stay as they are."),
+    "general.open_folder": ("Apri la cartella dei livelli", "Open the levels folder"),
+    "general.gamepad_page": ("Comandi del gamepad", "Gamepad controls"),
+    "general.desc_open_folder": ("Apre in Esplora file la cartella da cui si leggono i livelli adesso: {c}",
+                                 "Opens in Explorer the folder the levels are read from now: {c}"),
     "video.filter": ("Filtro texture", "Texture filtering"),
     "video.scale": ("Scala texture", "Texture scale"),
     "video.color": ("Colore", "Colour"),
@@ -598,8 +658,8 @@ TEXTS: dict[str, tuple[str, str]] = {
     "video.distant.pc": ("come il PC", "like the PC"),
     "video.distant.smooth": ("morbide", "smooth"),
     "video.uv": ("Coordinate texture", "Texture coordinates"),
-    "video.uv.pc": ("PC, scheda NVIDIA/Intel", "PC, NVIDIA/Intel card"),
-    "video.uv.amd": ("PC, scheda AMD", "PC, AMD card"),
+    "video.uv.pc": ("Scheda NVIDIA/Intel", "NVIDIA/Intel card"),
+    "video.uv.amd": ("Scheda AMD", "AMD card"),
     "video.uv.psx": ("PlayStation", "PlayStation"),
     "video.fov": ("Campo visivo", "Field of view"),
     "video.backface": ("Backface culling", "Backface culling"),
@@ -705,6 +765,10 @@ TEXTS: dict[str, tuple[str, str]] = {
     "keys.row.mouse_look": ("Mouse destro - Guarda; nel menu indietro", "Right mouse - Look; in the menu back"),
     "keys.row.wheel": ("Rotella - Scorre la lista del menu (velocità della camera: menu Camera)",
                        "Wheel - Scrolls the menu's list (camera speed: Camera menu)"),
+    "keys.row.pick": ("Alt + clic - Cosa c'è qui (selettore); di nuovo, la cosa sotto",
+                      "Alt + click - What is here (selector); again, the thing below"),
+    "keys.row.unpick": ("Clic destro - Deseleziona (col selettore acceso)",
+                        "Right click - Clear the selection (with the selector on)"),
     "keys.reverted": ("Un'azione era rimasta senza tasto: tornano i tasti dell'ultimo salvataggio.",
                       "An action was left without a key: the last saved keys are back."),
     "keys.cancelled": ("Cambio tasto annullato.", "Key change cancelled."),

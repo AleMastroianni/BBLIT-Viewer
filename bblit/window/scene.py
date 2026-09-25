@@ -18,6 +18,7 @@ from array import array  # noqa: E402
 
 from game import clone_life  # noqa: E402
 from game import collision  # noqa: E402
+from game import entrances  # noqa: E402
 from game import gates as gatesmod  # noqa: E402
 from game import geometry as geo  # noqa: E402
 from game import levels  # noqa: E402
@@ -88,7 +89,7 @@ class FaceGroup:
     """A group of triangles sharing texture and blending."""
 
     __slots__ = ("anim_key", "tex_id", "data", "vao", "vbo", "item_count", "category", "blend", "frames", "vaos",
-                 "spin", "sorted", "area", "face_tris", "mover", "two_sided")
+                 "spin", "sorted", "area", "face_tris", "mover", "two_sided", "extent")
 
     def __init__(self, tex_id, category, blend=None, n_frames=0, spin=None, area=None, mover=None,
                  two_sided=False):
@@ -123,6 +124,10 @@ class FaceGroup:
         # finding 307) are in groups of their own: with Video options ->
         # Backface culling the other groups are culled as the game culls them
         self.two_sided = two_sided
+        # (min x, min y, min z, max x, max y, max z) of the vertices, kept when
+        # the data is freed after the upload: the selector skips a group its
+        # ray cannot meet without reading its buffer back from the card
+        self.extent = None
         # the animated object this group belongs to, ("anim", n) for a placed
         # one, ("clone_anim", template, place) for a clone, or None: the
         # Animations page can hold it on one frame (drawing.anim_holds)
@@ -326,6 +331,7 @@ class Level(OverlayBuilder):
         one `preferences.py` names, else the first by object number.
         """
         self.sky_choices, self.sky_hidden = [], set()
+        self.sky_default = self.sky_chosen = None
         objects = self.lvl["objects"]
         templates = {}
         for o in objects:
@@ -379,8 +385,10 @@ class Level(OverlayBuilder):
         if default not in exclusive:
             default = next((role for role in roles if role in at_start), roles[0])
         chosen = sky_choice if sky_choice in exclusive else default
-        roles.sort(key=lambda role: (role != chosen, skies[role]))
+        # in the file's order, whatever is chosen: the menu names the level's
+        # own default and the chosen one from these two, not from the order
         self.sky_choices = [(role, skies[role], role in at_start) for role in roles]
+        self.sky_default, self.sky_chosen = default, chosen
         self.sky_hidden = exclusive - {chosen}
 
     def _read_gates(self):
@@ -647,7 +655,9 @@ class Level(OverlayBuilder):
             # the objects' names
             self._clone_labels()
         if "zones" in self.families:
-            self._piece(("zone",), self._death_zones)
+            # the ENTRANCE names come from the other files of the folder:
+            # their names, sizes and dates are in the key
+            self._piece(("zone", entrances.folder_signature(self.bze_folder)), self._death_zones)
         if "heightmap" in self.families:
             self._piece(("heightmap",), self._heightmap)
 

@@ -17,6 +17,7 @@ import time  # noqa: E402
 
 from game import collision  # noqa: E402
 from game import geometry as geo  # noqa: E402
+from game import levels  # noqa: E402
 from pyglet.math import Vec3  # noqa: E402
 from ui.texts import t  # noqa: E402
 
@@ -125,6 +126,55 @@ class Points:
             self._delete_armed = False
             self._feedback = (item_key, time.monotonic())
             self.menu.rebuild()
+
+    def _rename_bookmark(self, name):
+        """Camera and points -> a bookmark -> Name: saved with the others;
+        an empty name gives back "Bookmark N"."""
+        marks = self._bookmarks()
+        if 0 <= self._bookmark_i < len(marks):
+            if name:
+                marks[self._bookmark_i]["name"] = name
+            else:
+                marks[self._bookmark_i].pop("name", None)
+            self._store_bookmarks(marks)
+            self.menu.rebuild()
+
+    # a point copied by the viewer: the Lua line "{ X = 1, Y = 2, Z = 3 }" or the
+    # line "BBLIT L03A x=1 y=2 z=3"; game units
+    _POINT = re.compile(r"\bx\s*=\s*(-?\d+(?:\.\d+)?)[,\s]+y\s*=\s*(-?\d+(?:\.\d+)?)[,\s]+"
+                        r"z\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+    _LEVEL = re.compile(r"\bBBLIT\s+(\w+)")
+    PASTE_EYE = 1.6          # metres above the pasted point: a point is where the feet are
+
+    def _go_to_clipboard_point(self):
+        """Camera and points -> Go to the point in the clipboard: the camera
+        1.6 m above a point copied by the viewer (or by the Lua scripts),
+        looking the same way. A point of another level is said, not used."""
+        try:
+            text = self.get_clipboard_text() or ""
+        except Exception:  # noqa: BLE001
+            text = ""
+        found = self._POINT.search(text)
+        level = self._LEVEL.search(text)
+        if found is None:
+            self._paste_result = ("camera.paste.none", {})
+        elif level and self.current_level is not None and level.group(1).upper() != self.current_level.name.upper():
+            self._paste_result = ("camera.paste.other", {"n": levels.official_name(level.group(1)) or level.group(1)})
+        else:
+            u = geo.UNITS_PER_METER
+            x, y, z = (float(v) for v in found.groups())
+            self.pos = Vec3(x / u, -y / u + self.PASTE_EYE, -z / u)
+            self._paste_result = ("camera.paste.done", {"x": round(x), "y": round(y), "z": round(z)})
+            self.menu.hide()
+        self._paste_time = time.monotonic()
+        self.menu.dirty = True
+
+    def _paste_words(self):
+        """Beside the entry, for a few seconds: what the paste did."""
+        result = getattr(self, "_paste_result", None)
+        if result is None or time.monotonic() - getattr(self, "_paste_time", 0) > 3 * self.FEEDBACK_SECONDS:
+            return ""
+        return t(result[0], **result[1])
 
     def _delete_bookmark(self):
         marks = self._bookmarks()

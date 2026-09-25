@@ -38,8 +38,8 @@ BASELINE = os.path.join(PROJECT, "reference", "baseline")
 LOGS = os.path.join(BASELINE, "logs")
 
 # the checks that test something and can fail, in the order they run (the
-# fast ones first). Not here: census.py and inventory_placement.py (counts,
-# nothing to pass), the old diag_* scripts (one-off measures).
+# fast ones first). Not here: the tools in tools/ (counts and one-off
+# measures, nothing to pass) and OUTSIDE_THE_ROUND below.
 CHECKS = [
     "check_levels",
     "check_official_names",
@@ -67,6 +67,20 @@ CHECKS = [
     "check_cache_warmer",
     "check_walls",
 ]
+
+# checks that exist but stay out of the round; `--only` runs them, with their log:
+# - check_startup: compares with the reverse's first tick, one difference left
+#   (the animation rows): it goes in when it reaches 0;
+# - check_sky_depth: a measure against the reverse's sky layers, not a pass/fail
+#   of the viewer;
+# - check_start_camera: fails on purpose on one level of 79 (the opening camera
+#   the game does not give), kept to see that number.
+OUTSIDE_THE_ROUND = ["check_startup", "check_sky_depth", "check_start_camera"]
+
+# the longest check takes about 20 minutes (check_sky): past an hour a check
+# is stuck, a photo past five minutes
+CHECK_TIMEOUT, PHOTO_TIMEOUT = 3600, 300
+SUMMARY = os.path.join(LOGS, "_summary.log")
 
 # (name, viewer arguments): all with --tick 0, or the animations change the bytes
 PHOTOS = [
@@ -130,15 +144,23 @@ def run_checks(names):
             print(f"--   {name:22s}   not in this copy", flush=True)
             continue
         start = time.time()
-        proc = subprocess.run([sys.executable, os.path.join(CHECKS_DIR, name + ".py")], cwd=PROJECT,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            proc = subprocess.run([sys.executable, os.path.join(CHECKS_DIR, name + ".py")], cwd=PROJECT,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=CHECK_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            output = (e.stdout or b"").decode("utf-8", "replace")
+            with open(os.path.join(LOGS, name + ".log"), "w", encoding="utf-8") as f:
+                f.write(output + f"\nTIMED OUT after {CHECK_TIMEOUT} s\n")
+            results.append((name, False, time.time() - start))
+            print(f"FAIL {name:22s} {time.time() - start:6.1f} s   timed out after {CHECK_TIMEOUT} s", flush=True)
+            continue
         output = proc.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
         with open(os.path.join(LOGS, name + ".log"), "w", encoding="utf-8") as f:
             f.write(output)
         lines = [ln for ln in output.splitlines() if ln.strip()]
         last = lines[-1] if lines else "(no output)"
         ok = proc.returncode == 0
-        results.append((name, ok))
+        results.append((name, ok, time.time() - start))
         print(f"{'OK  ' if ok else 'FAIL'} {name:22s} {time.time() - start:6.1f} s   {last[:90]}", flush=True)
         if not ok:
             for ln in lines[-12:]:
@@ -168,13 +190,21 @@ def take_photos(make_baseline, wanted=None):
                 continue
             start = time.time()
             shot = os.path.join(tmp, name + ".png")
-            proc = subprocess.run([sys.executable, VIEWER] + args
-                                  + ["--tick", "0", "--screenshot", shot], cwd=PROJECT,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             reference = os.path.join(BASELINE, name + ".png")
             new_copy = os.path.join(BASELINE, name + ".new.png")
+            try:
+                proc = subprocess.run([sys.executable, VIEWER] + args
+                                      + ["--tick", "0", "--screenshot", shot], cwd=PROJECT,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=PHOTO_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                results.append((name, False, time.time() - start))
+                print(f"FAIL photo {name:20s} timed out after {PHOTO_TIMEOUT} s")
+                continue
             if proc.returncode != 0 or not os.path.exists(shot):
-                results.append((name, False))
+                # a .new.png of an earlier round would look like this round's
+                if os.path.exists(new_copy):
+                    os.remove(new_copy)
+                results.append((name, False, time.time() - start))
                 print(f"FAIL photo {name:20s} the viewer did not write it (exit {proc.returncode})")
                 for ln in proc.stdout.decode("utf-8", "replace").splitlines()[-8:]:
                     print(f"       | {ln[:150]}")
@@ -183,17 +213,17 @@ def take_photos(make_baseline, wanted=None):
                 shutil.copyfile(shot, reference)
                 if os.path.exists(new_copy):
                     os.remove(new_copy)
-                results.append((name, True))
+                results.append((name, True, time.time() - start))
                 print(f"SAVED photo {name:20s} {time.time() - start:5.1f} s")
                 continue
             if not os.path.exists(reference):
-                results.append((name, False))
+                results.append((name, False, time.time() - start))
                 shutil.copyfile(shot, new_copy)
                 print(f"FAIL photo {name:20s} no reference photo (run with --make-baseline)")
                 continue
             with open(shot, "rb") as f1, open(reference, "rb") as f2:
                 same = f1.read() == f2.read()
-            results.append((name, same))
+            results.append((name, same, time.time() - start))
             if same:
                 if os.path.exists(new_copy):
                     os.remove(new_copy)
@@ -205,6 +235,34 @@ def take_photos(make_baseline, wanted=None):
                       + (f": {changed} pixels changed" if changed is not None else "")
                       + f" (kept as {name}.new.png)")
     return results
+
+
+def _git(*command) -> str:
+    try:
+        return subprocess.run(["git", *command], cwd=PROJECT, capture_output=True,
+                              timeout=30).stdout.decode("utf-8", "replace").strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _write_summary(checks, photos, total) -> None:
+    """reference/baseline/logs/_summary.log: which commit, whether the tree
+    had changes not committed, and the seconds of each check and photo of
+    this run. Each check's own log is rewritten by every run: this says
+    which run they come from."""
+    head = _git("rev-parse", "--short", "HEAD") or "no git"
+    dirty = _git("status", "--porcelain")
+    lines = [time.strftime("%Y-%m-%d %H:%M:%S"),
+             f"commit {head}, tree {'with changes not committed' if dirty else 'clean'}", ""]
+    lines += [f"{'OK  ' if ok else 'FAIL'} {name:26s} {seconds:7.1f} s" for name, ok, seconds in checks]
+    lines += [f"{'OK  ' if ok else 'FAIL'} photo {name:20s} {seconds:7.1f} s" for name, ok, seconds in photos]
+    lines += ["", total]
+    try:
+        os.makedirs(LOGS, exist_ok=True)
+        with open(SUMMARY, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError:
+        pass
 
 
 def main():
@@ -224,7 +282,7 @@ def main():
         names = CHECKS
         if args.only:
             names = [n.strip() for n in args.only.split(",") if n.strip()]
-            unknown = [n for n in names if n not in CHECKS]
+            unknown = [n for n in names if n not in CHECKS + OUTSIDE_THE_ROUND]
             if unknown:
                 p.error(f"unknown checks: {', '.join(unknown)}")
         checks = run_checks(names)
@@ -236,11 +294,13 @@ def main():
                 p.error(f"unknown photos: {', '.join(unknown)}")
         photos = take_photos(args.make_baseline, wanted)
 
-    failed = [n for n, ok in checks + photos if not ok]
+    failed = [n for n, ok, _s in checks + photos if not ok]
+    total = (f"checks: {sum(ok for _, ok, _s in checks)}/{len(checks)} passed; "
+             f"photos: {sum(ok for _, ok, _s in photos)}/{len(photos)} "
+             f"{'saved' if args.make_baseline else 'identical'}; {time.time() - start:.0f} s")
     print()
-    print(f"checks: {sum(ok for _, ok in checks)}/{len(checks)} passed; "
-          f"photos: {sum(ok for _, ok in photos)}/{len(photos)} "
-          f"{'saved' if args.make_baseline else 'identical'}; {time.time() - start:.0f} s")
+    print(total)
+    _write_summary(checks, photos, total)
     if failed:
         print(f"FAILED: {', '.join(failed)}")
     sys.exit(1 if failed else 0)

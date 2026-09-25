@@ -281,8 +281,6 @@ def _box_kind(obj) -> str:
     return "PLATFORM" if word & STAND_ON else "SOLID"
 
 
-# steps closer than this to each other, facing the same way, are one
-# staircase and get one name (game units, about 3 m)
 # steps this close to each other, parallel and stopping you the same way,
 # are one staircase and get one name (game units, 3.75 m)
 STEP_GROUP_DISTANCE = 480
@@ -803,7 +801,9 @@ class OverlayBuilder:
         lo, hi = self.terrain_lo, self.terrain_hi
         diagonal = max(h - l for h, l in zip(hi, lo)) or 1.0
         object_faces = self._object_faces(diagonal, solid_only=True)
-        vertical_heights = collision.raster_vertical(solid_faces + object_faces)
+        # made one sub-cell at a time, only where the walls and steps ask
+        # (the same heights there as the full raster_vertical)
+        vertical_heights = collision.LazyVerticalRaster(solid_faces + object_faces)
 
         def facing(quad, look):
             # a Z-ordered quad is drawn from the side opposite to

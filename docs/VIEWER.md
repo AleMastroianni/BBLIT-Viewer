@@ -308,7 +308,7 @@ release, raise it there.
 | `loadscript.py` | reads the load script (section 1), with the opcode table **per block type**; writes a JSON extract |
 | `tim.py` | PlayStation TIM textures -> PNG |
 | `textures.py` | the texture table: registered slots and animated slots (finding 275) |
-| `export_obj.py` | terrain and props -> OBJ + MTL, in metres and Y up |
+| `obj_export.py` | terrain and props -> OBJ + MTL, in metres and Y up |
 | `render_obj.py` | renders an OBJ to PNG with no graphics engine, to check the data |
 | `model_sheet.py` | contact sheet of a level's models |
 | `rig.py` | `0x50` streams: rig, poses, parent chain (finding 261) |
@@ -341,7 +341,7 @@ python tools/model_sheet.py extracted/L03A -o out/L03A/models.png --assemble
 
 (Adjust the first path to where your `.bze` files are.) Useful options:
 `bze.py --raw` (no decompression); `tim.py --scale-factor N [--soft]`;
-`export_obj.py --no-props` (terrain only), `--units` (game units instead of
+`obj_export.py --no-props` (terrain only), `--units` (game units instead of
 metres), `--textures-dir` (folder named in the `.mtl`, default `textures`);
 `model_sheet.py --model ID`, `--columns`, `--cell-size`. `textures.py [DATA]
 [LEVEL]` prints where a level's texture slots come from, and
@@ -366,7 +366,7 @@ not an error. Since finding 265, all the reading columns are zero on the three
                      | id 1  load script  --loadscript.py-->  objects, resources, terrain, textures, zones
                      | id 3  asset block  --tim.py--------->  TIM textures
                      | id 4  model block
-                     |         +-- magic 0x41  --export_obj.read_model-->  geometry
+                     |         +-- magic 0x41  --geometry.read_model----->  geometry
                      |         +-- magic 0x50  --rig.py / montage.py--->  assembly of the parts
                      +- id 5+ audio banks (not used)
 ```
@@ -400,7 +400,7 @@ Figures are for `L03A` unless stated.
 | container and decompression | compression ratio exactly 8/9 (0.91x) on the audio banks, and every `FORM` header is a valid `AIFF` | Ombelll's format documents; `bze.py` prints the ratio per section |
 | load script | consumed 100%, 1 unknown byte; 282 objects, 150 with a position, as in Ombelll's documents | `loadscript.py` prints both |
 | resource offsets | 79/79 models with magic `0x41`, 274/274 streams with `0x50`, 442/442 textures on a TIM header | |
-| terrain | 158 sectors, sum of the counters 3058 = `n_prim`, every sector ends on the expected byte, chain ending on `vert_top` | finding 256; `export_obj.py` prints the counts |
+| terrain | 158 sectors, sum of the counters 3058 = `n_prim`, every sector ends on the expected byte, chain ending on `vert_top` | finding 256; `obj_export.py` prints the counts |
 | primitives | 2773/2773 read in the models, 2742/2742 in the terrain, none rejected | |
 | solid-colour textures | the 45 referenced by modes `0x4A`/`0x4E` are all 4x4 and uniform | finding 258 |
 | UV `FF FF` | 1158/1158 have a registered texture id, 0/1158 have all UVs at `FF` | finding 259 |
@@ -408,5 +408,5 @@ Figures are for `L03A` unless stated.
 | 15 animation ticks per second | measured frame by frame on the PlayStation version | finding 278 |
 
 The checks behind these figures are the scripts in `checks/`
-(`check_*.py`, `diag_*.py`); they read the levels from `BBLIT_DATA` and can be
+(`check_*.py`, `test_*.py`, run together by `run_checks.py`); they read the levels from `BBLIT_DATA` and can be
 rerun.

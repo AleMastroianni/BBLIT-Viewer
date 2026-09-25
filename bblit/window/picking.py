@@ -61,6 +61,27 @@ def _triangles(group):
             for i in range(0, len(data), FLOATS * 3)]
 
 
+def _ray_meets_box(origin, direction, extent, margin=0.01):
+    """Whether the ray can meet anything inside `extent` (min x, y, z, max
+    x, y, z), grown by `margin` metres: the slab test. A triangle is inside
+    its group's extent, so a group the ray misses holds no hit."""
+    near, far = 0.0, float("inf")
+    for k in range(3):
+        lo, hi = extent[k] - margin, extent[k + 3] + margin
+        d = direction[k]
+        if abs(d) < 1e-12:
+            if origin[k] < lo or origin[k] > hi:
+                return False
+            continue
+        t0, t1 = (lo - origin[k]) / d, (hi - origin[k]) / d
+        if t0 > t1:
+            t0, t1 = t1, t0
+        near, far = max(near, t0), min(far, t1)
+        if near > far:
+            return False
+    return True
+
+
 def _cross(a, b):
     return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
 
@@ -144,6 +165,8 @@ def stack(viewer, px, py):
             continue            # placed by the simulation when drawing
         if group.category.endswith("_lines"):
             continue            # edges, not a surface
+        if group.extent is not None and not _ray_meets_box(origin, direction, group.extent):
+            continue            # out of the ray's way: its buffer is not read back
         for tri in _triangles(group):
             dist = _ray_triangle(origin, direction, tri)
             if dist is not None:
@@ -181,11 +204,41 @@ def _normal(tri):
     return None if length == 0 else tuple(x / length for x in n)
 
 
+# the menu entry that shows a flag's groups: the card says the flag's words
+FLAG_WORDS = {
+    "show_no_collision": "level.no_collision", "show_collision_boxes": "level.collision_boxes",
+    "show_death_zones": "level.death_zones", "show_teleport_zones": "level.teleport_zones",
+    "show_ground": "level.ground", "show_hard_walls": "level.hard_walls", "show_steps": "level.steps",
+    "show_area_boxes": "level.area_boxes", "show_faces_1000": "level.faces_1000",
+    "show_gate_links": "level.gate_links",
+}
+# the groups that are not flags
+GROUP_WORDS = {"terrain": "pick.kind.terrain", "props": "pick.kind.props", "sky_dome": "pick.kind.sky",
+               "clones": "pick.kind.clones", "clones_in_level": "pick.kind.clones",
+               "always": "pick.kind.clones", "chosen": "pick.kind.clones"}
+
+
+def group_words(category):
+    """What a group is, in the menu's words ("Hard walls · outline"), from
+    its internal category ("hard_walls_lines")."""
+    from window.overlays import OVERLAYS
+    if category in OVERLAYS:
+        words = t(FLAG_WORDS.get(OVERLAYS[category], "pick.kind.flag"))
+        if category.endswith("_label"):
+            words += " · " + t("pick.part.label")
+        elif category.endswith(("_lines", "_all_lines")):
+            words += " · " + t("pick.part.lines")
+        if "_outside" in category:
+            words += " · " + t("level.walls_outside")
+        return words
+    return t(GROUP_WORDS[category]) if category in GROUP_WORDS else category
+
+
 def card(entry, level=None):
     """The selected thing, as lines of text for the panel and the clipboard."""
     u = geo.UNITS_PER_METER
     x, y, z = entry["at"]
-    lines = [t("pick.group", name=entry["category"]),
+    lines = [t("pick.group", name=f"{group_words(entry['category'])} ({entry['category']})"),
              t("pick.point", x=x, y=y, z=z, m=entry["distance"])]
     info = entry.get("run")
     if info is not None:

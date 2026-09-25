@@ -16,16 +16,23 @@ errors.txt
 __pycache__/
 *.pyc
 
-# a working copy's own game folder (tools/paths.py)
-tools/local_data.py
+# a working copy's own game folder and its private export line
+# (bblit/support/paths.py): never in the public copy
+bblit/support/local_data.py
+bblit/support/private_export.py
 
 # settings of a portable copy (portable.flag)
 userdata/
 portable.flag
 
-# the built executable (tools/build_exe.py) and the release (tools/make_release.py)
+# the built executable (packaging/build_exe.py) and the release
+# (packaging/make_release.py)
 /BBLIT Viewer.exe
 /_internal/
 /_internal_old/
 build/
 release/
+
+# what checks/run_checks.py writes: the reference photos (made from the
+# game's data) and the logs
+reference/

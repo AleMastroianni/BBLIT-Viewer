@@ -1,37 +1,23 @@
 """Native level viewer for Lost in Time. Reads the .bze files directly.
 
-    .venv/Scripts/python tools/viewer.py L03A
-    .venv/Scripts/python tools/viewer.py L03A --screenshot out.png  (one screenshot, then exits)
+    .venv/Scripts/python bblit/viewer.py L03A
+    .venv/Scripts/python bblit/viewer.py L03A --screenshot out.png  (one screenshot, then exits)
+    .venv/Scripts/python bblit/viewer.py --help                     (every option)
 
-Controls:
-    mouse (right button held)     look
-    W A S D                       move, Q/E up and down
-    Shift                         faster, Ctrl slower
-    wheel                         change base speed
-    T                             textures on/off
-    F                             wireframe
-    O                             props on/off
-    P                             stop / restart all animations
-    - +                           animation ticks per second
-    L                             bilinear filter (like the PC) / sharp texels
-    N                             animated textures on/off
-    H                             sky dome on/off
-    M                             semi-transparent blending on/off
-    G                             cloned templates: off / at startup / all
-    [ ]                           previous / next level
-    R                             back to the starting point
-    Esc                           menu (Backspace or M back, arrows and Enter)
-    Alt+Enter                     fullscreen
+The keys are listed, and can be changed, in the viewer itself: Help ->
+Keyboard (ui/keybinds.py, ui/keys_page.py). The mouse wheel scrolls the
+menu's list; with the right button held the mouse looks around.
 
-The menu (tools/menu.py, texts in tools/texts.py) follows the layout of the CTR
-viewer: Load level, Level options (with Flags), Video options, General
-options, Help. Settings persist from one run to the next
-(tools/settings.py); entity states and flags chosen from the menu last
-only for the session.
+The menu (ui/menu.py, texts in ui/texts.py, pages in window/menu_pages.py)
+follows the layout of the CTR viewer: Load level, Level options (with
+Flags), Video options, General options, Help. Settings persist from one run
+to the next (ui/settings.py); entity states and flags chosen from the menu
+last only for the session.
 
 There is no intermediate format: the .bze files are decompressed, the load
 script read and the geometry built in memory. The decompressed sections go
-into an on-disk cache, because decompressing in Python takes a few seconds.
+into an on-disk cache, because decompressing in Python takes a few seconds;
+the built pieces too (support/level_cache.py).
 """
 
 from __future__ import annotations

@@ -314,7 +314,7 @@ subito dopo una release lo si alza lì.
 | `loadscript.py` | legge il load script (sezione 1), con la tabella degli opcode **per tipo di blocco**; scrive un estratto JSON |
 | `tim.py` | texture TIM della PlayStation -> PNG |
 | `textures.py` | la tabella delle texture: slot registrati e slot animati (scoperta 275) |
-| `export_obj.py` | terreno e props -> OBJ + MTL, in metri e Y in alto |
+| `obj_export.py` | terreno e props -> OBJ + MTL, in metri e Y in alto |
 | `render_obj.py` | disegna un OBJ in un PNG senza motore grafico, per controllare i dati |
 | `model_sheet.py` | provino a contatto dei modelli di un livello |
 | `rig.py` | stream `0x50`: rig, pose, catena dei genitori (scoperta 261) |
@@ -348,7 +348,7 @@ python tools/model_sheet.py extracted/L03A -o out/L03A/models.png --assemble
 
 (Il primo percorso va adattato a dove stanno i propri `.bze`.) Opzioni utili:
 `bze.py --raw` (senza decompressione); `tim.py --scale-factor N [--soft]`;
-`export_obj.py --no-props` (solo terreno), `--units` (unità del gioco invece
+`obj_export.py --no-props` (solo terreno), `--units` (unità del gioco invece
 dei metri), `--textures-dir` (cartella citata nel `.mtl`, predefinita
 `textures`); `model_sheet.py --model ID`, `--columns`, `--cell-size`.
 `textures.py [DATI] [LIVELLO]` stampa da dove vengono gli slot di texture di
@@ -374,7 +374,7 @@ a zero sui tre livelli di `L03A`.
                      | id 1  load script  --loadscript.py-->  oggetti, risorse, terreno, texture, zone
                      | id 3  blocco asset  --tim.py--------->  texture TIM
                      | id 4  blocco modelli
-                     |         +-- magic 0x41  --export_obj.read_model-->  geometria
+                     |         +-- magic 0x41  --geometry.read_model----->  geometria
                      |         +-- magic 0x50  --rig.py / montage.py--->  montaggio delle parti
                      +- id 5+ banchi audio (non usati)
 ```
@@ -408,7 +408,7 @@ I dati sono di `L03A` dove non è detto altro.
 | container e decompressione | rapporto di compressione esattamente 8/9 (0,91x) sui banchi audio, e ogni header `FORM` è un `AIFF` valido | documenti sul formato di Ombelll; `bze.py` stampa il rapporto per sezione |
 | load script | consumato al 100%, 1 byte sconosciuto; 282 oggetti, 150 con posizione, come nei documenti di Ombelll | `loadscript.py` stampa entrambi |
 | offset delle risorse | 79/79 modelli con magic `0x41`, 274/274 stream con `0x50`, 442/442 texture su un header TIM | |
-| terreno | 158 settori, somma dei contatori 3058 = `n_prim`, ogni settore finisce sul byte previsto, catena che termina su `vert_top` | scoperta 256; `export_obj.py` stampa i conteggi |
+| terreno | 158 settori, somma dei contatori 3058 = `n_prim`, ogni settore finisce sul byte previsto, catena che termina su `vert_top` | scoperta 256; `obj_export.py` stampa i conteggi |
 | primitive | 2773/2773 lette nei modelli, 2742/2742 nel terreno, nessuna respinta | |
 | texture a tinta unita | le 45 citate dai modi `0x4A`/`0x4E` sono tutte 4x4 e uniformi | scoperta 258 |
 | UV `FF FF` | 1158/1158 hanno un id di texture registrato, 0/1158 hanno tutte le UV a `FF` | scoperta 259 |
@@ -416,5 +416,5 @@ I dati sono di `L03A` dove non è detto altro.
 | 15 tick di animazione al secondo | misurati fotogramma per fotogramma sulla versione PlayStation | scoperta 278 |
 
 I controlli dietro questi numeri sono gli script in `checks/`
-(`check_*.py`, `diag_*.py`); leggono i livelli da `BBLIT_DATA` e si possono
+(`check_*.py`, `test_*.py`, lanciati insieme da `run_checks.py`); leggono i livelli da `BBLIT_DATA` e si possono
 rieseguire.

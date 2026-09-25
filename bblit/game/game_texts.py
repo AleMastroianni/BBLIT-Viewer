@@ -27,17 +27,6 @@ import struct
 
 LANGUAGES = ("en", "fr", "de", "es", "it", "nl")
 
-# the Era selector's texts for the level titles, per menu group
-# (levels.py): the LS01 text index
-TITLE_TEXTS = {
-    "wabbit": 222, "kick_start": 223, "magic_hare": 224,
-    "cookin": 225, "witch": 226, "carrot_henge": 227,
-    "dock": 228, "sam_met": 229, "mine": 230, "red_road": 231,
-    "bank": 232, "escape": 233, "factory": 234, "mirror": 235,
-    "planet_x_file": 236, "conquest": 237, "vort": 238,
-    "duck_season": 239, "downhill": 240, "corrida": 241, "brain": 243,
-    "nowhere": 218,
-}
 
 # 120-tick cards that are messages, not the name of an area (English text)
 MESSAGES = {

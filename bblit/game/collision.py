@@ -465,12 +465,8 @@ def surfaces(grid_blocks: list[HeightmapBlock], covered_cells: dict[tuple[int, i
     return covered, invisible, pixel
 
 
-def raster_vertical(face_points) -> dict[tuple[int, int], list[float]]:
-    """For every 40-unit sub-cell (key x//40, z//40) the heights of the
-    visible near-vertical faces that pass through it, sampled every ~20
-    units over each triangle. Used to tell a hard wall you can see from one
-    you cannot."""
-    out: dict[tuple[int, int], list[float]] = {}
+def _vertical_triangles(face_points):
+    """The triangles of the visible near-vertical faces, in order."""
     for p in face_points:
         u = [p[1][k] - p[0][k] for k in range(3)]
         v = [p[2][k] - p[0][k] for k in range(3)]
@@ -478,30 +474,97 @@ def raster_vertical(face_points) -> dict[tuple[int, int], list[float]]:
         ln = (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
         if ln == 0 or abs(n[1]) / ln >= 0.7:
             continue
-        tris = [(p[0], p[1], p[2])] + ([(p[1], p[3], p[2])] if len(p) == 4 else [])
-        for a, b, c in tris:
-            edge = max(sum((a[k] - b[k]) ** 2 for k in range(3)),
-                       sum((b[k] - c[k]) ** 2 for k in range(3)),
-                       sum((c[k] - a[k]) ** 2 for k in range(3))) ** 0.5
-            steps = max(1, int(edge // 20) + 1)
-            # the same sums in the same order as when this was written out in
-            # full: only the lookups move out of the inner loop, so every
-            # float is the one it was (check_walls says so, number by number)
-            a0, a1, a2 = a[0], a[1], a[2]
-            b0, b1, b2 = b[0], b[1], b[2]
-            c0, c1, c2 = c[0], c[1], c[2]
-            put = out.setdefault
-            for i in range(steps + 1):
-                l1 = i / steps
-                x1, y1, z1 = l1 * a0, l1 * a1, l1 * a2
-                for j in range(steps + 1 - i):
-                    l2 = j / steps
-                    l3 = 1 - l1 - l2
-                    x = x1 + l2 * b0 + l3 * c0
-                    yv = y1 + l2 * b1 + l3 * c1
-                    z = z1 + l2 * b2 + l3 * c2
-                    put((int(x // SUBCELL), int(z // SUBCELL)), []).append(yv)
+        yield (p[0], p[1], p[2])
+        if len(p) == 4:
+            yield (p[1], p[3], p[2])
+
+
+def _sample_triangle(a, b, c, put):
+    """The heights of one triangle, sampled every ~20 units, put in their
+    sub-cells with `put` (dict.setdefault)."""
+    edge = max(sum((a[k] - b[k]) ** 2 for k in range(3)),
+               sum((b[k] - c[k]) ** 2 for k in range(3)),
+               sum((c[k] - a[k]) ** 2 for k in range(3))) ** 0.5
+    steps = max(1, int(edge // 20) + 1)
+    # the same sums in the same order as when this was written out in
+    # full: only the lookups move out of the inner loop, so every
+    # float is the one it was (check_walls says so, number by number)
+    a0, a1, a2 = a[0], a[1], a[2]
+    b0, b1, b2 = b[0], b[1], b[2]
+    c0, c1, c2 = c[0], c[1], c[2]
+    for i in range(steps + 1):
+        l1 = i / steps
+        x1, y1, z1 = l1 * a0, l1 * a1, l1 * a2
+        for j in range(steps + 1 - i):
+            l2 = j / steps
+            l3 = 1 - l1 - l2
+            x = x1 + l2 * b0 + l3 * c0
+            yv = y1 + l2 * b1 + l3 * c1
+            z = z1 + l2 * b2 + l3 * c2
+            put((int(x // SUBCELL), int(z // SUBCELL)), []).append(yv)
+
+
+def raster_vertical(face_points) -> dict[tuple[int, int], list[float]]:
+    """For every 40-unit sub-cell (key x//40, z//40) the heights of the
+    visible near-vertical faces that pass through it, sampled every ~20
+    units over each triangle. Used to tell a hard wall you can see from one
+    you cannot. The whole of it, at once: the viewer uses
+    LazyVerticalRaster, which gives the same heights for the sub-cells it
+    is asked about."""
+    out: dict[tuple[int, int], list[float]] = {}
+    put = out.setdefault
+    for a, b, c in _vertical_triangles(face_points):
+        _sample_triangle(a, b, c, put)
     return out
+
+
+class LazyVerticalRaster:
+    """raster_vertical made one sub-cell at a time, when asked (`get`).
+
+    Its only readers, `_edge_bottom` and `_seen_between`, ask a few
+    sub-cells along the walls and the steps, and read of their heights only
+    a maximum and an "is there one": the order of the heights does not
+    matter to them. So a sub-cell is made the first time it is asked for,
+    by sampling (once each) every triangle whose extent covers it, exactly
+    as raster_vertical samples it: the sub-cells asked for hold the same
+    heights. Where nothing asks (Mine or mine? 2 has no hard wall and no
+    step: 0 sub-cells asked) nothing is sampled: that raster alone was 8 s.
+    The proof, on every level: tools/raster_lazy_proof.py."""
+
+    BUCKET = 8          # sub-cells per side of an index bucket
+
+    def __init__(self, face_points):
+        self._triangles = []
+        self._buckets: dict[tuple[int, int], list[int]] = {}
+        for a, b, c in _vertical_triangles(face_points):
+            # the extent in sub-cells, one more on each side: a sample on a
+            # boundary may round into the next sub-cell
+            kx0 = int(min(a[0], b[0], c[0]) // SUBCELL) - 1
+            kx1 = int(max(a[0], b[0], c[0]) // SUBCELL) + 1
+            kz0 = int(min(a[2], b[2], c[2]) // SUBCELL) - 1
+            kz1 = int(max(a[2], b[2], c[2]) // SUBCELL) + 1
+            index = len(self._triangles)
+            self._triangles.append((a, b, c, kx0, kx1, kz0, kz1))
+            for bx in range(kx0 // self.BUCKET, kx1 // self.BUCKET + 1):
+                for bz in range(kz0 // self.BUCKET, kz1 // self.BUCKET + 1):
+                    self._buckets.setdefault((bx, bz), []).append(index)
+        self._sampled: set[int] = set()
+        self._ready: set[tuple[int, int]] = set()
+        self._cells: dict[tuple[int, int], list[float]] = {}
+
+    def get(self, key, default=None):
+        if key not in self._ready:
+            kx, kz = key
+            put = self._cells.setdefault
+            for index in self._buckets.get((kx // self.BUCKET, kz // self.BUCKET), ()):
+                if index in self._sampled:
+                    continue
+                a, b, c, kx0, kx1, kz0, kz1 = self._triangles[index]
+                if kx0 <= kx <= kx1 and kz0 <= kz <= kz1:
+                    _sample_triangle(a, b, c, put)
+                    self._sampled.add(index)
+            self._ready.add(key)
+        return self._cells.get(key, default)
 
 
 def _edge_bottom(b, vertical_heights, cells, floor):
