@@ -2,9 +2,8 @@
 
 Being dangerous is a property of the step an object is in, not of the object:
 the control dword of a step (opcode `0x30`, payload +12) says how it hurts,
-and the word +22 says by how much. The same reading as the reverse project's
-`tools/lists/make_hazards.py` (note N17), whose list is
-`..\\BBLIT_Decomp_Ale\\docs\\lists\\hazards.md`: 346 placed objects on the
+and the word +22 says by how much. The same reading as the reverse
+engineering project's list of hazards (its note N17): 346 placed objects on the
 disc have a dangerous step, only 98 in the state they start in (pirates and
 crabs hurt while they attack, not while they patrol).
 

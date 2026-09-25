@@ -58,6 +58,27 @@ def start_step(obj: dict | None) -> dict | None:
     return next((st for st in obj["steps"] if st["key"] == lookup_key), None)
 
 
+def playlist(obj: dict | None, state_number: int) -> tuple[list[int], bool]:
+    """The roles a state plays one after the other (its slots, in order), and
+    whether the last one holds on its last frame (play word 0x802, "once and
+    hold": the reverse's N74, the step never ends). ([], False) when the
+    object has no such state."""
+    if obj is None:
+        return [], False
+    state_rec = next((st for st in obj.get("states", ()) if st["number"] == state_number), None)
+    if state_rec is None:
+        return [], False
+    steps = {st["key"]: st for st in obj.get("steps", ())}
+    roles, last_play = [], None
+    for key in state_rec["slots"]:
+        step = steps.get(key) if key != END_MARKER else None
+        if step is None:
+            continue
+        roles.append(step["role"])
+        last_play = step.get("play", 0)
+    return roles, last_play is not None and (last_play & 0x803) == 0x802
+
+
 def start_role(obj: dict | None) -> int | None:
     """The role of the animation the game starts the object with: the step
     found by `start_step` carries it at +2 (finding 84)."""

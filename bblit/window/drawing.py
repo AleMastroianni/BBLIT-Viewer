@@ -309,6 +309,15 @@ class Drawing:
         self.status_bar.x, self.status_bar.y = round(10 * s), round(7 * s)
         glEnable(GL_DEPTH_TEST)
 
+    def anim_frame(self, anim_key, n_frames) -> int:
+        """The frame of an animation now: the tick, or for one that plays
+        once and holds (Level.once_anims) the ticks since the level was built,
+        stopped on the last frame."""
+        level = self.current_level
+        if level is not None and anim_key in level.once_anims:
+            return max(0, min(self.tick() - level.once_from, n_frames - 1))
+        return self.tick()
+
     def tick(self) -> int:
         """The animation tick: frozen with P or with --tick."""
         if self.fixed_tick is not None:
@@ -573,6 +582,8 @@ class Drawing:
                      and not (g.category in OVERLAYS and not self._overlay_shown(g.category))
                      # the flag names are textures: without textures they would be black quads
                      and not (g.category.endswith("_label") and not self.show_textures)
+                     # Flags -> Flag labels off: the words go, colours and outlines stay
+                     and not (isinstance(g.tex_id, str) and not self.show_flag_labels)
                      and not (g.category == "clones" and self.show_clones < 2)
                      and not (g.category == "clones_in_level" and self.show_clones < 1)
                      and g.category != "sky_dome"]
@@ -596,7 +607,7 @@ class Drawing:
             if face_group.vaos:
                 # an object held on one frame (Level options -> Animations)
                 hold = self.anim_holds.get(face_group.anim_key) if face_group.anim_key else None
-                frame = self.tick() if hold is None else hold
+                frame = self.anim_frame(face_group.anim_key, len(face_group.vaos)) if hold is None else hold
                 vao, _vbo, first_idx, item_count = face_group.vaos[frame % len(face_group.vaos)]
             else:
                 vao, first_idx, item_count = face_group.vao, 0, face_group.item_count
@@ -850,7 +861,7 @@ class Drawing:
 
         set_cull(False)
         # the collision boxes' names: last, facing the camera, over the boxes
-        if self.show_collision_boxes and self.show_textures:
+        if self.show_collision_boxes and self.show_textures and self.show_flag_labels:
             set_blend(None)
             drawn_triangles += self._draw_box_labels(forward)
 

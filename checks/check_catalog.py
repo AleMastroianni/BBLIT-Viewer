@@ -6,7 +6,7 @@ On every playable level: every object of the file is reached from exactly
 one category, and the exemplars of a category add up to the sum of its
 families. On the test levels, the cases looked at by hand:
 
-- Nowhere (MERLIN): Merlin (object 122, a skeleton of 11 parts whose box
+- Nowhere (MERLIN): the time machine (object 122, a skeleton of 11 parts whose box
   changes with its state) is a character there at the start; the helpers
   (model 272) are characters none of which is there at the start (they are
   born when a trial starts, as seen in the game);
@@ -74,7 +74,7 @@ probe(f"every object reached from exactly one category: {complete} of {len(level
 
 lvl, cat = build("MERLIN")
 ex = exemplars_of(cat, 122)
-probe("Nowhere: Merlin (object 122) is a character there at the start",
+probe("Nowhere: the time machine (object 122) is a character there at the start",
       cat.category[122][0] == "characters" and ex and all(e["at_start"] for e in ex))
 helpers = [f for f in cat.families["characters"] if f["model"] == 272]
 probe("Nowhere: the helpers (model 272) are characters, none there at the start",

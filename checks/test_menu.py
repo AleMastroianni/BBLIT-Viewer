@@ -152,6 +152,21 @@ probe("turning a flag on builds its family; off only hides it",
       v.current_level.families == set(viewer.FAMILIES)
       and {g.category for g in v.current_level.face_groups.values()} >= {
           "invisible_walls", "no_collision", "collision_boxes", "death_zones", "death_zones_label"})   # L03A: sea only
+# Flags -> Flag labels: last, after an empty row; off hides only the words
+flags_items = v.menu.stack[-1][1]
+probe("Flag labels is the last entry of Flags, after an empty row",
+      flags_items[-2].label() == "Etichette flag" and isinstance(flags_items[-3], menumod.Section)
+      and v.show_flag_labels)
+v.show_no_collision = True
+v.ensure_overlays()
+label_groups = [g for g in v.current_level.face_groups.values() if isinstance(g.tex_id, str)]
+v.menu.stack[-1][2] = len(flags_items) - 2
+press(k.ENTER)
+probe("Flag labels off: the flags stay on, their words are texture groups of their own",
+      not v.show_flag_labels and v.show_no_collision and label_groups
+      and all(g.category.endswith("_label") for g in label_groups))
+press(k.ENTER)
+v.show_no_collision = False
 press(k.BACKSPACE)
 probe("Backspace from Flags returns to Level options", v.menu.stack[-1][0] == "level")
 v.menu.hide()
@@ -217,9 +232,12 @@ press(k.ESCAPE)
 v.menu.stack[-1][2] = 1
 press(k.ENTER)
 era_labels = [x.label() for x in v.menu.stack[-1][1]]
-probe("Load level: Ere first, the five eras, Nowhere below Dimensione X, then Extra",
+# Extra (the cutscenes, the `_8` variants) is in the Debug build only: the
+# other copies hide it on purpose, and there the Extra probes are skipped
+debug_build = v.build == "Debug"
+probe("Load level: Ere first, the five eras, Nowhere below Dimensione X, then Extra (Debug build only)",
       era_labels[:7] == ["Ere", "Età della pietra", "Medioevo", "Pirati", "Anni '30", "Dimensione X", "Nowhere"]
-      and "Extra" in era_labels)
+      and ("Extra" in era_labels) == debug_build)
 v.menu.stack[-1][2] = era_labels.index("Pirati")
 press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
@@ -235,23 +253,25 @@ press(k.ESCAPE)
 probe("Esc closes it", not v.menu.is_open)
 press(k.ESCAPE)
 probe("Esc reopens where it was left (the main page)", v.menu.is_open and [x[0] for x in v.menu.stack] == ["main"])
-v.menu.open_page("load")
-v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
-press(k.ENTER)
-menu_items = v.menu.stack[-1][1]
-page_labels = [x.label() for x in menu_items]
-probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere (Debug build)",
-      "Nowhere" not in page_labels and "Era selector" not in page_labels
-      and "Vista d'insieme" not in page_labels and
-      "Cutscenes" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
-      and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
-v.menu.stack[-1][2] = page_labels.index("Cutscenes")
-press(k.ENTER)
-menu_items = v.menu.stack[-1][1]
-v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items) if x.selectable and x.value_text().startswith("CC3A"))
-press(k.ENTER)
-probe("Extra -> Cutscenes -> CC3A cutscene loaded, the menu on its main page",
-      v.current_level.name.upper() == "CC3A" and [x[0] for x in v.menu.stack] == ["main"])
+if debug_build:
+    v.menu.open_page("load")
+    v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
+    press(k.ENTER)
+    menu_items = v.menu.stack[-1][1]
+    page_labels = [x.label() for x in menu_items]
+    probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere (Debug build)",
+          "Nowhere" not in page_labels and "Era selector" not in page_labels
+          and "Vista d'insieme" not in page_labels and
+          "Cutscenes" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
+          and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
+    v.menu.stack[-1][2] = page_labels.index("Cutscenes")
+    press(k.ENTER)
+    menu_items = v.menu.stack[-1][1]
+    v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items)
+                               if x.selectable and x.value_text().startswith("CC3A"))
+    press(k.ENTER)
+    probe("Extra -> Cutscenes -> CC3A cutscene loaded, the menu on its main page",
+          v.current_level.name.upper() == "CC3A" and [x[0] for x in v.menu.stack] == ["main"])
 v.menu.open_page("load")
 v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Ere")
 press(k.ENTER)
@@ -712,6 +732,19 @@ v.anim_sel = {"category": "characters", "family": merlin, "which": 1}
 v.menu.rebuild()
 probe("the page's title is the family's name, the model and the parts under it",
       v._anim_title() == "Merlino" and v._anim_subtitle() == "Animazioni · Modello 229 · 31 parti")
+v.anim_sel["which"] = 2
+second = v._anim_title()
+v.anim_sel["which"] = 10
+tenth = v._anim_title()
+v.anim_sel["which"] = 1
+probe("an exemplar's own name: Merlin at his table (object 40), the others Merlin-Trial(1)...(9)",
+      catalogmod.exemplar_id(v._anim_exemplar()) == ("placed", 40)
+      and second == "Merlino-Prova(1)" and tenth == "Merlino-Prova(9)")
+machine = next(i for i, f in enumerate(catalogmod.menu_families(cat, "characters")) if f[2]["model"] == 83)
+v.anim_sel = {"category": "characters", "family": machine, "which": 1}
+probe("object 122 of Nowhere (model 83) is the time machine", v._anim_title() == "Macchina del tempo"
+      and catalogmod.exemplar_id(v._anim_exemplar()) == ("placed", 122))
+v.anim_sel = {"category": "characters", "family": merlin, "which": 1}
 # a click on the value's left arrow goes back, on the right one goes on
 v.menu.stack[-1][2] = anim_labels.index("Famiglia")
 v.on_draw()
@@ -868,6 +901,12 @@ w.close()
 w = viewer.Viewer(None, "extracted", screenshot="nessuna.png", level="L03A2")
 probe("startup with a requested level: that one", w.current_level is not None and w.current_level.name.upper() == "L03A2")
 w.close()
-failed = [n for n, ok in results if not ok]
+from window import app as appmod  # noqa: E402
+probe("the saved window size is taken back; a broken or too small one gives 1280 x 760",
+      appmod._window_size([1500, 900]) == (1500, 900) and appmod._window_size([300, 200]) == (1280, 760)
+      and appmod._window_size("x") == (1280, 760) and appmod._window_size(None) == (1280, 760)
+      and settings_mod.DEFAULTS["window_size"] == [1280, 760]
+      and appmod._window_size([2500, 1400], (1366, 768)) == (1326, 668))
+failed =[n for n, ok in results if not ok]
 print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")
 sys.exit(1 if failed else 0)

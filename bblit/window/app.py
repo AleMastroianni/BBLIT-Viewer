@@ -51,6 +51,24 @@ from pyglet.math import Vec3  # noqa: E402
 from ui import keys_page  # noqa: E402
 
 
+def _window_size(saved, screen=None) -> tuple[int, int]:
+    """The saved window size, if it is two numbers and not smaller than a
+    usable window; else 1280 x 760. With `screen` (width, height), no bigger
+    than the screen of now, less a margin for the title bar and the taskbar:
+    a monitor unplugged or a lower resolution must not give a window larger
+    than the desktop."""
+    try:
+        width, height = int(saved[0]), int(saved[1])
+    except (TypeError, ValueError, IndexError):
+        width, height = 1280, 760
+    if width < 640 or height < 400:
+        width, height = 1280, 760
+    if screen is not None:
+        width = max(640, min(width, screen[0] - 40))
+        height = max(400, min(height, screen[1] - 100))
+    return width, height
+
+
 class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window.Window):
     """The window: the level in front, the menu over it."""
 
@@ -69,9 +87,21 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         # a stencil buffer: the flags' see-through fills tint a pixel once per
         # kind of wall, so two pieces of the same wall cannot add their alpha
         # and draw a line that is not there (drawing.py, STENCIL_CLASSES)
-        super().__init__(1280, 760, resizable=True, vsync=user_settings["vsync"],
+        try:
+            screen = pyglet.display.get_display().get_default_screen()
+            screen_size = (screen.width, screen.height)
+        except Exception:  # noqa: BLE001
+            screen_size = None
+        width, height = _window_size(user_settings["window_size"], screen_size)
+        super().__init__(width, height, resizable=True, vsync=user_settings["vsync"],
                          caption=version.window_title(t('title'), self.build),
                          config=pyglet.gl.Config(double_buffer=True, depth_size=24, stencil_size=8))
+        # centred on the screen: the position is never kept
+        screen = self.screen
+        self.set_location(screen.x + max(0, (screen.width - self.width) // 2),
+                          screen.y + max(0, (screen.height - self.height) // 2))
+        # the size to save: the last one seen outside full screen
+        self._windowed_size = [self.width, self.height]
         if level_files is None:
             self.folder = paths.find_levels_folder(data or user_settings["levels_folder"] or None)
             # Extra (the cutscenes, the menu, the credits, the `_8` variants)
@@ -118,6 +148,11 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         self.show_walls_outside = True
         # Walls: edges over holes, the steps seen from a 0x7E hole: hidden, at every start
         self.show_hole_steps = False
+        # Flags -> Flag labels: the words written in the flags and over the
+        # collision boxes. Off, the colours and the outlines stay (DEATH
+        # FLOOR, black in the red, looked like a hole in the floor). Yes at
+        # every start
+        self.show_flag_labels = True
         # "Visibility by area as in the game" (findings 293-295): off at
         # every start, no key; the area in use, kept when the camera is in
         # no collision block
@@ -303,6 +338,11 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
             for key, piece in saved.items():
                 self._pieces.setdefault(key, piece)
 
+    def on_resize(self, width, height):
+        if not self.fullscreen:
+            self._windowed_size = [width, height]
+        return super().on_resize(width, height)
+
     def on_close(self):
         self._save_settings()
         super().on_close()
@@ -378,6 +418,8 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
                                    sky_choice=self.session_sky.get(name),
                                    exceptions=self.anim_exceptions)
         self.forget_uv_rule()   # the uv rule remembers each texture's size
+        # what plays once (the anchors' fall) starts now
+        self.current_level.once_from = self.tick()
         self.area_in_use = self.current_level.player_area
         if not same_level:
             # the level is open and drawn from here on: the families of its

@@ -66,6 +66,13 @@ PREFERENCES = {
              "states": [(199, "rising"), (202, "floating")]},
             {"name": "green_crates", "model": 311,
              "states": [(348, "falling"), (131, "on_ground")]},
+            # the anchors (model 168, template 71, finding 280): the game
+            # starts them turning in the air (state 1); state 501 is their
+            # fall when Bugs stays under one for a second: the shadow grows
+            # (role 153), the anchor falls (348) and stays on the ground
+            # (198, once and hold). Chosen, it plays once from that moment
+            {"name": "anchors", "model": 168,
+             "states": [(248, "turning_in_air"), (("state", 501), "fall")]},
         ],
     },
     "L02C3": {

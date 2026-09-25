@@ -1,7 +1,7 @@
 """Moved to `bblit/game/collision.py`.
 
 This file only keeps `import collision` working for the reverse engineering
-project (`..\\BBLIT_Decomp_Ale`), which puts this folder on its path: it
+project, which puts this folder on its path: it
 makes this name the module itself, private names included.
 """
 import importlib

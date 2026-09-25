@@ -34,6 +34,9 @@ DEFAULTS = {
     "clones_shown": 1,
     "ticks_per_second": 15.0,
     "fullscreen": False,
+    # the window's size when it was last closed (not full screen); the
+    # position is not kept: the window always opens centred on the screen
+    "window_size": [1280, 760],
     "vsync": True,
     "bilinear_filter": True,
     # Video options -> Distant textures. False = like the PC, which has no

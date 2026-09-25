@@ -9,10 +9,11 @@ options, not duplicated). From the top:
 - Category and Family, with the number of positions of the selector in
   grey on the right (7 categories, so many families): how many exemplars
   there are, and why a thing is in its category, go in the description;
-- the title of the page is the name of the family chosen ("Merlin"), from
-  `game/family_names.py`, with the model and the parts of its skeleton
-  small under it (the line of "whoever has a head" has to stay open to
-  proof); where the table has no name yet, the model's number;
+- the title of the page is the name of the exemplar chosen ("Merlin",
+  "Merlin-Trial(3)"), else of its family, from `game/family_names.py`,
+  with the model and the parts of its skeleton small under it (the line of
+  "whoever has a head" has to stay open to proof); where the tables have
+  no name yet, the model's number;
 - Which one, "3 of 10", Shift + arrow jumps ten;
 - Provenance (what the data says), Spawn (what is seen while playing: the
   user's truth, "to be asked" where it is not known yet), When it is there,
@@ -246,7 +247,7 @@ class AnimationsPage:
         if key is None:
             return 0
         hold = self.anim_holds.get(key)
-        return (self.tick() if hold is None else hold) % n
+        return (self.anim_frame(key, n) if hold is None else hold) % n
 
     def _anim_set_flow(self, e, flow):
         key = self._anim_key(e)
@@ -281,7 +282,7 @@ class AnimationsPage:
 
     def _anim_family_label(self, key, exemplars, fam):
         """The family's name (`family_names`), else what it is by number."""
-        name = family_names.name_key(self.current_level.name, (key, exemplars, fam))
+        name = family_names.family_name(self.current_level.name, (key, exemplars, fam))
         if name is not None:
             return t(name)
         return self._anim_family_number(key)
@@ -297,9 +298,18 @@ class AnimationsPage:
         return t("anim.fam.type", n=number)
 
     def _anim_title(self):
-        """The title of the page: the name of what is being looked at."""
+        """The title of the page: the name of what is being looked at, the
+        exemplar's own, else its family's."""
         fam = self._anim_family() if self.current_level is not None else None
-        return self._anim_family_label(*fam) if fam is not None else t("menu.anim")
+        if fam is None:
+            return t("menu.anim")
+        e = self._anim_exemplar()
+        index = max(0, min(self.anim_sel["which"], len(fam[1])) - 1)
+        name = family_names.exemplar_name(self.current_level.name, fam,
+                                          catalog.exemplar_id(e) if e else None, index)
+        if name is not None:
+            return t(name[0], **name[1])
+        return self._anim_family_label(*fam)
 
     def _anim_subtitle(self):
         """Under the title, small: the page, and for a named family its
@@ -309,7 +319,7 @@ class AnimationsPage:
             return ""
         key, exemplars, record = fam
         bits = [t("menu.anim")]
-        if family_names.name_key(self.current_level.name, fam) is not None and key[0] != "rest":
+        if family_names.family_name(self.current_level.name, fam) is not None and key[0] != "rest":
             bits.append(self._anim_family_number(key))
         if key[0] == "characters" and record is not None:
             level = self.current_level

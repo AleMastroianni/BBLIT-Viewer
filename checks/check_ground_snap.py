@@ -5,9 +5,8 @@ put them where the game does?
 
 A type 14 object whose starting step has neither 0x1 nor 0x80000000 in its
 control dword stands on the collision ground of its area at every tick; its
-file height means nothing. The reverse's survey (`check_ground_snap.py` of
-`BBLIT_Decomp_Ale`, the cutscenes and the `_8` files left out) found 158 such
-objects, 24 of them more than 30 units from their ground.
+file height means nothing. The reverse engineering project's survey (the
+cutscenes and the `_8` files left out) found 158 such objects, 24 of them more than 30 units from their ground.
 
 This opens every level as the viewer does (`scene.Level`, which calls
 `collision.settle_objects`) and measures, for every object of that class,

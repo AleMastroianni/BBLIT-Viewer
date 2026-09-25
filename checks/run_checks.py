@@ -124,6 +124,11 @@ def run_checks(names):
     os.makedirs(LOGS, exist_ok=True)
     results = []
     for name in names:
+        if not os.path.exists(os.path.join(CHECKS_DIR, name + ".py")):
+            # the checks that read the reverse engineering project's lists
+            # stay out of the public copy (packaging/make_development.py)
+            print(f"--   {name:22s}   not in this copy", flush=True)
+            continue
         start = time.time()
         proc = subprocess.run([sys.executable, os.path.join(CHECKS_DIR, name + ".py")], cwd=PROJECT,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

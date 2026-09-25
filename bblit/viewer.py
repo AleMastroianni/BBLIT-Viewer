@@ -99,6 +99,8 @@ def main() -> None:
     p.add_argument("--gatelinks", choices=("gates", "all"),
                    help="show who opens which gate, or every link")
     p.add_argument("--faces1000", action="store_true", help="show the 0x1000 terrain faces")
+    p.add_argument("--no-flag-labels", action="store_true",
+                   help="the flags without their words (colours and outlines stay)")
     p.add_argument("--no-walls-outside", action="store_true",
                    help="hide the sides of the walls that do not stop you (OUTSIDE)")
     p.add_argument("--hole-steps", action="store_true",
@@ -176,6 +178,8 @@ def main() -> None:
         v.show_area_boxes = True
     if args.faces1000:
         v.show_faces_1000 = True
+    if args.no_flag_labels:
+        v.show_flag_labels = False
     if args.no_walls_outside:
         v.show_walls_outside = False
     if args.hole_steps:

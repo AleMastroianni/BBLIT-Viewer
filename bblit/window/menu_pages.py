@@ -203,6 +203,10 @@ class MenuPages:
                               ("all", "level.gate_links.all")],
                              lambda: self.show_gate_links, self._set_gate_links, "desc.gate_links"),
                     item("level.faces_1000", "show_faces_1000", "desc.faces_1000"),
+                    # apart from the flags: it changes only their words
+                    M.Section(None, label_text=lambda: ""),
+                    M.YesNo("level.flag_labels", lambda: self.show_flag_labels,
+                            lambda v: setattr(self, "show_flag_labels", v), "desc.flag_labels"),
                     M.Back()]
 
         def walls():
@@ -585,6 +589,7 @@ class MenuPages:
         user_settings["animated_textures"], user_settings["clones_shown"] = self.animated_textures, self.show_clones
         user_settings["ticks_per_second"] = float(self.tps)
         user_settings["fullscreen"], user_settings["bilinear_filter"] = self.fullscreen, self.bilinear
+        user_settings["window_size"] = list(self._windowed_size)
         user_settings["mipmaps"] = self.mipmaps
         user_settings["texture_scale"], user_settings["albedo"] = self.scale_factor, float(self.albedo)
         user_settings["uv_rule"] = self.uv_rule

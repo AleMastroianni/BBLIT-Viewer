@@ -14,8 +14,8 @@ state waits on a level byte (`0x4b2260[i]`) or on a save byte
 here one step is enough to say "gate 37 is opened by object 78", which is what
 the viewer writes on the box and draws a line for.
 
-Read from the data, as `..\\BBLIT_Decomp_Ale\\docs\\lists\\keys.md` is:
-`checks/check_gates.py` compares the two.
+Read from the data, the same way the reverse engineering project reads its
+list of keys.
 """
 
 from __future__ import annotations

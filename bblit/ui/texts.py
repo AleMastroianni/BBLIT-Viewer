@@ -306,9 +306,11 @@ TEXTS: dict[str, tuple[str, str]] = {
                            "animators)."),
     "names.bugs": ("Bugs", "Bugs"),
     "names.merlin": ("Merlino", "Merlin"),
+    "names.merlin_trial": ("Merlino-Prova({n})", "Merlin-Trial({n})"),
     "names.merlin_helper": ("Aiutante mago", "Magician helper"),
     "names.pirate": ("Pirata", "Pirate"),
     "names.crab": ("Granchio", "Crab"),
+    "names.time_machine": ("Macchina del tempo", "Time machine"),
     "anim.n_by_itself": ("{n} nascono dopo da soli", "{n} come later by themselves"),
     "anim.n_by_bugs": ("{n} nascono quando Bugs fa qualcosa", "{n} come when Bugs does something"),
     "anim.new_game": ("«All'inizio» vale per una partita nuova: con un salvataggio le carote d'oro e "
@@ -433,6 +435,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "level.gate_links.gates": ("Solo cancelli", "Gates only"),
     "level.gate_links.all": ("Tutti i collegamenti", "All the links"),
     "level.faces_1000": ("Portali", "Portals"),
+    "level.flag_labels": ("Etichette flag", "Flag labels"),
     "desc.gate_links": ("Una linea da ogni interruttore a quello che comanda (scoperte 323, 331). "
                         "\"Solo cancelli\": chi apre davvero qualcosa che sbarra la strada, e il "
                         "box dice GATE <- #78. \"Tutti i collegamenti\": anche gli oggetti che "
@@ -443,6 +446,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "GATE <- #78. \"All the links\": the objects that only react to a byte "
                         "without opening anything too (pads, pick-ups), with REACTS <- #78 on the "
                         "box beside what kind it is. No at every start and at every level."),
+    "desc.flag_labels": ("Le scritte dentro le flag e sopra i box di collisione. Spente restano i "
+                         "colori e i contorni, spariscono solo le parole. Sì a ogni avvio.",
+                         "The words inside the flags and over the collision boxes. Off, the colours "
+                         "and the outlines stay, only the words go. Yes at every start."),
     "desc.faces_1000": ("I quad 0x1000 del terreno: sono portali, l'area che si vede attraverso e' "
                         "scritta su ognuno (scoperta 293). Il gioco non li disegna e non fermano. In "
                         "grigio.",
@@ -558,6 +565,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "group.bridges": ("Ponti levatoi", "Drawbridges"),
     "group.water_barrels": ("Barili in acqua", "Barrels in the water"),
     "group.green_crates": ("Casse verdi", "Green crates"),
+    "group.anchors": ("Ancore", "Anchors"),
     "level.sky_choice": ("Cielo", "Sky"),
     "level.sky_choice.start": ("Oggetto {n} (di partenza)", "Object {n} (at the start)"),
     "level.sky_choice.default": ("Oggetto {n} (il primo)", "Object {n} (the first)"),
@@ -574,6 +582,8 @@ TEXTS: dict[str, tuple[str, str]] = {
     "state.floating": ("Galleggiano", "Floating"),
     "state.falling": ("Cadono", "Falling"),
     "state.on_ground": ("A terra", "On the ground"),
+    "state.turning_in_air": ("Girano in aria", "Turning in the air"),
+    "state.fall": ("Cadono e restano a terra", "Fall and stay on the ground"),
 
     # video options
     "video.title": ("Opzioni video", "Video options"),

@@ -51,8 +51,8 @@ RULE_PASSES_PER_TICK = 2
 # Bit of the second static flag word (object+0xc) that puts a TYPE 14 object
 # wherever the camera is, at every tick. Together with type 9, which is
 # always placed that way, this is how the game draws the sky and the sea:
-# read in its code by the reverse (note N39 of BBLIT_Decomp_ALE), 97 such
-# objects on the disc (docs/lists/placement.md there).
+# read in its code by the reverse engineering project (its note N39), 97
+# such objects on the disc.
 FOLLOWS_CAMERA = 0x20000000
 # a rule effect: the object takes the object whose id is field +28 as its
 # child (finding 330: the vehicles that carry Bugs); Bugs is object id 1
@@ -224,6 +224,11 @@ class Level(OverlayBuilder):
         self.hidden_routes = set(exceptions.get("hidden", ()))
         # route -> the anim key of the clone's groups, when it animates
         self.clone_anim_keys = {}
+        # the anim keys that play once and hold on their last frame (a state
+        # played as a whole whose last step is "once and hold"), counted from
+        # `once_from`, the tick the viewer built the level at (window/app.py)
+        self.once_anims = set()
+        self.once_from = 0
         self.gates = {}
         self.gate_groups = {}
         self.name = os.path.splitext(os.path.basename(bze_path))[0]
@@ -276,6 +281,14 @@ class Level(OverlayBuilder):
         # `session_poses` holds those changed from the menu, session only
         self.pref = preferences.for_level(self.name)
         self.pref["pose"] = {**self.pref["pose"], **(session_poses or {})}
+        # a pose can also be a whole state, ("state", number): its roles are
+        # played one after the other (the anchors' fall: the shadow grows,
+        # the anchor falls, it stays on the ground). {model: state number};
+        # the role of such a model stays the one the game starts from
+        self.pose_states = {mid: v[1] for mid, v in self.pref["pose"].items()
+                            if isinstance(v, tuple) and v[0] == "state"}
+        for mid in self.pose_states:
+            del self.pref["pose"][mid]
         self._pieces = pieces if pieces is not None else {}
         self._current_piece = None       # the piece being built (see _piece)
         self._portals = None             # the 0x1000 quads, read on demand
@@ -863,9 +876,12 @@ class Level(OverlayBuilder):
         spr = texmod.sprite(t, self.res, self.sec4)
         n_t = self._idx[id(t)]
         if mid is not None and models[mid]["size"] > 12:
-            self._piece(("clone", route, category, parent_role, role),
-                        lambda: self._clone(t, n_t, models[mid], role, pos, rot, category))
+            state = self.pose_states.get(mid)
+            self._piece(("clone", route, category, parent_role, role) + ((("state", state),) if state else ()),
+                        lambda: self._clone(t, n_t, models[mid], role, pos, rot, category, state=state))
             self.clone_anim_keys[croute] = ("clone_anim", n_t, pos)
+            if state and montage.playlist(t, state)[1]:
+                self.once_anims.add(("clone_anim", n_t, pos))
             # the box only for the clones the viewer always shows
             # (preferences.py: torches, crates, barrels, anchors) and for what
             # an attacker swings: the ones behind the flag Cloned templates
@@ -1007,12 +1023,21 @@ class Level(OverlayBuilder):
                                           frame=f, n_frames=n_frames, counted=f == first)
         self.stat["held_clones"] = self.stat.get("held_clones", 0) + 1
 
-    def _clone(self, t, n_t, model, role, pos, rot, category):
-        """The triangles of a clone (one piece)."""
+    def _clone(self, t, n_t, model, role, pos, rot, category, state=None):
+        """The triangles of a clone (one piece). With `state`, the roles of
+        that state one after the other (montage.playlist), and no rotation:
+        the turning is a rule of the state the game starts from."""
+        roles = montage.playlist(t, state)[0] if state else []
         try:
-            trans = montage.transforms(self.sec4, t["resources"], self.res, t, role=role)
+            trans = montage.transforms(self.sec4, t["resources"], self.res, t,
+                                       role=roles[0] if roles else role)
             vertices, faces, _ = geo.read_model(self.sec4, model["offset"], trans)
-            frames = montage.animation(self.sec4, t["resources"], self.res, t, role=role)
+            if roles:
+                frames = []
+                for r in roles:
+                    frames.extend(montage.animation(self.sec4, t["resources"], self.res, t, role=r) or [])
+            else:
+                frames = montage.animation(self.sec4, t["resources"], self.res, t, role=role)
         except Exception:  # noqa: BLE001
             return
         if not faces:
@@ -1027,7 +1052,7 @@ class Level(OverlayBuilder):
             # (camera_place) and the drawing moves them with the camera
             category, pos = "sky_dome", camera_place(t)
         # a rotating clone (finding 280): the anchors, the clocks
-        step = _spin_speed(t)
+        step = _spin_speed(t) if not roles else 0
         spin = (("spin", n_t, pos), step) if step else None
         # a clone animates too (finding 278): the floating barrel
         if frames and any(b != frames[0] for b in frames[1:]):
