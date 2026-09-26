@@ -38,7 +38,7 @@ says so.
 | 275 | Eyes, sun halo, water and ripples are animated textures filled by objects |
 | 276 | A vertex with bit `0x8000` is a copy of a vertex of another part and must be welded |
 | 277 | In the `0x3C` triangle the first vertex is the one at +28, not at +14 |
-| 278 | An animation has one block per tick, and each block carries only what changes |
+| 278 | An animation has one block per frame, and each block carries only what changes |
 | 279 | Sprites, nested clones and attachment points: the torches |
 | 280 | Anchors: parts removed from the pose (type 8, flag 0xB) and the rotation of action `0x26` |
 | 281 | The `_8` variants are not in the level table |
@@ -122,10 +122,12 @@ exist in the slot table**.
 The claim was: the game registers every TIM in a numbered slot
 (`FUN_004229a0`, table at `0x52fd60`) and does not clear the table on level
 change (unlike the sound registry, Ombelll's finding 152), so `L03A` would
-take six of its 8 missing ids from `L03ACOM` and two (7 and 307) from
-`title.bze`. That the table is not cleared is a reading of the code (see
-275), not the result of a search: no scan of every routine that writes to
-`0x52fd60` was made. Either way, no drawn face depends on it.
+take five of its 8 missing ids (3, 4, 6, 291, 293) from `L03ACOM` and the
+others from `title.bze`, which registers all eight. That the table is not
+cleared is a reading of the other build's references to the table, not
+re-read in this build (`HYPOTHESIS`), and not the result of a search: no scan
+of every routine that writes to `0x52fd60` was made. Either way, no drawn face
+depends on it.
 
 ## 261 — A model's parts are assembled with the rig and chained on their parents
 
@@ -159,7 +161,11 @@ Two details:
 pixel coordinate is `u/255 · (size − 1)`, sampled at the **texel center**.
 Dividing by 256 shifts by half a texel: invisible with nearest filtering,
 visible with linear filtering or mipmaps (on a 16×16 texture half a texel is
-3% of the surface). The direction of v is corrected by 271.
+3% of the surface). The direction of v is corrected by 271. This is the rule
+of the PC's software renderer: the function is called only by its drawers.
+The OpenGL renderer, the one normally played, uses `byte / 255` over the
+whole texture with `GL_REPEAT`, then `clamp(byte / 255, 0.01, 0.99)`
+(findings 328 and 341, not yet published).
 
 ## 263 — The `.bmp` files in `Datas/bze` are not level previews
 
@@ -213,13 +219,16 @@ with bit 3 of the flag set would be drawn opaque. **Measured:** in the three
 dock sections **0 faces of 4899** in mode `0x4A`/`0x4E` have bit 3 (their
 flags are only `0x01` and `0x03`). Rejected for the dock only: the census over
 all 53 playable levels finds **30** (L03C1 6, L04C3 6, L05A3c 12, L04C1,
-L04D1, L04D2 2 each), and what the game does with them is not established
-(census column `semi0`).
+L04D1, L04D2 2 each; census column `semi0`). The PC draws them opaque: the
+pass that marks which copy of a texture a face needs marks the texture of a
+`0x4A`/`0x4E` face opaque only, without looking at the flag (finding 307, not
+yet published; not compared with the game).
 
 Side note from the same census: modes `0x34` and `0x38` do not appear in the
 three dock sections, and flag bit `0x02` (double-sided in the PlayStation
-TMD) is set on about a fifth of the faces of every mode. Whether it means
-double-sided here is not measured.
+TMD) is set on about a fifth of the faces of every mode. In the code it
+means double-sided: the backface test is switched off (finding 307, not yet
+published).
 
 ## 267 — The sky dome follows the camera
 
@@ -231,7 +240,10 @@ gray tips of it are visible.
 
 Drawn first, without depth and translated with the camera, the scene matches
 screenshots of the game: **the sun sets behind the stack of crates with the
-ship's wheel**, which is impossible with a fixed dome.
+ship's wheel**, which is impossible with a fixed dome. "Drawn first, without
+depth" is a simplification that fails where two domes follow the camera: the
+game resolves them with the ordinary depth buffer (finding 346, not yet
+published).
 
 Open: whether it also rotates partially with the view. The screenshots rule
 out full rotation (the sun does not appear in every direction), not a partial
@@ -239,8 +251,9 @@ one.
 
 ## 268 — The x2 factor on the vertex color is wrong for the PC
 
-`PROVEN_RAW_DATA` (pixels of the PC game) + `REBUILD_VERIFIED`. **Corrects
-Ombelll's finding 16 for the PC version**: texture × vertex color × 2
+Compared with screenshots of the PC game (pixels of screenshots, not raw
+data) + `REBUILD_VERIFIED`. **Corrects Ombelll's finding 16 for the PC
+version**: texture × vertex color × 2
 (128 = neutral, "255 doubles") is the PlayStation convention, not the port's.
 With x2 the viewer is about **twice as bright on everything** as screenshots
 of the PC game in the same framing: salmon-pink hull instead of brown, bright
@@ -307,7 +320,8 @@ direction does not show, so that count alone did not decide.
 ## 271 — The texture v coordinate is counted from the bottom
 
 `REBUILD_VERIFIED`, with ground truth. **Corrects 262** for the direction
-(the scaling by size − 1 stays). The reading of `FUN_0041cd50` in Ombelll's
+(the scaling by size − 1 stays as discussed there: it is the software
+renderer's). The reading of `FUN_0041cd50` in Ombelll's
 documents does not say which side v starts from; counting it from the top, as
 for an image, is wrong.
 
@@ -329,9 +343,10 @@ the portholes missing on the ship; white and black triangles at the stern.
   does not show), but it points the same way as the lettering.
 
 Textures exported as PNG do not change: they are already upright (the islet
-billboard has the palms at the top). Only the mapping changes, in
-`export_obj.uv_to_texture` (`bblit/game/geometry.py`), shared by the viewer and
-the OBJ export.
+billboard has the palms at the top). Only the mapping changes:
+`geometry.uv_to_texture` (`bblit/game/geometry.py`) for the OBJ export;
+the viewer uses `geometry.uv_transform` with the texture coordinates rule
+chosen in Video options (the PC's clamp by default).
 
 ## 272 — An object's pose is the one the game starts, not the one with the most records
 
@@ -395,8 +410,9 @@ fan" halo was largely additive faces (B + F/4) drawn opaque.
 
 ## 274 — Blue chests, falling crates and flames are template clones
 
-`PROVEN_RAW_DATA` for who requests them and under what condition, `STRONG`
-for the chests' placement, `REBUILD_VERIFIED` on screen.
+`PROVEN_RAW_DATA` for who requests them and under what condition, seen in the
+game on the PC and on the PlayStation for their being there, `HYPOTHESIS` for
+the chests' placement, `REBUILD_VERIFIED` on screen.
 
 Objects that the game shows (PC and PlayStation) but that are not placed by
 the level are **templates** (block 0x08, with no position) cloned by a `0x31`
@@ -414,7 +430,12 @@ exports the `0x31` rules of every object. In `L03A`:
 is 1, 2 or 3. The rig of object 83 has three child parts at
 **x = -400, 0, +400**: reading "+24 = k-th child part" puts the three chests
 in a row, as in a screenshot of the PlayStation version. A consistent
-reading, not read in the code (refined in 279).
+reading, not read in the code (refined in 279). The code gives the real rule:
+with `0x80` the clone is a child hung from the part the spawner's animation
+marks at that moment (record type 10; the root when nothing is marked), and
+the first parameter is the frame of birth, not an attach point; "k-th marked
+part" agrees with it for the chests and the torches (finding 314, not yet
+published).
 
 **In the viewer**, flag Cloned templates (`--clones 0/1/2`): Off (default),
 At start (condition true with empty tables, Ombelll's finding 161, and no
@@ -444,7 +465,11 @@ named by `0x0B` (u32) a frame chosen as follows:
   k-th record;
 * type 2: the sequence is in a resource with opcode **`0x3F`** (u32 number of
   pairs, u32 offset, u32 size): byte pairs **(frame, duration in ticks)**;
-* type 20: no sequence; `0x42` = **(first, last, duration)**, a loop.
+* type 20: no sequence; `0x42` = **(first, last, duration)**. The game never
+  reads "last": it starts at first, goes up and back to 0 after the last
+  record (reading first…last is wrong for 47 of the 129); and type 2 is a
+  state machine: its last sequence is not the game's start for 110 of 391
+  (finding 313, not yet published).
 
 **The proof that could have failed.** Across all the `.bze` files there are
 **520** objects with `0x0B` in 79 files, all of type 2 (391) or 20 (129).
@@ -482,12 +507,15 @@ filled them; on screen it gave a barrel strap in place of the eyes and an
 olive fan in place of the halo (269). After 275 no level has a drawn face
 left to explain with the chain, and `textures.construct` (`bblit/game/textures.py`)
 no longer adds companion files (they can still be requested with `extra`).
-That the game's table survives level changes remains true in the code (no
-clearing routine), but nothing needs it to be drawn.
+That the game's table survives level changes is a reading of the other
+build's code (no clearing routine found; `HYPOTHESIS`, see 260), but nothing
+needs it to be drawn.
 
 **In the viewer** animated slots change frame over time (flag Animated
-textures; when off, the first frame of the sequence is shown). The tick
-length, first assumed at 25 per second, is measured in 278: 15 per second.
+textures; when off, the first frame of the sequence is shown). The frame
+rate, first assumed at 25 per second, is measured in 278: 15 frames per
+second; the logic runs at 30 ticks per second (finding 316, not yet
+published).
 
 **Still open:** in the game the halo is a solid, larger yellow disc; in the
 viewer it has the right shape but is fainter (frame, blend or vertex color,
@@ -513,10 +541,14 @@ declared original is the nearest to the copy **2197 times of 2876** (at
 random it would be about 1 in a few hundred; most of the rest are nearly
 coincident vertices).
 
-**The rule**, in `export_obj.read_model`: the copy takes the position of the
+**The rule**, in `geometry.read_model`: the copy takes the position of the
 original, already transformed with its part. It is the skin that holds the
 joints together: without it Bugs's shoulders and arms and Merlin's robe and
-face are open. `read_model(..., weld=False)` gives the old reading.
+face are open. `read_model(..., weld=False)` gives the old reading. The
+game's own rule is close but not the same: the stored position becomes the
+mean of the original's and the copy's (× 0.5) in screen space, the same as
+the weld whenever the rig puts both at one point, half the gap otherwise
+(finding 307, not yet published).
 
 ## 277 — In the `0x3C` triangle the first vertex is the one at +28, not at +14
 
@@ -547,16 +579,20 @@ half circles, are whole rings centered on the post; the spiral decoration on
 the edge of the piers and the skull of the pirate flag (top left from the
 camera at (202, 18, -117)) are fixed too.
 
-**Not proven:** the flat triangle `0x34` has the same shape (first index at
-+14, right after the third UV) but only 50 primitives in all the data and no
-adjacent pair in the files tested: it keeps the old reading.
+The flat triangle `0x34` has the same shape (first index at +14, right after
+the third UV) but only 50 primitives in all the data and no adjacent pair in
+the files tested, so the data alone did not settle it and the viewer keeps
+the old reading; the code gives `0x34` = (+20, +22, +14) (finding 307, not
+yet published).
 
-## 278 — An animation has one block per tick, and each block carries only what changes
+## 278 — An animation has one block per frame, and each block carries only what changes
 
 `PROVEN_RAW_DATA` for the structure, `REBUILD_VERIFIED` on screen.
 
 In animation streams (types 2 and 4) block times are 0, 1, 2, ... with no
-gaps: a block is a tick. The first block carries the full pose, the following
+gaps: a block is a frame. A frame lasts (word +2 of the stream's header) / 2
+logic ticks: 8309 streams of the disc have the word 2 and 1582 the word 4
+(finding 316, not yet published). The first block carries the full pose, the following
 ones only the TRS records of the parts that move (carrot 111: 17 blocks, from
 the second on only the rotation of part 2). State therefore **accumulates**
 block by block, with no interpolation. `rig.animation` returns the transforms
@@ -565,20 +601,21 @@ view (same block).
 
 In `L03A` 29 placed objects have a starting animation that actually changes
 something (spinning carrots and golden carrots, life buoys with the
-propeller, pirates, ...). The carrot at ticks 0, 4, 8 is tilted left, facing
+propeller, pirates, ...). The carrot at frames 0, 4, 8 is tilted left, facing
 forward, tilted right.
 
-**Ticks per second: 15, measured** in BizHawk on the PlayStation version
+**Frames per second: 15, measured** in BizHawk on the PlayStation version
 (NTSC-U), frame by frame, in front of a normal carrot: one turn in 68, 68 and
 67 frames (203 in 3 turns). The carrot's animation has **17 blocks** and the
-PlayStation shows them all before starting over: 17 ticks every 67.7 frames
-at 60 Hz = **15.07 ticks per second**, one block exactly every 4 frames (the
+PlayStation shows them all before starting over: 17 blocks every 67.7 frames
+at 60 Hz = **15.07 blocks per second**, one block exactly every 4 frames (the
 logic runs at 30 per second, 0x76010).
 
 **The last block is an end-of-loop placeholder**: it changes no part, so it
 repeats the second-to-last frame. This holds for **135 animations of 135** in
-L03A, L03A2, L03ACOM, L01a and MERLIN. In the PC game the carrot spins
-without stopping, whereas keeping the block stops it for one tick every turn;
+L03A, L03A2, L03ACOM, L01a and MERLIN. Seen in the game on the PC: the carrot
+spins without stopping, whereas keeping the block stops it for one frame
+every turn;
 `rig.animation` drops it. Measured on the PlayStation; the PC should have the
 same logic, not measured. The viewer repeats every animation in a loop, so
 one-shot animations (a carrot popping out) are seen repeating.
@@ -597,8 +634,9 @@ of 3 blocks: 118 raised, 119, 120, 121 lowered (depth 2.6 / 6.2 / 9.4 /
 
 `PROVEN_RAW_DATA` for the chain, `HYPOTHESIS` for sprite blending (two
 consistent examples, the glow and the flame below: not counted over the disc,
-and no routine read that reads that word), `STRONG` for the attachment (a
-reading consistent with the data, not read in the code).
+and no routine read that reads that word), `HYPOTHESIS` for the attachment
+(a reading consistent with the data; later read in the code, finding 314,
+not yet published).
 
 **Sprites.** A template with a `0x40` resource (frames, 275) and without
 `0x0B` is a world sprite: `L03A` has 20. The `0x64` record carries width and
@@ -621,7 +659,10 @@ tick: the top of the torch (part 3), the hand of the throwing pirate (part 23
 of object 108), the three chest spots (parts 4, 3, 2). Reading adopted: the
 k-th part marked `0xA`, and without markings the k-th child of the root
 (274). It puts the flame at the top of the torch; the old reading would put
-it at the base.
+it at the base. In the code field +24 is not a part: it is the frame of
+birth, and the clone hangs from the part the parent's animation marks at that
+moment; "k-th marked part" agrees with it for the chests and the torches
+(finding 314, not yet published).
 
 **In the viewer** clones are recursive up to three levels; in templates the
 rules of the starting step that are true at startup apply. Sprites are
@@ -630,8 +671,9 @@ camera-facing squares at the attachment point.
 **Sprite origin:** the `0x64` record carries no origin. In the game the flame
 **rests** on the top of the torch (also in a PlayStation screenshot with the
 torch lit on the islet), so the viewer draws every sprite with its bottom
-edge on the attachment point. For the other sprites this is an extension, not
-a measurement.
+edge on the attachment point. For the other sprites this was an extension,
+not a measurement, until the code was read: bottom edge at the object's
+origin, centred only with bit `0x8000000` (finding 305, not yet published).
 
 **Open:** the two models cloned together with the flame (670, 659).
 
@@ -706,7 +748,7 @@ the shadow on the ground. The fall is not simulated.
 30 per second, 278) one turn is 4096/136 = 30.1 passes, **1.0 s** (60
 PlayStation frames). If rules ran once per animation tick it would be 2.0 s
 (120 frames). A frame-by-frame measurement in BizHawk decides
-(`RULE_PASSES_PER_TICK` in `bblit/viewer.py`).
+(`RULE_PASSES_PER_TICK` in `bblit/window/scene.py`).
 
 **Deliberately excluded:** pirate 110 rotates by 60×16 = 960 (84°) in each of
 its four states, and each state ends when it gets near a waypoint (roles 58,
@@ -764,7 +806,7 @@ z: perhaps the planted anchor.
 
 `PROVEN_BINARY` for the table, `PROVEN_RAW_DATA` for the files.
 
-The level table of `bugs.exe` (111 entries of 24 bytes starting from
+The level table of `bugs.exe` (at `0x4ad380`, 111 entries of 24 bytes starting from
 `..\BZE\TITLE.BZE;1`; the index is the LevID) names 111 files. The game data
 contains nine `_8` files that do not appear in it: `L01D1_8`, `L01D2_8`,
 `L03A_8`, `L03A2_8`, `L03ACOM_8`, `L03B_8`, `L03C_8`, `L04B3_8`, `LB04_8`.
@@ -807,7 +849,8 @@ levels of the viewer's menu (`checks/check_walls.py`):
 
 - **1527** records in **26** levels (none in `L03A`); all 20 bytes long,
   `n_bound_faces` 0, count 1. One record in `CCEND` reads as 16384 bytes long:
-  that level does not build anyway.
+  that file's terrain could not be read at the time (its sectors without a
+  header are read by finding 289, not yet published).
 - The four `u16` at `+8` are **all** within the chunk's vertex count (1527 of
   1527), and **all** 1527 quads are vertical (normal within 0.2 of the
   horizontal plane): "curtains".
@@ -903,14 +946,26 @@ box is origin + (extent X, extent Z), and in Y from its plane up by the
 negative "lower bound" of opcode `0x1C`; the fourth word is the plan radius as
 a `u16` (40,481 for `L03A`'s 32,569 × 24,041, √ = 40,480).
 
-Over the menu levels: **165** zones with effect `0x200000` (death: animation
-series and life counter cleared, Ombelll's finding 169) in 46 levels, 15
+Over the 79 files of the menu (the `_8` variants included): **166** zones
+with effect `0x200000` (death, Ombelll's finding 169) in 46 levels, 15
 teleport zones in 4, 9 damage zones (action `0x48`) in 3, 70 checkpoints in
-57. The largest death zones cover the whole level: the sea of `L03A` at
-Y −300, the abyss of `L05A5`. The viewer calls a zone covering at least half
-the terrain plan the **death floor** (DEATH FLOOR in the Death and damage
-zones flag, 23 zones); the other 153 are death zones (DEATH). Rule conditions
-are not evaluated.
+57. One of the 166, in `L05A4`, has a negative extent and never fires. The
+largest death zones cover the whole level: the sea of `L03A` at Y −300, the
+abyss of `L05A5`. The viewer calls a zone covering at least half the terrain
+plan the **death floor** (DEATH FLOOR in the Death and damage zones flag, 24
+zones); the other 141 it draws are death zones (DEATH). Rule conditions are
+not evaluated.
+
+What the effect does, read in the code (the kill routine `0x437d00`, in the
+build of 264): Bugs gets the death series the caller passes (`+0x17c`, slot
+`+0x17e` = 0); his flag word `+0x14` gets `0x1000004` and loses `0x10000`;
+the invulnerability timer (`0x4b3160`), the camera's hold countdown
+(`0x4b3dac`) and five more counters (`0x4b3241`, `0x4b3242`, `0x4b3948`,
+`0x4b394c`, `0x4b394e`, not named yet) go to 0; Bugs is unhooked from what
+carries him and lets go of what he carries (that object is put back in the
+world where it is); with a point, Bugs and the camera are moved there, the
+camera behind him. The routine then calls `0x437c20`, not read here. There
+is no lives counter: the game has none.
 
 ## 286 — What you see against what you stand on: invisible ground, landing pixels, fake walls
 
@@ -933,8 +988,10 @@ declared rules, matched against cases known from the game.
   ground on both sides it is the lower side 2094 times in 2528, the same
   convention as for the up faces); standing there at your ground's height,
   behind the face there is neither a `0x7F` sub-cell nor ground more than 100
-  units above you. 20,936 faces over the menu levels; in `L01B` they are the
-  inner walls of the canyon ring, which in the game have no collision.
+  units above you. 20,936 faces over the menu levels, among them the inner
+  walls of the canyon ring of `L01B`. Tested in the game later: `L01B` has no
+  fake wall of its own; a piece of the terrain of `L01D2` is drawn there
+  without collision.
 
 Every other group is byte-identical with and without these overlays in 78 of
 78 levels (`check_walls.py`). Not covered: object faces and platforms.
@@ -982,8 +1039,9 @@ to drop them.
   fall meets either ground (safe, bright cyan) or first a zone that kills,
   hurts (action 0x48) or teleports (trap, faint dark cyan). The lava of
   `L03D1` is a trap over its death slab, except a strip at z 195–290 just
-  outside the slab: a candidate for the safe spot on the lava known from the
-  game. `L03D1`: 45 safe, 451 trap.
+  outside the slab: a candidate for a safe spot on the lava reported from
+  the game (`HYPOTHESIS`, not checked against it). `L03D1`: 45 safe, 451
+  trap.
 - **Fake walls withdrawn**: screenshots from the game showed the flag marking
   walls that clearly stop you.
 - **Area boxes instead of the ceiling**: each heightmap stack drawn as a

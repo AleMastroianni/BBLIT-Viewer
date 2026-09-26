@@ -137,8 +137,8 @@ reads them as `byte / 255` over the whole texture, then **clamps them to
 opposite edge mixes in at a border only on textures under 50 texels a side,
 and only a little. The software renderer scales them by (size − 1) and
 samples at the texel centre, which is the PlayStation's rule. On top of that,
-**when the driver calls itself `ATI` or `RAGE PRO`** — that is any AMD card
-today — the game clamps them to the narrower [4.5/255, 250.5/255], so the
+**when the driver calls itself `ATI` or `RAGE PRO`** — that is any current
+AMD card — the game clamps them to the narrower [4.5/255, 250.5/255], so the
 outer strip of every texture, about 3.5% of it, is never drawn.
 
 The viewer cannot have one single behaviour, so the rule is a choice in
