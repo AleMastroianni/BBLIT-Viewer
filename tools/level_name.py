@@ -5,10 +5,10 @@
     .venv/Scripts/python tools/level_name.py --find "Planet X"
 
 The rule: a level's name is **always** read with
-`levels.official_name`, never written from memory, not even in a chat message;
-and in prose -- documents, docstrings, messages -- the first mention is
-`Name (CODE)`, as this prints it: "The Planet X File! 1 (L05A1)". In the
-viewer's own interface the name stays alone.
+`levels.official_name`, never written from memory; and in prose --
+documents, docstrings, messages -- the first mention is `Name (CODE)`, as
+this prints it: "The Planet X File! 1 (L05A1)". In the viewer's own
+interface the name stays alone.
 """
 import os
 import sys
