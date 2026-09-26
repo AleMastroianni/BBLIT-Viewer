@@ -205,8 +205,8 @@ def _line(r):
             else f"z {r['plane']:.0f}, x {r['a0']:.0f}..{r['a1']:.0f}")
     return (f"   {r['score']:7.1f}  {r['kind']:9s} {ends:28s}  y {r['y_base']:.0f}..{r['y_top']:.0f}"
             f"  |  tilt {r['tilt']:4.1f}  off {r['off']:4.1f}  in {r['inside'] * 100:5.1f}%"
-            f"  cop {r['fill'] * 100:5.1f}%  celle {r['cells']:3d}"
-            f"  lato {'si' if r['looks_free'] else 'NO':2s} d {r['d_mid']:6.1f}  {'new' if r['new'] else '   '}"
+            f"  cov {r['fill'] * 100:5.1f}%  cells {r['cells']:3d}"
+            f"  side {'ok' if r['looks_free'] else 'NO':2s} d {r['d_mid']:6.1f}  {'new' if r['new'] else '   '}"
             f"  |  a ({r['at'][0]}, {r['at'][1]}, {r['at'][2]})")
 
 
@@ -235,16 +235,16 @@ def main():
         report[name] = dict(upright_faces=upright, attributed=len(rows), new=len(new_rows),
                             new_wrong_side=len(wrong), new_no_cell=len(empty),
                             old_no_cell=len(old_empty), rows=rows[:200])
-        print(f"== {name}: {upright} facce in piedi, {len(rows)} attribuzioni, "
-              f"{len(new_rows)} solo dalla regola nuova ({len(empty)} non tengono nessuna cella, "
-              f"{len(wrong)} dalla parte sbagliata del piano); "
-              f"con la vecchia regola senza celle: {len(old_empty)} su {len(rows) - len(new_rows)}")
+        print(f"== {name}: {upright} upright faces, {len(rows)} attributions, "
+              f"{len(new_rows)} from the new rule only ({len(empty)} hold no cell, "
+              f"{len(wrong)} on the wrong side of the plane); "
+              f"with the old rule without cells: {len(old_empty)} of {len(rows) - len(new_rows)}")
         chosen = rows
         if near:
             chosen = sorted(rows, key=lambda r: sum((r["at"][k] - near[k]) ** 2 for k in range(3)))
             chosen = [r for r in chosen if sum((r["at"][k] - near[k]) ** 2 for k in range(3)) ** 0.5 < 4000]
             chosen.sort(key=lambda r: -r["score"])
-            print(f"   (solo entro 31 m da {near[0]:.0f}, {near[1]:.0f}, {near[2]:.0f}: {len(chosen)})")
+            print(f"   (only within 31 m of {near[0]:.0f}, {near[1]:.0f}, {near[2]:.0f}: {len(chosen)})")
         for r in chosen[:top]:
             print(_line(r))
     if out_file:

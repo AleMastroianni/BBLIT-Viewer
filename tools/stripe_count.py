@@ -107,19 +107,19 @@ def main():
             os.remove(path)
         return n
 
-    print(f"{level}, camera {camera}, finestra {window}, soglia {THRESHOLD:.0f}/255")
+    print(f"{level}, camera {camera}, window {window}, threshold {THRESHOLD:.0f}/255")
     rows = []
     walls_before = (v.show_hard_walls, v.show_steps)
     v.show_hard_walls = v.show_steps = False
-    rows.append(("flag dei muri SPENTE", shot("walls_off")))
+    rows.append(("wall flags OFF", shot("walls_off")))
     v.show_hard_walls, v.show_steps = walls_before
     kept = drawing.WALL_ALPHA
     for alpha in alphas:
         drawing.WALL_ALPHA = alpha
-        rows.append((f"riempimento {alpha * 100:.0f}%", shot(f"alpha{int(alpha * 100)}")))
+        rows.append((f"fill {alpha * 100:.0f}%", shot(f"alpha{int(alpha * 100)}")))
     drawing.WALL_ALPHA = kept
     for label, n in rows:
-        print(f"   {label:24s} {n:4d} colonne")
+        print(f"   {label:24s} {n:4d} columns")
     v.close()
 
 

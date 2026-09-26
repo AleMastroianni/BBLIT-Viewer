@@ -120,8 +120,8 @@ def main():
     flat = shot("alpha00")          # the same surface, NOT tinted
     flat_l, flat_c = luminance(flat), channels(flat)
     x0, y0, x1, y1 = window
-    print(f"{level}, camera {camera}, {width}x{height}, finestra {window}")
-    print(f"   criterio: dL medio >= {GOOD:.0f}/255 e meno di un terzo di pixel deboli (<{WEAK:.0f})")
+    print(f"{level}, camera {camera}, {width}x{height}, window {window}")
+    print(f"   criterion: mean dL >= {GOOD:.0f}/255 and less than a third of weak pixels (<{WEAK:.0f})")
     for alpha in alphas:
         drawing.WALL_ALPHA = alpha
         tinted = shot(f"alpha{int(round(alpha * 100))}")
@@ -136,16 +136,16 @@ def main():
                 d_rgb.append(sum(abs(a - b) for a, b in zip(t_c[y][x], flat_c[y][x])) / 3.0)
                 weak += dl < WEAK
         if not d_l:
-            print(f"   riempimento {alpha * 100:4.0f}%   nessun pixel coperto")
+            print(f"   fill {alpha * 100:4.0f}%   no pixel covered")
             continue
         d_l.sort()
         mean = sum(d_l) / len(d_l)
         median = d_l[len(d_l) // 2]
         share = 100.0 * len(d_l) / ((x1 - x0) * (y1 - y0))
-        print(f"   riempimento {alpha * 100:4.0f}%   dL medio {mean:5.1f}   mediano {median:5.1f}"
+        print(f"   fill {alpha * 100:4.0f}%   mean dL {mean:5.1f}   median {median:5.1f}"
               f"   dRGB {sum(d_rgb) / len(d_rgb):5.1f}"
-              f"   deboli {100.0 * weak / len(d_l):4.1f}%"
-              f"   copre {share:4.1f}% della finestra ({len(d_l)} px)")
+              f"   weak {100.0 * weak / len(d_l):4.1f}%"
+              f"   covers {share:4.1f}% of the window ({len(d_l)} px)")
     drawing.WALL_ALPHA = kept
     v.close()
 

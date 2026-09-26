@@ -91,7 +91,7 @@ def main():
         files = [f for f in files if os.path.splitext(os.path.basename(f))[0].upper() in wanted]
     with Pool(min(8, len(files))) as pool:
         result = pool.map(one, files)
-    print(f"{'livello':10s} {'tratti':>7s} {'EDGE':>7s} {'muri':>7s} {'gradini':>7s} "
+    print(f"{'level':10s} {'runs':>7s} {'EDGE':>7s} {'walls':>7s} {'steps':>7s} "
           f"{'0x7F':>7s} {'max m':>7s}")
     total = dict(runs=0, edge=0, wall=0, step=0, hard_walls=0)
     bands = [0] * (len(BANDS) + 1)
@@ -104,17 +104,17 @@ def main():
             bands[i] += n
         print(f"{name:10s} {r['runs']:7d} {r['edge']:7d} {r['wall']:7d} {r['step']:7d} "
               f"{r['hard_walls']:7d} {r['biggest'] / UNITS:7.1f}")
-    print(f"{'totale':10s} {total['runs']:7d} {total['edge']:7d} {total['wall']:7d} {total['step']:7d} "
+    print(f"{'total':10s} {total['runs']:7d} {total['edge']:7d} {total['wall']:7d} {total['step']:7d} "
           f"{total['hard_walls']:7d}")
-    print(f"   EDGE + muri + gradini = {total['edge'] + total['wall'] + total['step']}, "
-          f"tratti = {total['runs']}")
-    print("\ntratti per dislivello:")
+    print(f"   EDGE + walls + steps = {total['edge'] + total['wall'] + total['step']}, "
+          f"runs = {total['runs']}")
+    print("\nruns by drop:")
     running = 0
     for i, edge in enumerate(BANDS):
         running += bands[i]
-        print(f"   <= {edge:5d} unita' ({edge / UNITS:5.2f} m) {bands[i]:7d}   somma {running:7d}"
+        print(f"   <= {edge:5d} units ({edge / UNITS:5.2f} m) {bands[i]:7d}   sum {running:7d}"
               f"   {100.0 * running / max(1, total['runs']):5.1f}%")
-    print(f"   oltre {bands[-1]:7d}")
+    print(f"   beyond {bands[-1]:7d}")
     if out_file:
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=1)

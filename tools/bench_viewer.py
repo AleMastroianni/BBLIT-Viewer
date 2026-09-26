@@ -48,7 +48,7 @@ for name in LEVELS:
     if os.path.exists(pieces):
         shutil.move(pieces, cold)          # the first time: no pieces on disc
     t0 = time.perf_counter()
-    v = viewer.Viewer([path], "extracted", 0, screenshot="nessuna.png")
+    v = viewer.Viewer([path], "extracted", 0, screenshot="none.png")
     v.screenshot = None
     first_open = time.perf_counter() - t0
     t0 = time.perf_counter()
@@ -71,19 +71,19 @@ for name in LEVELS:
     if os.path.exists(cold):               # again, this time from the cache
         pass
     t0 = time.perf_counter()
-    v = viewer.Viewer([path], "extracted", 0, screenshot="nessuna.png")
+    v = viewer.Viewer([path], "extracted", 0, screenshot="none.png")
     warm_open = time.perf_counter() - t0
     v.close()
     if os.path.exists(cold):
         if os.path.exists(pieces):
             os.remove(pieces)
         shutil.move(cold, pieces)
-    print(f"\n=== {name} ({triangles} triangoli) ===")
-    print(f"  apertura la prima volta (senza pezzi su disco): {first_open:6.2f} s")
-    print(f"  apertura dalla cache dei pezzi:                 {warm_open:6.2f} s")
-    print(f"  primo disegno:                                  {first_frame * 1000:6.1f} ms")
-    print(f"  accendere una flag pesante ({HEAVY}): {heavy_on:6.2f} s")
-    print(f"  accendere tutte le flag:                        {all_on:6.2f} s")
-    print(f"  fotogramma, flag spente:        {off:6.2f} ms")
-    print(f"  fotogramma, una flag pesante:   {one:6.2f} ms")
-    print(f"  fotogramma, tutte le flag:      {every:6.2f} ms")
+    print(f"\n=== {name} ({triangles} triangles) ===")
+    print(f"  first opening (no pieces on disk):             {first_open:6.2f} s")
+    print(f"  opening from the piece cache:                   {warm_open:6.2f} s")
+    print(f"  first frame drawn:                              {first_frame * 1000:6.1f} ms")
+    print(f"  turning on a heavy flag ({HEAVY}): {heavy_on:6.2f} s")
+    print(f"  turning on every flag:                          {all_on:6.2f} s")
+    print(f"  frame, flags off:               {off:6.2f} ms")
+    print(f"  frame, one heavy flag:          {one:6.2f} ms")
+    print(f"  frame, every flag:              {every:6.2f} ms")

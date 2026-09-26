@@ -140,15 +140,15 @@ def main():
     radius = float(sys.argv[sys.argv.index("--radius") + 1]) if "--radius" in sys.argv else 40.0
     level = Level(os.path.join(paths.DATA_BZE, name + ".bze"), "extracted", None, None, {}, families=set())
     runs, solid = _runs(level)
-    print(f"{name}: {len(runs)} tratti di muro duro, camera {origin[0]:.0f}, {origin[1]:.0f}, {origin[2]:.0f}")
+    print(f"{name}: {len(runs)} hard wall runs, camera {origin[0]:.0f}, {origin[1]:.0f}, {origin[2]:.0f}")
 
     def show(run, extra=""):
         axis, plane, a0, a1, y_top, y_base = _quad(run)
         vis = "visibile" if run[6] else "INVISIBILE"
-        ends = (f"x {plane:.0f}, z da {a0:.0f} a {a1:.0f}" if axis == "x"
-                else f"z {plane:.0f}, x da {a0:.0f} a {a1:.0f}")
-        print(f"   {ends}  |  pavimento {y_base:.0f}  soffitto {y_top:.0f}"
-              f"  (alto {(y_base - y_top) / UNITS:.1f} m)  |  {vis}{extra}")
+        ends = (f"x {plane:.0f}, z from {a0:.0f} to {a1:.0f}" if axis == "x"
+                else f"z {plane:.0f}, x from {a0:.0f} to {a1:.0f}")
+        print(f"   {ends}  |  floor {y_base:.0f}  ceiling {y_top:.0f}"
+              f"  ({(y_base - y_top) / UNITS:.1f} m high)  |  {vis}{extra}")
 
     if look is not None:
         j, p = math.radians(look[0]), math.radians(look[1])
@@ -161,21 +161,21 @@ def main():
             if h:
                 met.append((h[0], h[1], run))
         met.sort()
-        print(f"   raggio yaw {look[0]:.1f} pitch {look[1]:.1f} -> direzione "
+        print(f"   ray yaw {look[0]:.1f} pitch {look[1]:.1f} -> direction "
               f"({direction[0]:.3f}, {direction[1]:.3f}, {direction[2]:.3f})")
         if first_face is not None:
             q = [origin[k] + first_face * direction[k] for k in range(3)]
-            print(f"   prima faccia solida del gioco a {first_face / UNITS:.1f} m "
+            print(f"   first solid face of the game at {first_face / UNITS:.1f} m "
                   f"({q[0]:.0f}, {q[1]:.0f}, {q[2]:.0f})")
         if not met:
-            print("   il raggio non incontra nessun muro duro")
+            print("   the ray meets no hard wall")
         for t, q, run in met:
-            behind = " (dietro una faccia del gioco)" if first_face is not None and t > first_face else ""
-            show(run, f"  |  colpito a {t / UNITS:.1f} m in ({q[0]:.0f}, {q[1]:.0f}, {q[2]:.0f}){behind}")
+            behind = " (behind a face of the game)" if first_face is not None and t > first_face else ""
+            show(run, f"  |  hit {t / UNITS:.1f} m away, at ({q[0]:.0f}, {q[1]:.0f}, {q[2]:.0f}){behind}")
         return
 
     near = sorted(((_distance(r, origin), r) for r in runs), key=lambda kv: kv[0])
-    print(f"   tratti entro {radius:.0f} m, dal piu' vicino:")
+    print(f"   runs within {radius:.0f} m, nearest first:")
     for d, run in near:
         if d / UNITS > radius:
             break
@@ -183,8 +183,8 @@ def main():
         # how tall it looks from here
         top_angle = math.degrees(math.atan2(origin[1] - y_top, max(1.0, d)))
         base_angle = math.degrees(math.atan2(origin[1] - y_base, max(1.0, d)))
-        show(run, f"  |  {d / UNITS:5.1f} m  direzione {_bearing(run, origin):5.1f} gradi"
-                  f"  altezza apparente {abs(top_angle - base_angle):4.1f} gradi")
+        show(run, f"  |  {d / UNITS:5.1f} m  bearing {_bearing(run, origin):5.1f} degrees"
+                  f"  apparent height {abs(top_angle - base_angle):4.1f} degrees")
 
 
 if __name__ == "__main__":

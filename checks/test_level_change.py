@@ -36,7 +36,7 @@ import viewer
 k = pyglet.window.key
 FIRST, SECOND = "L03A.bze", "Merlin.bze"
 file_paths = [os.path.join(paths.DATA_BZE, f) for f in (FIRST, SECOND)]
-v = viewer.Viewer(file_paths, "extracted", 0, screenshot="nessuna.png")
+v = viewer.Viewer(file_paths, "extracted", 0, screenshot="none.png")
 v.screenshot = None   # the keyboard becomes active again; settings stay off
 results = []
 

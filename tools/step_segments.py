@@ -73,9 +73,9 @@ def main():
     report = {}
     for name, pieces, total in rows:
         report[name] = pieces
-        print(f"{name:10s} {len(pieces):7d} pezzi di bordo, altezza totale dei pannelli {total:9d} unita'")
-    print(f"{'total':10s} {sum(len(p) for _n, p, _t in rows):7d} pezzi, "
-          f"{sum(t for _n, _p, t in rows):9d} unita'")
+        print(f"{name:10s} {len(pieces):7d} edge pieces, total height of the panels {total:9d} units")
+    print(f"{'total':10s} {sum(len(p) for _n, p, _t in rows):7d} pieces, "
+          f"{sum(t for _n, _p, t in rows):9d} units")
     if out_file:
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump(report, f)

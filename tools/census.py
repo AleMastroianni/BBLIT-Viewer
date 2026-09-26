@@ -43,20 +43,20 @@ DATA = paths.DATA_BZE
 
 # (key, short header, explanation) in the order they are printed
 COLUMNS = [
-    ("facce", "facce", "drawable faces read (terrain + props)"),
+    ("faces", "faces", "drawable faces read (terrain + props)"),
     ("ls_unknown", "ls?", "unrecognized load script bytes"),
-    ("t_sector_errors", "sett!", "terrain sectors rejected or not ending on the expected byte"),
-    ("t_chain_errors", "cat!", "terrain chunks whose chain does not end on the vertices"),
-    ("rejected", "resp", "rejected primitives (index outside the part)"),
-    ("unknown_mode", "modo?", "records never read: the chain stops on an unknown mode"),
+    ("t_sector_errors", "sect!", "terrain sectors rejected or not ending on the expected byte"),
+    ("t_chain_errors", "chain!", "terrain chunks whose chain does not end on the vertices"),
+    ("rejected", "rej", "rejected primitives (index outside the part)"),
+    ("unknown_mode", "mode?", "records never read: the chain stops on an unknown mode"),
     ("tex_unknown", "tex?", "faces citing a texture not registered in the chain"),
     ("blend_ignored", "semi0", "semi-transparent 0x4A/0x4E faces drawn opaque"),
     ("p_placed", "props", "placed objects (not the model-less ones, not the excluded triggers)"),
     ("p_no_model", "noMod", "placed 0x07 objects with no model at all"),
-    ("p_empty", "vuoto", "objects with empty TMD (12 bytes): the file says not to draw"),
+    ("p_empty", "empty", "objects with empty TMD (12 bytes): the file says not to draw"),
     ("p_no_rig", "noRig", "multi-part models without a rig: parts stacked on the origin"),
     ("p_no_pose", "noPos", "rig found but no pose with transforms"),
-    ("p_loose_parts", "parti", "parts with a mesh but no transform, in total"),
+    ("p_loose_parts", "parts", "parts with a mesh but no transform, in total"),
     ("p_errors", "exc", "objects whose reading raises an exception"),
     ("pose_fallback", "pos~", "rigged objects whose pose does NOT come from the state -> step -> role chain"),
     ("sky_dome", "sky", "props as large as the level (sky or sea), off by default"),
@@ -83,7 +83,7 @@ def census_level(name: str, data_dir: str = DATA, cache: str = "extracted") -> d
         for vl in faces:
             if vl.tex_id is not None and vl.tex_id not in table:
                 r["tex_unknown"] += 1
-        r["facce"] += len(faces)
+        r["faces"] += len(faces)
 
     # ---- terrain
     diag_lo, diag_hi = [1e18] * 3, [-1e18] * 3
