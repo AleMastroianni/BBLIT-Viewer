@@ -6,7 +6,7 @@
 Starts from the executable built by `packaging/build_exe.py` and writes FOLDER
 (default `release/BBLIT Viewer/`, outside git) with `BBLIT Viewer.exe`,
 `_internal/`, `portable.flag` (settings in `userdata/` next to the viewer,
-nothing written to Documents), README.md, README_Ita.md, LICENSE,
+nothing written to Documents), README.md, LICENSE,
 THIRD_PARTY_LICENSES.txt and `bze_levels/` with only its README. Inside it,
 `BBLIT-Viewer-v<VERSION>.zip` (the number of `bblit/support/version.py`) with
 the same things under one folder, ready to attach to a release; its SHA-256
@@ -40,7 +40,7 @@ from support.version import VERSION  # noqa: E402
 EXECUTABLE = "BBLIT Viewer.exe"
 DEFAULT_DIR = os.path.join(paths.PROJECT_DIR, "release", "BBLIT Viewer")
 ZIP_FOLDER = "BBLIT Viewer"
-DOCUMENTS = ("README.md", "README_Ita.md", "LICENSE")
+DOCUMENTS = ("README.md", "LICENSE")
 LEVELS_README = os.path.join("bze_levels", "README.txt")
 NOTICES = "THIRD_PARTY_LICENSES.txt"
 # the generated parts: only these are replaced and go into the zip

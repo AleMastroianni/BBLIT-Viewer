@@ -1,7 +1,5 @@
 # BBLIT Viewer: the viewer and the tools
 
-Italian version: [VIEWER_Ita.md](VIEWER_Ita.md)
-
 BBLIT Viewer is a free-camera level viewer for the PC game *Bugs Bunny: Lost
 in Time* (1999). It reads the game's `.bze` level files directly and builds
 everything in memory; there is no intermediate format. The program is in
@@ -287,7 +285,7 @@ anything. With Python 3.10.0 exactly, the script works around a bug in `dis`
 that stops PyInstaller.
 
 `python packaging/make_release.py` builds the release folder and its zip: the
-executable with `_internal/`, `README`, `README_Ita`, `LICENSE`,
+executable with `_internal/`, `README`, `LICENSE`,
 `THIRD_PARTY_LICENSES.txt` (the licences of Python, pyglet, Pillow and
 PyInstaller's bootloader, bundled in the executable) and
 `bze_levels/README.txt`. The zip is called `BBLIT-Viewer-v<version>.zip`.

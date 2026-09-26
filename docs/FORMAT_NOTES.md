@@ -1,7 +1,5 @@
 # Format notes: findings 256-288
 
-Italiano: [FORMAT_NOTES_Ita.md](FORMAT_NOTES_Ita.md)
-
 Technical notes on the level data of *Bugs Bunny: Lost in Time* (PC, 1999)
 and on what the game does with it, found while building the level viewer in
 this repository (`bblit/viewer.py`), mostly on `L03A` (*Hey... What's Up,
