@@ -109,8 +109,9 @@ turns them off and leaves the colours and outlines.
   <img src="docs/images/wireframe_L02A1.png" alt="Wireframe of L02A1" width="49%">
 </p>
 
-The findings behind each flag are in [docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md)
-(282-288).
+The findings behind the flags up to 288 are in
+[docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md) (282-288); the later ones are not
+published yet.
 
 ## Building
 
