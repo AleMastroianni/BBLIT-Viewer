@@ -36,11 +36,10 @@ changed.
 
 ## What it does
 
-- **The viewer**: every level of the game, era by era, with the hub
-  (Nowhere), the Era selector and the `_8` variants. Terrain, props in their
-  starting pose, animations at the game's 15 ticks per second, animated
-  textures, the sky dome, semi-transparent blends and the template clones the
-  level's rules spawn. Free camera; menus in English and Italian.
+- **The viewer**: every level of the game, era by era. Terrain, props in
+  their starting pose, animations at the game's speed, animated textures,
+  the sky dome, semi-transparent blends and the template clones the level's
+  rules spawn. Free camera; menus in English and Italian.
 - **Flags** (Level options → Flags): see below.
 - **Two ways to read the game's texture coordinates**, because the game
   itself has two (Video options → Texture coordinates): with an **AMD card**
@@ -94,8 +93,7 @@ with what is drawn: they are a guide to where to look, not a proof.
 | Ground | the ground you really stand on (the heightmap) | read |
 | No collision | faces you see but cannot stand on, and the walls joined to them that let you through | deduced |
 | Portals | the terrain quads the game never draws: they are portals, with the area they lead to | read |
-| Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named DEATH, DEATH FLOOR or DAMAGE on top | read |
-| DEATH FLOOR | in Death and damage zones: the death zones at least half the size of the level (sea, abyss) | deduced |
+| Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named on top DEATH, DEATH FLOOR (a death zone at least half the size of the level: sea, abyss) or DAMAGE | read; the DEATH FLOOR size rule: deduced |
 | Teleport zones | zones that send somebody somewhere, with an arrow to the point: ENTRANCE (and the level it comes from), TELEPORT, RECOVER, RESTART, and LEVEL with the level it leads to | read |
 | Collision boxes | each object's collision box, as the game tests it: SOLID, PLATFORM (you stand on it) or only TOUCH | read |
 | Who opens what | a line from every switch to what it commands: only the gates, or also the objects that only react | read in the code, not checked in the game |

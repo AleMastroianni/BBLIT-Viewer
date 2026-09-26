@@ -7,9 +7,9 @@ is published, raise it here.
 
 from __future__ import annotations
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 
 def window_title(name: str, build: str = "") -> str:
-    """"BBLIT Viewer 0.4.0", plus the kind of copy when the folder names one."""
+    """"BBLIT Viewer 0.5.0", plus the kind of copy when the folder names one."""
     return f"{name} {VERSION}" + (f" — {build}" if build else "")
