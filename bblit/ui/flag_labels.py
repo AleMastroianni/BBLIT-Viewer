@@ -23,7 +23,6 @@ _FONTS = ("segoeuib.ttf", "arialbd.ttf")
 # "DTH + DMG"
 ABBREVIATIONS = {
     "NO COLLISION": "NOC",
-    "INVISIBLE WALL": "INV",
     "HARD WALL": "HRD",
     "DEATH": "DTH",
     "DEATH FLOOR": "DFL",
