@@ -194,7 +194,7 @@ drawn. Background: findings 282-288.
 | Who opens what | a line from every switch to what it commands (findings 323, 331): only the gates, with GATE <- #78 on the box, or all the links, also the objects that only react (REACTS <- #78) |
 
 Names on the overlays are always in English; **Flag labels** turns the words
-off and leaves the colours and outlines. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), SLD (solid), PLT (platform), TCH (touch), for example `DTH + DMG` on the lava of `L03D1`.
+off and leaves the colours and outlines. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), STP (step wall), SLD (solid), PLT (platform), TCH (touch), for example `DTH + DMG` on the lava of `L03D1`.
 
 ---
 

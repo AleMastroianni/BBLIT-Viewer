@@ -530,7 +530,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "desc.death_zones": ("Le zone che ti uccidono (DEATH, sigla DTH; DEATH FLOOR, DFL, quelle grandi "
                          "almeno meta' del livello: il mare, l'abisso), con respawn al checkpoint, e "
                          "quelle che ti feriscono (DAMAGE, DMG, azione 0x48). Tutte in rosso; sulla "
-                         "faccia in alto tutto cio' che la zona fa, anche il respawn (RSP).",
+                         "faccia in alto tutto cio' che la zona fa, anche il respawn.",
                          "Zones that kill you (DEATH, short DTH; DEATH FLOOR, DFL, for those at "
                          "least half the size of the level: the sea, the abyss), with a respawn at "
                          "the checkpoint, and zones that hurt you (DAMAGE, DMG, action 0x48). All "
