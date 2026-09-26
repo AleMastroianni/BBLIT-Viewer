@@ -1,8 +1,8 @@
 """The chosen state in which to show a level.
 
 These are not readings of the format: the game decides these things at runtime
-(switches, conditions, object states). Here we fix the state needed for the
-custom track.
+(switches, conditions, object states). The state needed for the custom track is
+fixed here.
 Each entry says which measurement the number comes from.
 
 * `pose`: model -> role of the animation to use instead of the one the game

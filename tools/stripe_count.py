@@ -86,7 +86,7 @@ def main():
     v = viewer.Viewer([os.path.join(paths.DATA_BZE, level + ".bze")], "extracted", 0,
                       screenshot="none.png")
     v.screenshot = None
-    # the flags of the user's framing: everything the walls share the frame
+    # the flags of the first framing: everything the walls share the frame
     # with, so the count is of the same picture as the first measurements
     v.show_area_boxes = v.show_collision_boxes = v.show_ground = True
     v.show_hard_walls = v.show_steps = "all"

@@ -10,7 +10,7 @@ game):
   floor over the void. The heightmap has no ground on the free side, so what
   the step rule measures there is not a rise between two floors, and the
   class cannot be read from it. It is drawn as thick as the floor really is
-  (`collision._edge_bottom`); the user has tested in the game that the
+  (`collision._edge_bottom`); tested in the game: the
   plank's own edge does stop him;
 * **muro (HARD WALL)** -- there is ground on the free side and the rise is
   more than Bugs's jump (`collision.JUMP_HEIGHT`, 383): it just stops him;

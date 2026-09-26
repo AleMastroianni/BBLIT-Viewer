@@ -303,7 +303,7 @@ def settles(obj) -> bool:
     of the heightmap of its area, or falls onto it at most 70 a tick. The
     boxes of other objects are never ground. The types 0, 4 and 12 to 29
     never ask."""
-    from game import montage       # here: montage imports rig, rig nothing of ours
+    from game import montage       # here: montage imports rig, rig nothing of bblit
     if obj.get("block_type") == 0x08 or obj.get("category") != TYPE_14:
         return False
     pos = obj.get("position")

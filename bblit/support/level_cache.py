@@ -236,6 +236,6 @@ def store(cache: str, name: str, current_signature: str, pieces: dict) -> None:
     except OSError as e:
         print(f"piece cache not saved for {name}: {e}")
         try:
-            os.remove(tmp)   # our own half-written copy, if any
+            os.remove(tmp)   # this write's half-written copy, if any
         except OSError:
             pass

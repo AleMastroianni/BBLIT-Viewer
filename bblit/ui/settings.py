@@ -1,6 +1,6 @@
 """Viewer settings that persist from one start to the next.
 
-Same scheme as the CTR viewer: with a `portable.flag` file next to the viewer
+With a `portable.flag` file next to the viewer
 (in the project folder) the settings live in `userdata/settings.json`
 inside the copy itself; without it, in `Documents/BBLIT Viewer/settings.json`.
 
@@ -104,7 +104,7 @@ def route() -> str:
 
 
 def build() -> str:
-    """The kind of copy, from the folder name, like the CTR viewer builds:
+    """The kind of copy, from the folder name:
     a folder called "BBLIT <kind>", with kind Debug, Current, Development or
     Portable, shows the kind in the window title. Any other name shows nothing.
     """

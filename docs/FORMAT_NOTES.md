@@ -720,7 +720,8 @@ this belongs with moving enemies.
   36 (mesh 34, 1.56 m disc, additive, texture 303: a pinwheel), a child of
   the root. Pose 35 removes it; among Bugs's animations in L03A only **28**
   (state 30, step 37) places it, **3 m above the root** and rotating for 14
-  ticks: the propeller ears with which Bugs slows his fall. With no pose
+  ticks: the propeller ears with which Bugs slows his fall (seen in play on
+  the PC, not measured). With no pose
   placing it, it had been drawn at the part's origin, inside the planks. The
   same holds for parts 37 and 38 (two 2.5 m additive squares, textures 304
   and 305, trail rings): 38 appears only in 365 (states 21 and 90, 4 ticks),
@@ -738,14 +739,16 @@ this belongs with moving enemies.
   object has a single animation (149), used by both its states, which always
   removes 2: from the object's data alone the hole always looks open. L03A
   has three. **100** (221.1; -116.0 m) is under a crate that Bugs moves;
-  **99** (236.3; -155.9) is on the island: roles 210 and 209, a pair. In the
-  game, entering the hole under the crate activates the hole of the other.
+  **99** (236.3; -155.9) is on the island: roles 210 and 209, a pair. Seen
+  in play on the PC, not measured: entering the hole under the crate
+  activates the hole of the other.
   In the data both always let you in (action 47, within 200); what changes
   the look of 99 is not in its animation and has not been found. **62**
   (22.9; -32.5, near the start) lets you in (within 400) only with bit 0x80
   of `tabel1[102]`, which object 97 sets in step 199. Object 97 is the
-  **explosive barrel** (model 157) sitting on the hole; in the game the hole
-  opens after the barrel explodes, lit with the torch. In step 199 the barrel
+  **explosive barrel** (model 157) sitting on the hole; seen in play on the
+  PC, not measured: the hole opens after the barrel explodes, lit with the
+  torch. In step 199 the barrel
   clones the explosion (roles 548 and 669, the white star) and its pieces
   (662), sets the bit and switches itself off (effect 0x10000). The link with
   the torch is NOT proven: state 3 of the barrel has condition `0x0C`
@@ -767,8 +770,8 @@ contains nine `_8` files that do not appear in it: `L01D1_8`, `L01D2_8`,
 `L03A_8`, `L03A2_8`, `L03ACOM_8`, `L03B_8`, `L03C_8`, `L04B3_8`, `LB04_8`.
 They have the same number of objects with a model as the levels of the same
 name (for example 77 for `L03A` and `L03a_8`), so they are copies or variants.
-Without an entry in the table the game does not load them by LevID; the
-viewer lists them under Extra.
+Without an entry in the table no LevID of their own names them; the viewer
+lists them under Extra.
 
 **What differs** (six pairs: `L03A`, `L03A2`, `L03ACOM`, `L01D1`, `LB04`,
 `L04B3`): both files have 10 sections; sections 2 and 5-10 are identical byte
@@ -777,8 +780,14 @@ differ, by a few KB. `L03a_8` has 281 objects against 282 and 439 textures
 against 442; `L04b3_8` has identical textures. They are **not** 8-bit texture
 versions: the share of 4-bit and 8-bit TIMs is the same (`L03A` 413/29,
 `L03a_8` 407/32). Nor are they the language suffix (`_0`, `_1`, `_3`), which
-only concerns the `L_*` loading screens. Most likely another revision of the
-same levels; which objects and textures change has not been listed.
+only concerns the `L_*` loading screens. "Another revision of the same
+levels" was the guess written here first (`HYPOTHESIS`), and it is
+superseded: they are the levels of the 8-bit software renderer. With that
+renderer chosen, the game loads the `_8` file in place of its twin for
+exactly these nine LevIDs; `L01D1_8` lacks one golden carrot, the one
+players miss with the low settings (a report of the community). The
+findings that show it (344 and 371) come after 288 and are not published
+yet.
 
 **Cross-check.** The table agrees with an independent LevID spreadsheet (row
 r = LevID r + 1) for all 70 entries the viewer uses: title and note are

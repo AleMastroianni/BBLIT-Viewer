@@ -9,7 +9,7 @@ Keyboard (ui/keybinds.py, ui/keys_page.py). The mouse wheel scrolls the
 menu's list; with the right button held the mouse looks around.
 
 The menu (ui/menu.py, texts in ui/texts.py, pages in window/menu_pages.py)
-follows the layout of the CTR viewer: Load level, Level options (with
+has these pages: Load level, Level options (with
 Flags), Video options, General options, Help. Settings persist from one run
 to the next (ui/settings.py); entity states and flags chosen from the menu
 last only for the session.
@@ -214,8 +214,7 @@ def main() -> None:
 
 def main_guarded() -> None:
     """For the console-less executable: an error ends up in errors.txt next
-    to the viewer and in a message box, instead of vanishing (like the
-    fatal_errors.txt of the CTR viewer)."""
+    to the viewer and in a message box, instead of vanishing."""
     try:
         main()
     except Exception:  # noqa: BLE001

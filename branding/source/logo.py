@@ -1,4 +1,4 @@
-"""The logo: our own blue background, the golden carrot, the title in
+"""The logo: a blue background drawn from scratch, the golden carrot, the title in
 Luckiest Guy (Apache 2.0, branding/fonts).
 
     python branding/source/logo.py
@@ -19,7 +19,7 @@ W, H = 1280, 400
 
 def background(w, h):
     """A deep blue vertical gradient with a soft light in the upper left and
-    a few faint rings: ours, in the spirit of the CTR viewer's blue."""
+    a few faint rings."""
     img = Image.new("RGB", (w, h))
     px = img.load()
     for y in range(h):

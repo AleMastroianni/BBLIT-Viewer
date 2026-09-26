@@ -1,4 +1,4 @@
-"""The keys, as in the CTR viewer (Help -> Keyboard): the ones with a single
+"""The keys (Help -> Keyboard): the ones with a single
 function can be changed, the ones with several are locked.
 
 Each rebindable action has exactly one key. The default is a Windows
@@ -130,7 +130,7 @@ UNITS_HIGH = 6.5
 
 def layout() -> list[Cap]:
     """The keyboard: main block 15 units wide, navigation from 15.25, numpad
-    from 18.5 (the CTR viewer's layout). Character keys by scan code."""
+    from 18.5. Character keys by scan code."""
     caps: list[Cap] = []
 
     def fixed(x, row, w, vk, text, h=1.0, extra=None):

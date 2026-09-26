@@ -1,6 +1,6 @@
 """The collision ground, split the way it was asked for.
 
-Today the Ground flag has two classes: a sub-cell is "covered" when a drawn
+The Ground flag has two classes: a sub-cell is "covered" when a drawn
 up-facing face passes within 100 units of it, "invisible" otherwise. But
 what stays lit in Era selector is **not** an invisible platform, it is
 a **slope** -- the heightmap climbs in steps of 128 while the drawn ground
@@ -14,7 +14,7 @@ So three classes, not two:
   drawn, only at another height (slopes, staircases). No crust: at most a
   light mark on the face, and a menu entry of its own, off by default;
 * **invisible**: no drawn face above this cell at all (or only one further
-  than SLOPE) -- this is the one that matters for glitch hunting, and it
+  than SLOPE) -- the one that shows ground with nothing drawn over it, and it
   stays bright.
 
     .venv/Scripts/python tools/ground_split.py [LS01 ...] [--json FILE]

@@ -1,5 +1,4 @@
-"""The name of a flag written inside its faces, as in the CTR viewer's FLAG
-tiles: one texture per flag and language (black letters on transparent),
+"""The name of a flag written inside its faces: one texture per flag and language (black letters on transparent),
 painted on each face with its own texture coordinates, not one text label
 per face (No collision alone has 32 thousand faces).
 

@@ -12,15 +12,15 @@ The titles and notes are the level names as read in the game, where
 they were filled in (BBLIT_Level_IDs, from the Stone Age
 to the 1930s); the spreadsheet's are kept in `sheet_name` and `sheet_note`
 for check_levels.py, and the Debug build shows the old note in the
-description (user: for now).
+description.
 
 The eras follow the file prefix (L01..L05), like the loading screens in
 Ombelll's `LEVELS.md`; the spreadsheet also assigns the three bonus levels
 to an era. **Nowhere** is in Load level below Dimension X (`NOWHERE`).
 **Eras** (`HUB`), the first entry of Load level: the Era selector (`LS01`)
 as the overview and at the centre of each era. **Extra**: the `_8`
-variants that are on the disc but not in the executable's table, in every
-build.
+variants that are on the disc but not in the executable's table, in the
+Debug build only.
 **Cutscenes**, inside Extra and only in the Debug build: what has a 3D
 environment but is not a playable level (menus, credits, cutscenes). In
 the other builds Cutscenes stays hidden for now.
@@ -32,9 +32,9 @@ Titles and notes are the game's own names where it has them (finding
 291: in the interface language, written exactly as in the game): {"en": ..., "it": ...} read from the disc by game_texts.py. A title
 carries the index of its LS01 text ("ls01") and, for a `_8` variant, the
 suffix; a note the indices of the area cards it is made of ("cards"),
-chosen where the user confirmed the name in the game: a card can also be a
+chosen where the name was confirmed in the game: a card can also be a
 sign or a hint ("Garbage Storage..."), so the game alone does not say which
-names a sub-level. Where the game has no name, the note is the user's, in
+names a sub-level. Where the game has no name, the note is written by hand, in
 both languages when it needs a translation ({"en", "it"} without "cards":
 "Boss: Elmer" / "Boss: Taddeo"). `name()` gives the one to show. check_official_names.py compares them with the disc.
 """

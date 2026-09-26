@@ -1,4 +1,4 @@
-"""CTR viewer-style menu, drawn over the scene with pyglet.
+"""The menu, drawn over the scene with pyglet.
 
 A page is a list of items; pages open on top of each other and Back
 (Backspace, M or right button) returns to the previous one. Esc is handled by
@@ -9,7 +9,7 @@ Items: `YesNo`, `Choice` (cycling values, left and right arrows), `Number`,
 Labels are computed on every draw with `texts.t`, so changing language
 rebuilds nothing.
 
-Compared with the CTR viewer: fixed-width panel on the left, page title,
+The layout: fixed-width panel on the left, page title,
 sections, label on the left and value on the right, description of the
 selected item at the bottom of the panel.
 """
@@ -54,7 +54,7 @@ def text_width(row, font_size):
 def wrap_lines(label_text, width_units, font_size):
     """Split the text into lines that fit in `width_units` pixels.
 
-    We wrap by hand, measuring with single-line labels: pyglet 2.1's multiline
+    Lines are wrapped by hand, measuring with single-line labels: pyglet 2.1's multiline
     layout widens the space before the last word ("Tasto T." became
     "Tasto   T."), at any width.
     """

@@ -7,7 +7,7 @@ camera is given as the status bar shows it.
 
 With `--look` it casts the ray and prints, in order, every hard-wall run it
 goes through: the run's ends, the floor and the ceiling of its block (the
-height a hard wall stops you between, finding 309 and the user's three
+height a hard wall stops you between, finding 309 and three in-game
 recordings), whether anything is drawn on it, and where the ray meets it.
 Any solid face of the game the ray meets first is printed too, so a wall
 behind a crate is not mistaken for one in the open.

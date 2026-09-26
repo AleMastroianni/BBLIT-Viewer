@@ -5,8 +5,8 @@
 The executable ends up in the project folder, next to the sources:
 `BBLIT Viewer.exe` and the `_internal` folder with Python and the libraries,
 both outside git. It finds the levels like the sources (`bblit/support/paths.py`).
-PyInstaller's work stays in `build/`. A folder and not a single file, like
-the CTR viewer's Portable copy: it starts at once, without unpacking itself
+PyInstaller's work stays in `build/`. A folder and not a single file:
+it starts at once, without unpacking itself
 at every launch.
 
 Inside the executable are the icon and background from `resources/` and

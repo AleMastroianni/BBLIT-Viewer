@@ -57,7 +57,7 @@ from pyglet.gl import (  # noqa: E402
 from pyglet.math import Mat4, Vec3  # noqa: E402
 
 # Level options -> Wireframe: off, Skeleton (lines only), Grid (textures and
-# the triangle edges over them, as in the CTR viewer)
+# the triangle edges over them)
 WIRE_OFF, WIRE_SKELETON, WIRE_GRID = 0, 1, 2
 # The walls' see-through fills, by kind, in drawing order: every group of one
 # kind (its panels, the game's faces it colours, and both from the outside
@@ -95,7 +95,7 @@ def wall_class(category):
 def wall_pull(category):
     """How much a group is pulled toward the camera: a wall's fill or the
     face it colours a little, its outline and its name more. 0 for
-    everything else, which keeps the depth offset it has today."""
+    everything else, which keeps its depth offset."""
     if not any(category.startswith(kind) for kind in STENCIL_CLASSES):
         return 0.0
     return PULL_EDGES if category.endswith(("_label", "_lines")) else PULL_FILL
@@ -105,7 +105,7 @@ GRID_COLOR = (0.0, 0.0, 0.0, 0.7)
 # game units, in the viewer's metres
 NEAR_SPRITE = 150.0 / 128.0
 
-# on the main menu background (like "ctrviewer by DCxDemo")
+# on the main menu background
 SIGNATURE = "BBLIT Viewer by AleMastroianni"
 
 VERTEX_SHADER = """#version 330 core
@@ -116,7 +116,7 @@ uniform mat4 mvp;
 // the walls' flags are drawn on the surface they describe: instead of a
 // depth offset, which is fixed and lets an overlay through a wall as the
 // distance grows, the vertex is pulled toward the camera in view space by a
-// SHARE of its distance, as the CTR viewer does. 0 = no pull
+// SHARE of its distance. 0 = no pull
 uniform mat4 view_matrix;
 uniform mat4 projection;
 uniform float pull;
@@ -969,7 +969,7 @@ class Drawing:
 
     def _draw_status_bar(self):
         """Level, position in game units and in meters, speed, animation
-        state: what is always needed, glitch hunting included."""
+        state: what is always needed."""
         x, y, z = self.pos.x, self.pos.y, self.pos.z
         # the viewer uses (x, -y, -z) in meters, 128 units = 1 meter (VIEWER.md)
         gx, gy, gz = x * geo.UNITS_PER_METER, -y * geo.UNITS_PER_METER, -z * geo.UNITS_PER_METER

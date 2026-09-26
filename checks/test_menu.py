@@ -331,7 +331,7 @@ probe("in another build Extra does not show Cutscenes but keeps the _8 variants"
       and any((x.value_text() or "").startswith("L03A_8") for x in v.menu.stack[-1][1]))
 v.build = build
 
-# Camera and points (glitch hunting, stage 3): bookmarks, shadow point, export
+# Camera and points: bookmarks, shadow point, export
 import re  # noqa: E402
 from game import collision  # noqa: E402
 from pyglet.math import Vec3  # noqa: E402
@@ -453,7 +453,7 @@ except Exception as e:  # noqa: BLE001
 probe("the shadow circle draws", ok)
 v.show_camera_shadow = False
 
-# Keys and gamepad (as in the CTR viewer): Help -> Keyboard / Gamepad
+# Keys and gamepad: Help -> Keyboard / Gamepad
 from ui import keybinds  # noqa: E402
 kbp = v.keyboard_page
 v.menu.show("main")

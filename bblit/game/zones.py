@@ -256,7 +256,7 @@ def trap_shape(z: dict) -> ZoneShape | None:
     On purpose this does NOT count the effects finding 326 added: a zone that
     teleports Bugs (0x800) or changes level (0x80000) does end a fall too,
     but putting them in here would take "safe fall" away from places that
-    carry it today, and that is the user's call."""
+    carry it now; that choice is left open."""
     if kind_of(z) or hurts(z):
         return shape_of(z)
     return None

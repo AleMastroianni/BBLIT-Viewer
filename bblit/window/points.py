@@ -1,4 +1,4 @@
-"""Camera and points, for the glitch hunting: where the camera is in game
+"""Camera and points: where the camera is in game
 units, where Bugs would land under it (the shadow point), the bookmarks of
 a level and the lines copied for memory tools and BizHawk.
 

@@ -54,7 +54,7 @@ def _level_changes(folder: str, cache: str) -> list[tuple[str, str, int, int]]:
             sec = textures.sections(os.path.join(folder, entry), cache, ids=(1,))
             lvl = loadscript.export_level(loadscript.parse(sec[1])[0])
         except Exception:  # noqa: BLE001
-            continue          # a file we cannot read simply says nothing
+            continue          # a file that cannot be read says nothing
         for z in lvl["zones"]:
             for r in z.get("rules", []):
                 if not r["effect"] & zones.LEVEL_CHANGE:

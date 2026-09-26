@@ -63,7 +63,7 @@ def main():
         shown = gt.candidates(loadscript.parse(sec[1])[0], texts)
         used = note.get("cards", []) if isinstance(note, dict) else []
         if isinstance(note, dict) and "cards" not in note:
-            # the user's own note, translated: both languages, no game text to match
+            # a note written by hand, translated: both languages, no game text to match
             user_notes += 1
             if not (note.get("en") and note.get("it")):
                 print(f"{file}: user note {note} lacks a language")

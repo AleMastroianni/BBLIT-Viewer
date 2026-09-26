@@ -137,7 +137,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
 
         self.show_textures = user_settings["texture"]
         self.show_props = user_settings["props"]
-        # the glitch-hunting flags: always off at every start, never saved
+        # the flags: always off at every start, never saved
         for attr in set(OVERLAYS.values()):
             setattr(self, attr, False)
         # Walls -> Hard walls and Steps have three values: "off", "all" and
@@ -255,11 +255,11 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
                                            color=(235, 238, 245, 255), multiline=True, width=520,
                                            anchor_y="top")
         self._pick_background = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 185))
-        # as in the CTR viewer: name and author on the main menu background
+        # name and author on the main menu background
         self.signature = pyglet.text.Label(SIGNATURE, font_name=menumod.FONT, font_size=14,
                                        color=(235, 238, 245, 210),
                                        anchor_x="right", anchor_y="bottom")
-        # keys (Help -> Keyboard) and gamepad (Help -> Gamepad), as in the CTR viewer
+        # keys (Help -> Keyboard) and gamepad (Help -> Gamepad)
         self.bindings = keybinds.Bindings(user_settings["key_bindings"])
         texts.key_of_action = lambda action: keybinds.key_name(self.bindings.key(action), t)
         self.gamepad_enabled = user_settings["gamepad"]

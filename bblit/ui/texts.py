@@ -1,6 +1,6 @@
 """All the interface texts, in Italian and in English.
 
-A single place for translations, as in the CTR viewer: menus ask for a key
+A single place for translations: menus ask for a key
 and get the text in the current language, so changing language rebuilds
 nothing. A missing key is shown on screen as is.
 """
@@ -699,7 +699,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "help.pause": ("Ferma / riavvia le animazioni", "Pause / resume animations"),
     "help.hide_ui": ("Copri / scopri l'interfaccia", "Hide / show the interface"),
 
-    # keys and gamepad (Help and General options, as in the CTR viewer)
+    # keys and gamepad (Help and General options)
     "help.keyboard": ("Tastiera", "Keyboard"),
     "help.gamepad": ("Gamepad", "Gamepad"),
     "help.about": ("Informazioni", "About"),
@@ -829,7 +829,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "pad.right_stick_does": ("Guarda. Pressione: nessuna funzione", "Look around. Press: no function"),
     "pad.nothing": ("Nessuna funzione", "No function"),
 
-    # Camera and points (glitch hunting, stage 3)
+    # Camera and points
     "level.camera": ("Camera e punti", "Camera and points"),
     "desc.camera": ("Segnalibri di camera di questo livello e il punto ombra da copiare.",
                     "Camera bookmarks for this level and the shadow point to copy."),

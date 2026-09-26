@@ -9,7 +9,7 @@ Without arguments: a big level and a small one. It moves the level's
 `pieces.pkl` aside to measure the first opening honestly, and puts it back.
 The frame is measured with the camera moving, or the sorted list of the
 semi-transparent faces would never be sorted again and the number would
-flatter us. Run it before and after anything that touches the drawing: the
+look better than it is. Run it before and after anything that touches the drawing: the
 viewer has to stay immediate.
 """
 import os

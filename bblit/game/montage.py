@@ -123,7 +123,7 @@ def choose_sources(sec4: bytes, resources: list[int], res: dict, obj: dict | Non
         return (trs, pref_score)
 
     if role is None:
-        role = start_role(obj)       # forced `role`: a choice made by the user (preferences.py)
+        role = start_role(obj)       # forced `role`: a declared choice (preferences.py)
     pose = next((p for p in poses if p["role"] == role), None) if role is not None else None
     if pose is not None and points(pose)[0] == 0:
         pose = None       # the chain leads to an animation without transforms

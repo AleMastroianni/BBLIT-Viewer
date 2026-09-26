@@ -812,7 +812,7 @@ class Level(OverlayBuilder):
                     continue          # already there, hanging from its bone
                 seen_keys.add((n, role))
                 if role in self.pref["always_cloned"]:
-                    # an "equal" condition on a variable fixed by the user
+                    # an "equal" condition on a variable fixed in preferences.py
                     # is evaluated: the blue crates appear in only one order
                     op, val, index = r["condition"]
                     if op in (0x01, 0x02) and index in self.pref["table1"]                             and self.pref["table1"][index] != val:

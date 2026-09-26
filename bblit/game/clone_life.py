@@ -2,7 +2,7 @@
 
 A template (block 0x08) becomes a live object when a rule of a live object
 clones it (effect 0x100 or 0x40000, the template's id in field +28: Ombelll's
-finding 194, our 274 and 279). Whether that rule ever fires by itself is what
+finding 194; 274 and 279). Whether that rule ever fires by itself is what
 this module reads, the way the engine walks the rules (the reverse's notes
 N10-N13, N20, N30):
 

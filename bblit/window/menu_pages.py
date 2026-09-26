@@ -210,7 +210,7 @@ class MenuPages:
             return build_items
 
         def flags():
-            """The overlays for glitch hunting."""
+            """The overlays drawn over the scene."""
             def item(item_key, attr_name, desc):
                 def set_flag(v):
                     setattr(self, attr_name, v)
@@ -525,7 +525,7 @@ class MenuPages:
                     M.Action("menu.quit", self.close)]
 
         def help_items():
-            # as in the CTR viewer: Help -> Keyboard / Gamepad (drawn pages)
+            # Help -> Keyboard / Gamepad (drawn pages)
             return [M.Submenu("help.keyboard", "keyboard", desc="desc.help_keyboard"),
                     M.Submenu("help.gamepad", "gamepad", desc="desc.help_gamepad"),
                     M.Submenu("help.about", "about", desc="desc.help_about"),
@@ -539,7 +539,7 @@ class MenuPages:
                     M.Back()]
 
         return {
-            # as in the CTR viewer: name and author on the main page
+            # name and author on the main page
             "main": M.Page(lambda: t("menu.main"), main_items, 360),
             "load": M.Page(lambda: t("load.title"), load_items, 360),
             "eras": M.Page(lambda: t("load.eras"), section_pages(levels.HUB), 720),

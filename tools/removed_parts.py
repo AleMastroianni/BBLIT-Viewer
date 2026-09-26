@@ -24,7 +24,7 @@ Three counts, over every object and template of every level that has a rig:
    reading it sits at its rest place.
 3. **what the viewer does not draw**: the pose the viewer shows (the game's
    starting role, or the preference), the parts with a mesh left hidden, and
-   how many vertices that is. This is what the user can see missing.
+   how many vertices that is. This is what can be seen missing.
 
 Counted once per (level, model, stream): many objects share a model.
 It only counts; it changes nothing.

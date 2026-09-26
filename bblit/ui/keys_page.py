@@ -1,4 +1,4 @@
-"""Help -> Keyboard and Help -> Gamepad, drawn pages as in the CTR viewer.
+"""Help -> Keyboard and Help -> Gamepad, drawn pages.
 
 Keyboard: above, the key rows in columns (click or Enter: the next key
 pressed becomes the new one, Esc cancels; right click: remove the key;
@@ -8,7 +8,7 @@ the locked ones, and a line saying what the key under the mouse does. If a
 key is left without a function when leaving the page, the last saved set
 comes back.
 
-Gamepad: a controller drawn in the middle (ours, not the CTR viewer's), a
+Gamepad: a controller drawn in the middle, a
 line from every control to what it does, information only.
 
 A custom page takes the menu's input and drawing (menu.Page `custom`).
@@ -530,7 +530,7 @@ class GamepadPage:
 
     @staticmethod
     def _draw_pad(d, origin, s):
-        """A pad of our own: rounded body with a touchpad, separate d-pad
+        """A pad drawn here: rounded body with a touchpad, separate d-pad
         arrows, four face buttons with their symbols, two sticks, a light bar."""
         ox, oy = origin
         b, g = d.batch, d.groups

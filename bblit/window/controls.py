@@ -77,7 +77,7 @@ class Controls:
             self.held_keys.add(symbol)
 
     def _toggle_menu(self):
-        """Esc (and Start on the gamepad): as in the CTR viewer, it opens and
+        """Esc (and Start on the gamepad): it opens and
         closes the menu; Quit is in the menu."""
         if self.current_level is None:
             self.menu.show(self._start_page())    # without a level the menu stays
@@ -221,7 +221,7 @@ class Controls:
 
     def on_deactivate(self):
         """Out of focus (for example while switching to an emulator): no keys
-        left held down and no mouse look, as in the CTR viewer."""
+        left held down and no mouse look."""
         self.focused = False
         self.held_keys.clear()
         if self.gamepad is not None:

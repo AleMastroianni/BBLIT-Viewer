@@ -1,4 +1,4 @@
-"""The gamepad, as in the CTR viewer: the first controller pyglet finds,
+"""The gamepad: the first controller pyglet finds,
 connected before or after the start (ControllerManager).
 
 Buttons arrive as events (`on_button`: the pyglet names "a", "b", "x", "y",

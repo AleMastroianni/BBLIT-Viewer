@@ -15,8 +15,8 @@ options, not duplicated). From the top:
   "whoever has a head" has to stay open to proof); where the tables have
   no name yet, the model's number;
 - Which one, "3 of 10", Shift + arrow jumps ten;
-- Provenance (what the data says), Spawn (what is seen while playing: the
-  user's truth, "to be asked" where it is not known yet), When it is there,
+- Provenance (what the data says), Spawn (what is seen while playing,
+  confirmed in the game, "to be asked" where it is not known yet), When it is there,
   Animations;
 - Follow with the camera: the SELECTED row frames its thing (keys, pad and
   mouse all move the selection), and it can be turned off.

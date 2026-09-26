@@ -30,7 +30,7 @@ from game import zones  # noqa: E402
 COLOR_STEP_WALLS = (255, 40, 200)
 # the edges of a floor over the void (flag Steps -> edges over holes): a
 # teal the game does not use, and the word EDGE on them, because the colour
-# alone is never enough (the user is colour-blind). What the data says is
+# alone is never enough (not every reader tells colours apart). What the data says is
 # that the heightmap has no ground on the free side (0x7E), so the rise the
 # step rule measures there is not a rise between two floors: that is why it
 # is neither a step nor a wall. What the game does at that rim is another
@@ -51,7 +51,7 @@ BOX_ALPHA = 0.30
 # and of a wall (Hard walls, Steps): the fill nearly transparent, the edges
 # and the names full, so a wall reads as a block and the level stays
 # visible through it (chosen on the photos of the proposal).
-# 25%, chosen with two measures in front of us.
+# 25%, chosen on two measures.
 # `tools/stripe_count.py`: the stripes that were two layers adding their
 # alpha are gone at either fill now that the fills are stencilled, but on a
 # framing whose own scene makes 14 boundaries, 25% adds 8 and 44% adds 64 --
@@ -66,7 +66,7 @@ WALL_ALPHA = 0.25
 # a wall's name no taller than this (game units, 2 m): a hard wall is as
 # tall as its block, up to 250 m
 # a collision box is filled at BOX_ALPHA so the model inside it can be seen
-# (the user chose it on the photos: opaque buried the pirates, edges only
+# (chosen on the photos: opaque buried the pirates, edges only
 # lost the colour of the kind under the red outline of what hurts)
 # overlays drawn on the terrain face itself, pulled forward in the depth
 # test: the edges more than the fill, so they stay over it
@@ -153,7 +153,7 @@ COLOR_REACTS_LINK = (90, 200, 255)
 # (flag Boxes) who opens which gate -- is ONE line and nothing else: a bit thicker than a normal edge, ending exactly on the
 # destination point, drawn through the geometry so it can be followed to where
 # it goes even behind a wall. The old head and the cross on the point are
-# gone: small, frayed and ugly, in the user's words.
+# gone: small and frayed.
 LINK_WIDTH = 4.0          # how thick a link's line is drawn
 # the heightmap (flags Ground, Hard walls) and the fake walls (Fake walls)
 COLOR_GROUND = (60, 170, 80)              # covered by a visible face
@@ -439,8 +439,8 @@ class OverlayBuilder:
 
     def _add_collision_box(self, o, role, rot, scale_factor, diagonal):
         """The object's collision box (flag Collision boxes), with the object's position,
-        rotation and scale (montage.collision_box), as in the CTR
-        viewer: sharp edges and a barely visible fill (blend
+        rotation and scale (montage.collision_box):
+        sharp edges and a barely visible fill (blend
         B + F/4). The edges are degenerate triangles (a, b, b)
         drawn as lines: no diagonals. Touches neither bounds nor counters."""
         try:
@@ -675,7 +675,7 @@ class OverlayBuilder:
 
     def _add_box(self, box, category, draw_color, rot=None, scale_factor=1.0, pos=(0, 0, 0), filled=True,
                  edge_color=None, edge_category=None, blend=3, anim=None):
-        """A box as in the CTR viewer: barely visible fill
+        """A box: barely visible fill
         (blend B + F/4, group `category`) and sharp edges (group
         `category + "_lines"`: degenerate triangles (a, b, b) drawn as lines, no
         diagonals). `edge_color` paints only the edges and `edge_category` puts

@@ -1,5 +1,5 @@
 """The names of the Animations menu: what a thing is, for the title of the
-page ("Merlin" instead of "Model 229"). Decided by the user, never guessed:
+page ("Merlin" instead of "Model 229"). Decided, never guessed:
 where nothing is written here the page shows the model's number, and the
 table is filled as the things are recognised.
 

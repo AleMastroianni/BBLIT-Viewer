@@ -10,9 +10,8 @@ they are identical in both -- and measures, over the pixels the fill actually
 covers, how much the picture moved:
 
     dL   the average |difference| in LUMINANCE (0.299 R + 0.587 G + 0.114 B),
-         in levels of 255. This is the number that matters here: the user is
-         colour-blind, so a tint that only moves the hue does not exist for
-         him.
+         in levels of 255. This is the number that matters here: for a
+         colour-blind reader a tint that only moves the hue does not exist.
     dRGB the same average over the three channels, for comparison.
     weak the share of the covered pixels whose |dL| is under WEAK (8 of 255).
 
