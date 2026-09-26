@@ -86,16 +86,23 @@ with what is drawn: they are a guide to where to look, not a proof.
 
 | flag | what it shows | how it is made |
 |---|---|---|
-| Hard walls | the heightmap's `0x7F` walls: they stop you at any height | read |
-| Ground | the ground you really stand on (the heightmap) | read |
-| Collision boxes | each object's collision box, as the game tests it: SOLID, PLATFORM (you stand on it) or only TOUCH | read |
-| Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named DEATH, DEATH FLOOR or DAMAGE on top | read |
-| Teleport zones | zones that send somebody somewhere, with an arrow to the point: ENTRANCE (and the level it comes from), TELEPORT, RECOVER, RESTART, and LEVEL with the level it leads to | read |
-| Portals | the terrain quads the game never draws: they are portals, with the area they lead to | read |
-| Invisible walls | hard walls where nothing visible stands, and steps of more than 100 units | deduced |
-| No collision | faces you see but cannot stand on, and the walls joined to them that let you through | deduced |
-| DEATH FLOOR | in Death and damage zones: the death zones at least half the size of the level (sea, abyss) | deduced |
+| Hard walls | the heightmap's `0x7F` walls: they stop you at any height. With **Only invisible**, only those where nothing visible stands | read; Only invisible: deduced |
+| Steps | the heightmap's steps of more than 100 units: they stop you only going up. With **Only invisible**, only those where nothing visible stands | read in the code, not checked in the game; Only invisible: deduced |
+| Steps: edges over holes | with Steps, also the steps seen from a hole: the edges of platforms over the void, mostly noise | read in the code, not checked in the game |
 | Area boxes | each heightmap block as a box: sides that stop you from inside, the jump ceiling on top | read in the code, not checked in the game |
+| Outside side | the side of those walls that does not stop you | a way of drawing the walls above |
+| Ground | the ground you really stand on (the heightmap) | read |
+| No collision | faces you see but cannot stand on, and the walls joined to them that let you through | deduced |
+| Portals | the terrain quads the game never draws: they are portals, with the area they lead to | read |
+| Death and damage zones | zones that kill you (respawn at the checkpoint) or hurt you, turned as the game turns them, named DEATH, DEATH FLOOR or DAMAGE on top | read |
+| DEATH FLOOR | in Death and damage zones: the death zones at least half the size of the level (sea, abyss) | deduced |
+| Teleport zones | zones that send somebody somewhere, with an arrow to the point: ENTRANCE (and the level it comes from), TELEPORT, RECOVER, RESTART, and LEVEL with the level it leads to | read |
+| Collision boxes | each object's collision box, as the game tests it: SOLID, PLATFORM (you stand on it) or only TOUCH | read |
+| Who opens what | a line from every switch to what it commands: only the gates, or also the objects that only react | read in the code, not checked in the game |
+
+The walls of the heightmap (the first five rows) are on the **Walls** page of
+the flags. The words on the overlays are always in English; **Flag labels**
+turns them off and leaves the colours and outlines.
 
 <p align="center">
   <img src="docs/images/collision_boxes_L03D1.png" alt="Collision boxes in L03D1" width="49%">
