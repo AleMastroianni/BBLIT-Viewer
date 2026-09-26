@@ -155,7 +155,7 @@ COLOR_REACTS_LINK = (90, 200, 255)
 # it goes even behind a wall. The old head and the cross on the point are
 # gone: small and frayed.
 LINK_WIDTH = 4.0          # how thick a link's line is drawn
-# the heightmap (flags Ground, Hard walls) and the fake walls (Fake walls)
+# the heightmap's ground (flag Ground): covered, invisible, isolated sub-cells
 COLOR_GROUND = (60, 170, 80)              # covered by a visible face
 COLOR_INVISIBLE_GROUND = (140, 255, 60)  # no visible face above
 COLOR_PIXEL = (255, 255, 255)              # isolated sub-cells, with the ray

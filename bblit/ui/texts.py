@@ -135,17 +135,19 @@ TEXTS: dict[str, tuple[str, str]] = {
     "load.bonus": ("Bonus", "Bonus"),
     "load.desc_level": ("{entry_name} · LevID {id} · {file}.bze",
                             "{entry_name} · LevID {id} · {file}.bze"),
-    "load.desc_variant": ("{entry_name} · {file}.bze: sul disco ma non nella tabella dei "
-                             "livelli dell'eseguibile, quindi senza LevID.",
-                             "{entry_name} · {file}.bze: on the disc but not in the executable's "
-                             "level table, so no LevID."),
+    "load.desc_variant": ("{entry_name} · {file}.bze: la versione del livello per il renderer "
+                             "software a 8 bit; con quel renderer il gioco la carica al posto "
+                             "dell'originale, con lo stesso LevID.",
+                             "{entry_name} · {file}.bze: the level's version for the 8-bit software "
+                             "renderer; with that renderer the game loads it instead of the "
+                             "original, under the same LevID."),
     "load.eras": ("Ere", "Eras"),
     "load.desc_eras": ("L'Era selector (LS01): la vista d'insieme e il centro di ogni era.",
                        "The Era selector (LS01): the overview and the centre of each era."),
     "load.desc_era": ("I livelli dell'era, per titolo e parte.",
                         "The era's levels, by title and part."),
-    "load.desc_extra": ("Le varianti _8 fuori dalla tabella dei livelli.",
-                          "The _8 variants missing from the level table."),
+    "load.desc_extra": ("Le versioni dei livelli per il renderer software a 8 bit.",
+                          "The levels' versions for the 8-bit software renderer."),
     "era.nowhere": ("Nowhere", "Nowhere"),
     "era.stone_age": ("Età della pietra", "Stone Age"),
     "era.medieval": ("Medioevo", "Medieval Period"),
@@ -160,7 +162,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "extra.cutscenes": ("Filmati", "Cutscenes"),
     "extra.desc_cutscenes": ("Menu, crediti e filmati. Solo nella build Debug.",
                              "Menus, credits and cutscenes. Debug build only."),
-    "extra.variants": ("Varianti _8 (senza LevID)", "_8 variants (no LevID)"),
+    "extra.variants": ("Varianti _8 (renderer a 8 bit)", "_8 variants (8-bit renderer)"),
 
     # level options
     "level.title": ("Opzioni livello — {n}", "Level options — {n}"),

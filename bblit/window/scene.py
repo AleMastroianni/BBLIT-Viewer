@@ -45,8 +45,9 @@ TICKS_PER_SECOND = 15.0
 
 # Object rule passes per animation tick. The type 14 handler walks the step's
 # rules on every logic tick (Ombelll's finding 188), and the logic runs at 30 per
-# second against the 15 animation blocks (finding 278). NOT measured:
-# the rotation speed of the anchors will tell (280).
+# second against the 15 animation blocks (finding 278). Settled by finding 316:
+# the rules run once per logic tick, and an anchor (280) adds 136 of 4096 a
+# tick, one turn in 30.1 ticks = 60 frames of a 60 Hz recording.
 RULE_PASSES_PER_TICK = 2
 
 # Bit of the second static flag word (object+0xc) that puts a TYPE 14 object

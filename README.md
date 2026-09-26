@@ -152,7 +152,7 @@ the issues. Please never attach game files.
 
 ## Community
 
-The *Bugs Bunny: Lost in Time* speedrun and TAS community is on Discord:
+The *Bugs Bunny: Lost in Time* speedrun community is on Discord:
 **https://discord.gg/PThM9ucHmu**. Thanks to everyone there for their help
 over the years.
 
