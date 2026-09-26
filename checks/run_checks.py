@@ -41,6 +41,7 @@ LOGS = os.path.join(BASELINE, "logs")
 # fast ones first). Not here: the tools in tools/ (counts and one-off
 # measures, nothing to pass) and OUTSIDE_THE_ROUND below.
 CHECKS = [
+    "check_twins",
     "check_levels",
     "check_official_names",
     "check_section_cache",

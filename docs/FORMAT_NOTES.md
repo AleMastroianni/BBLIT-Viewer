@@ -10,8 +10,8 @@ which end at 255: "Ombelll's finding N", "Ombelll's MODELFORMAT" and
 such as `FUN_00423eb0` (related work: [BugsDecomp](https://github.com/quantumdude836/BugsDecomp)).
 The rule is the same: **a reading counts only after a test that could have
 failed**, and each finding gives that test and its numbers. Evidence tags
-(`PROVEN_RAW_DATA`, `PROVEN_BINARY`, `REBUILD_VERIFIED`, `STRONG`, `OPEN`)
-are used as in those notes. Where a finding corrects Ombelll's documents, it
+(`PROVEN_RAW_DATA`, `PROVEN_BINARY`, `REBUILD_VERIFIED`, `STRONG`, `OPEN`,
+`HYPOTHESIS`) are used as in those notes. Where a finding corrects Ombelll's documents, it
 says so.
 
 | # | Finding |
@@ -123,8 +123,9 @@ The claim was: the game registers every TIM in a numbered slot
 (`FUN_004229a0`, table at `0x52fd60`) and does not clear the table on level
 change (unlike the sound registry, Ombelll's finding 152), so `L03A` would
 take six of its 8 missing ids from `L03ACOM` and two (7 and 307) from
-`title.bze`. That the table is not cleared remains true in the code (see
-275), but no drawn face depends on it.
+`title.bze`. That the table is not cleared is a reading of the code (see
+275), not the result of a search: no scan of every routine that writes to
+`0x52fd60` was made. Either way, no drawn face depends on it.
 
 ## 261 — A model's parts are assembled with the rig and chained on their parents
 
@@ -138,6 +139,9 @@ says a pose gives the full transform of every part, while a section of
 MODELFORMAT says they are concatenated. **The chain is right**, measured the
 way the documents measure Bugs: assembled without the chain he is 150 units
 tall and sits in a heap; with the chain he is **285**, a standing figure.
+No height was fixed in advance: 285 is not compared with an expected size,
+and "a standing figure" is a check by eye, which is what this verdict rests
+on (the 58 of 58 above is a count and holds by itself).
 
 Two details:
 
@@ -591,8 +595,10 @@ of 3 blocks: 118 raised, 119, 120, 121 lowered (depth 2.6 / 6.2 / 9.4 /
 
 ## 279 — Sprites, nested clones and attachment points: the torches
 
-`PROVEN_RAW_DATA` for the chain and for sprite blending, `STRONG` for the
-attachment (a reading consistent with the data, not read in the code).
+`PROVEN_RAW_DATA` for the chain, `HYPOTHESIS` for sprite blending (two
+consistent examples, the glow and the flame below: not counted over the disc,
+and no routine read that reads that word), `STRONG` for the attachment (a
+reading consistent with the data, not read in the code).
 
 **Sprites.** A template with a `0x40` resource (frames, 275) and without
 `0x0B` is a world sprite: `L03A` has 20. The `0x64` record carries width and
@@ -851,8 +857,11 @@ Above the glass fence in `L05A3C` (the Mastermind room) there is an invisible
 wall that is not a `0x1000` sector (282), and the collision heightmap has no
 hard wall there either. It is an object's box. Objects collide through the
 box in record type 9 of their animation (Ombelll's finding 123: six `s16`
-corners in the object's space, tested rotated with the object by
-`FUN_004313a0`). The viewer draws it (flag Collision boxes;
+corners in the object's space, tested rotated with the object). What stops
+Bugs against these boxes is `0x433670`, read in the disassembly (a code
+address of the build in 264); `FUN_004313a0` of Ombelll's documents
+(`0x431510` in that build) is the camera's collision with the object boxes,
+not Bugs's. The viewer draws it (flag Collision boxes;
 `montage.collision_box`: the first type 9 record of the starting pose
 stream).
 
@@ -944,7 +953,10 @@ units. To be settled in the game. The viewer draws the stacks as Area boxes
 
 ## 288 — The viewer's collision flags, revised against the game
 
-Declared rules; each change follows something observed in the game.
+Declared rules; each change follows something observed in the game. The two
+rules given with numbers (invisible walls, and safe or trap) are
+`HYPOTHESIS`: no threshold was written in advance that would have said when
+to drop them.
 
 - **The 0x1000 terrain faces are not walls.** In `L03D1` one stands where the
   real invisible wall is an object box (284) and the other stops nothing. So,
