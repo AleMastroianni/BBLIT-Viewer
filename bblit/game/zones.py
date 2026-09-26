@@ -7,14 +7,21 @@ in X and in Z, and in Y from its floor up to "Y limit" higher up (the game's
 Y grows downwards; the limit is negative). Its rules (0x33)
 carry an effects word at +16 (finding 169):
 
-* 0x200000: the player goes into a series of animations and the lives
-  counter drops to zero: death, and you restart from the checkpoint;
+* 0x200000: death, and you restart from the checkpoint. The kill routine
+  (0x437d00 in this build) gives Bugs the death series its caller passes
+  (+0x17c, slot +0x17e = 0), sets 0x1000004 in his flag word +0x14 and
+  clears 0x10000, zeroes the invulnerability timer (0x4b3160), the
+  camera's hold countdown (0x4b3dac) and five more counters, unhooks him
+  from what carries him and makes him let go of what he carries, and with
+  a point moves him and the camera there. There is no lives counter: the
+  game has none;
 * 0x40000000: teleport to the three parameters: a direct respawn at a fixed
   point (the recovery net of L04A2: six zones over the whole floor, all
   towards (7900, -15520, 5000)). Nothing grabs the player in the game: a
   zone kills, hurts, or respawns you.
 
-On the menu levels: 165 zones with 0x200000 in 46 levels, 15 with
+Over the 79 menu files: 166 zones with 0x200000 in 46 levels (one, in
+L05A4, with a negative extent: it never fires), 15 with
 teleport in 4, and 9 that hurt (action 0x48, finding 158) in 3. The
 rules' conditions are not evaluated: you see where the zone CAN act.
 

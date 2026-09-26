@@ -26,7 +26,7 @@ says so.
 | 263 | The `.bmp` files in `Datas/bze` are not level previews |
 | 264 | Two builds of `Bugs.exe`: the data addresses hold, the code addresses do not |
 | 265 | Type 4 streams are animations |
-| 266 | REJECTED: "semi-transparent `0x4A`/`0x4E` faces are drawn opaque" |
+| 266 | REJECTED for the dock, then settled by 307: semi-transparent `0x4A`/`0x4E` faces are opaque on the PC |
 | 267 | The sky dome follows the camera |
 | 268 | The x2 factor on the vertex color is wrong for the PC |
 | 269 | CLOSED by 275: the sun's halo uses textures that no static file has |
@@ -211,7 +211,7 @@ that the pose found is the right one; the before and after picture does.
 **Not established:** what distinguishes 4 from 2. "4 carries a box per block,
 2 does not" fits the counts but is not measured.
 
-## 266 — REJECTED: "semi-transparent `0x4A`/`0x4E` faces are drawn opaque"
+## 266 — REJECTED for the dock, then settled by 307: semi-transparent `0x4A`/`0x4E` faces are opaque on the PC
 
 The reader takes the blend mode only in UV modes, because in modes
 `0x4A`/`0x4E` the word at +10 falls inside the colors; faces of those modes
