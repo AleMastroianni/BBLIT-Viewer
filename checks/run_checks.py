@@ -42,6 +42,7 @@ LOGS = os.path.join(BASELINE, "logs")
 # measures, nothing to pass) and OUTSIDE_THE_ROUND below.
 CHECKS = [
     "check_twins",
+    "check_manual_names",
     "check_levels",
     "check_official_names",
     "check_section_cache",

@@ -117,16 +117,17 @@ level open the menu stays open.
 
 ## The menu pages
 
-| page | contents |
-|---|---|
-| Main | Resume (greyed out with no level), Load level, Level options, Video options, General options, Help, Quit |
-| Load level | the five eras (Stone Age, Medieval Period, Pirate Years, The 1930s, Dimension X), then Nowhere (opens directly), then **Extra**: the Era selector (`LS01`), also opened at the centre of each era, and the `_8` variants that are on the disc but not in the game's level table. In an era page the levels are listed by title and part, with the file name on the right (a dot marks the open level), the full name and LevID in the description, and a Bonus section where the era has one |
-| Level options | **Flags** (below); Rendering: Textures, Objects, Sky, Semi-transparency, Wireframe, Visibility by area as in the game (only what the game would draw: the camera's area and the areas reached through the portals on screen, findings 293-295; off at every start); Entities: Animations (Playing / Paused / Starting pose), Ticks per second, Animated textures, Cloned templates, plus the group states of the level, if it has any |
-| Video options | Full screen, VSync, Texture filtering, Texture scale (x1 to x4, scale2x/scale3x), Colour (PC, or PSX x2: finding 268), Texture coordinates (PC NVIDIA/Intel, default; PC AMD; PlayStation — findings 328, 341, see below), Field of view (40 to 100 degrees, default 65, with a 51° stop: the game's own, finding 327) |
-| General options | Language (English, default, or Italian), Status bar, Levels folder, Open the bze_levels folder |
-| Help | the keys |
+What each page is for. Every entry has its own description at the bottom of
+the panel, so this manual names only the entries whose name does not say
+what they do.
 
-Every row has a description at the bottom of the panel.
+| page | what it is for |
+|---|---|
+| Load level | choosing a level: by era, then by title and part (the full name, the LevID and the file are in the description), Nowhere on its own, and under **Extra** the Era selector (`LS01`) and the `_8` variants that are on the disc but not in the game's level table |
+| Level options | what the open level shows and how: textures, objects, sky and animations, the objects the game adds or moves, the overlays of **Flags** (below), the bookmarks and the points to copy of **Camera and points**, and the gates or group states where the level has them |
+| Video options | how the picture is made, in three groups: the screen, the textures, and the choices that imitate the game (among them **Texture coordinates**, below) |
+| General options | the language, where the levels are read from, the cache, the gamepad and its drawn controls |
+| Help | the keys and the gamepad drawn, and the version |
 
 **Texture coordinates, and why an AMD card sees a different picture.** The PC
 game has two renderers and they do not read the byte texture coordinates the
@@ -145,8 +146,8 @@ The viewer cannot have one single behaviour, so the rule is a choice in
 
 | value | what it draws |
 |---|---|
-| PC, NVIDIA/Intel card | `byte / 255` clamped to [0.01, 0.99], repeated: what the game shows (the default) |
-| PC, AMD card | the same, with the outer strip of every texture cut away, as the game does with an AMD driver |
+| NVIDIA/Intel card | `byte / 255` clamped to [0.01, 0.99], repeated: what the game shows (the default) |
+| AMD card | the same, with the outer strip of every texture cut away, as the game does with an AMD driver |
 | PlayStation | the (size − 1) rule of the software renderer |
 
 The viewer does **not** pick it from your card on its own: the picture would
@@ -171,25 +172,29 @@ on the main menu page, and whenever no level is open.
 
 ### Flags
 
-Overlays for glitch hunting. They are **always off at start**, are not saved,
+Overlays drawn over the scene. They are **always off at start**, are not saved,
 and have **no keys**: turn them on in **Level options -> Flags**, or with the
-command-line options below. Background: findings 282-288.
+command-line options below. The walls of the heightmap are together on the
+**Walls** page, and there **Only invisible** keeps only those with nothing
+drawn. Background: findings 282-288.
 
 | flag | what it shows |
 |---|---|
-| Invisible walls | what stops you with nothing drawn, in magenta: the collision heightmap's hard walls (`0x7F`) where there is no visible wall (INVISIBLE WALL, short INV) and the steps of more than 100 units (STEP WALL, short STP), which stop you only going up: from the high side STEP WALL · OUTSIDE (findings 298, 309) |
+| Hard walls | the heightmap's `0x7F` walls, which stop you at any height (HARD WALL, short HRD). Blue, from the floor to the ceiling of their block, seen from the side you would enter from; for Bugs they stop from every side (finding 309) |
+| Steps | the heightmap's steps of more than 100 units (STEP WALL, short STP), which stop you only going up: from the high side STEP WALL · OUTSIDE (findings 298, 309). Pink |
+| Steps: edges over holes | with Steps, also the steps seen from a `0x7E` hole (its ground is the slab's base): the edges of platforms over the void; they stop whoever falls next to the platform but are mostly noise. Off at every start |
+| Area boxes | the collision volume of each mini area (heightmap blocks). Their sides stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you pass); a slab top stops the head of a jump (JUMP CEILING, from below; from above JUMP CEILING · OUTSIDE): Bugs's origin stops about 410 lower (findings 298, 299). Outside side hides the OUTSIDE side |
+| Outside side | the side of the walls that does not stop you (the OUTSIDE names): area boxes from outside and above, steps from the high side; on at every start |
+| Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
 | No collision | faces you see but cannot stand on, and the walls joined to them that let you through. White with black edges, written NO COLLISION; what is under them is told by the zone flags |
-| Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object), by what it does to Bugs (finding 300): SOLID in orange stops you, PLATFORM in green stops you and you can stand on it, TOUCH in blue is only touched (pickups, triggers) |
+| Portals | the terrain's `0x1000` quads are portals: the area each one leads to is written on it (finding 293). The game does not draw them and they do not stop you. Grey |
 | Death and damage zones | zones that kill you, with a respawn at the checkpoint (DEATH; DEATH FLOOR for those at least half the size of the level: the sea, the abyss), and zones that hurt you without killing you (DAMAGE, action `0x48`). All red, the name on the top face |
 | Teleport zones | zones that send somebody somewhere (finding 326), violet, each with an arrow from the zone to the point: **ENTRANCE** is the way in from another level, and says which one (it only fires when the level change you came through wrote its byte, so you cannot use it while playing); **TELEPORT** moves Bugs with no condition at all; **RECOVER** the object inside the zone (the recovery nets); **RESTART** is where Bugs comes back after a death; **LEVEL** names the level the zone leads to (a level change has no point in this file). Levels are named, not coded: "LEVEL Wabbit on the run! 1" |
-| Ground | the ground you really stand on (the heightmap): faint green under visible faces, bright green where nothing is drawn, white with beams for isolated 40-unit spots |
-| Hard walls | the heightmap's `0x7F` walls, which stop you at any height (HARD WALL, short HRD). Blue, drawn 5 m tall, seen from the side you would enter from; for Bugs they stop from every side (finding 309) |
-| Area boxes | the collision volume of each mini area (heightmap blocks). Their sides stop only who is inside (AREA WALL; from outside AREA WALL · OUTSIDE: you pass); a slab top stops the head of a jump (JUMP CEILING, from below; from above JUMP CEILING · OUTSIDE): Bugs's origin stops about 410 lower (findings 298, 299). Walls: outside side hides the OUTSIDE side |
-| Walls: outside side | the side of the walls that does not stop you (the OUTSIDE names): area boxes from outside and above, steps from the high side; on at every start |
-| Walls: edges over holes | with Invisible walls, also the steps seen from a `0x7E` hole (its ground is the slab's base): the edges of platforms over the void; they stop whoever falls next to the platform but are mostly noise. Off at every start |
-| Portals | the terrain's `0x1000` quads are portals: the area each one leads to is written on it (finding 293). The game does not draw them and they do not stop you. Grey |
+| Collision boxes | each object's collision box as the game tests it (it can be much bigger than the object), by what it does to Bugs (finding 300): SOLID in orange stops you, PLATFORM in green stops you and you can stand on it, TOUCH in blue is only touched (pickups, triggers) |
+| Who opens what | a line from every switch to what it commands (findings 323, 331): only the gates, with GATE <- #78 on the box, or all the links, also the objects that only react (REACTS <- #78) |
 
-Names on the overlays are always in English. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), INV (invisible wall), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), SLD (solid), PLT (platform), TCH (touch), for example `DTH + DMG` on the lava of `L03D1`.
+Names on the overlays are always in English; **Flag labels** turns the words
+off and leaves the colours and outlines. A thing that does several things, or is in two flags that are on, is named with short forms: NOC (no collision), INV (invisible wall), HRD (hard wall), DTH (death), DFL (death floor), DMG (damage), RSP (respawn), STP (step wall), SLD (solid), PLT (platform), TCH (touch), for example `DTH + DMG` on the lava of `L03D1`.
 
 ---
 
@@ -255,7 +260,7 @@ paused animations. An unknown or malformed entry is ignored.
   level opens that fast; it stops when the viewer is closed. Compressed,
   about 2 MB a level.
 
-The glitch-hunting overlays are built only when one of their flags is
+The overlays drawn over the scene are built only when one of their flags is
 turned on (the heightmap takes a few seconds on large levels); after that
 they are in the cache too, and turning the flag off only hides them.
 
@@ -291,7 +296,7 @@ PyInstaller's bootloader, bundled in the executable) and
 `bze_levels/README.txt`. The zip is called `BBLIT-Viewer-v<version>.zip`.
 
 The version number is written in one place, `bblit/support/version.py`: the
-window title, Help -> About and the name of the release zip read it from
+window title, **Help -> About** and the name of the release zip read it from
 there. Every build carries the number of the next release; right after a
 release, raise it there.
 
