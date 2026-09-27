@@ -10,14 +10,14 @@ families. On the test levels, the cases looked at by hand:
   changes with its state) is a character there at the start; the helpers
   (model 272) are characters none of which is there at the start (they are
   born when a trial starts, as seen in the game);
-- Nowhere, the reverse's N75 and N76: the small crate (template 310) is
+- Nowhere, findings 368 and 369: the small crate (template 310) is
   there after the first tick, objects 127 and 142 hang from Bugs from it,
   and the placed objects with no place or at (0, 0, 0) are seven pages of
   the pause menu, five scripts without a model (54, 55, 56, 146, 171), the
   sky, the two on Bugs and twelve texture animators: none parked;
 - Mine or mine? 3 (L03C2): the rails (template 1238, one state) are in The
   rest, scenery; they come by themselves, but not at the first tick (the
-  trigger that starts the ride waits for its clock to pass 0: N74);
+  trigger that starts the ride waits for its clock to pass 0: finding 367);
 - Hey... What's up, Dock? 1 (L03A): the blue chests (templates 764-766) are
   not characters (three parts), and the crabs (model 276, 11 parts) and the
   pirates (model 112, 24 parts) are.
@@ -81,15 +81,15 @@ probe("Nowhere: the helpers (model 272) are characters, none there at the start"
       len(helpers) == 1 and helpers[0]["exemplars"] and not any(e["at_start"] for e in helpers[0]["exemplars"]))
 
 crate = exemplars_of(cat, cat.templates[310])
-probe("Nowhere: the small crate (template 310) is there after the first tick (N75)",
+probe("Nowhere: the small crate (template 310) is there after the first tick (finding 368)",
       crate and any(e["at_start"] for e in crate))
-probe("Nowhere: objects 127 and 142 hang from Bugs from the first tick (N75, N76)",
+probe("Nowhere: objects 127 and 142 hang from Bugs from the first tick (findings 368, 369)",
       {127, 142} <= cat.startup.on_bugs)
 from collections import Counter  # noqa: E402
 origin = [n for n, o in enumerate(lvl["objects"]) if o["block_type"] != 0x08
           and (not o["position"] or tuple(o["position"]) == (0, 0, 0))]
 prov = Counter(next(e["provenance"] for e in exemplars_of(cat, n) if e["parent"] is None) for n in origin)
-probe(f"Nowhere: nothing parked at the origin (N76): {dict(prov)}",
+probe(f"Nowhere: nothing parked at the origin (finding 369): {dict(prov)}",
       prov == Counter({"texture": 12, "pause_page": 7, "script": 5, "on_bugs": 2, "sky": 1}))
 
 lvl, cat = build("L03C2")

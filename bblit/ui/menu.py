@@ -110,6 +110,10 @@ class Item:
         # a function returning a short text drawn grey and small on the far
         # right, after the value (a count), or None
         self.note = None
+        # a value that changes by itself, with nobody touching the menu (the
+        # frame of an animation that plays, the camera that moves): read
+        # again at every frame, and only its label is redone when it changes
+        self.live = False
 
     def label(self) -> str:
         return self._text_fn() if self._text_fn else t(self.item_key)
@@ -300,6 +304,7 @@ class Menu:
         self.stack: list[list] = []       # [entry_name, menu_items, cursor]
         self._batch = None
         self._drawables = []
+        self._live = []                   # the live rows drawn (_refresh_live)
         self._areas = []                  # (y0, y1, item index)
         # {item index: (x of the left end, x of the middle) of its value
         # "‹ … ›"}: a click between them goes back, as the left key does
@@ -599,11 +604,34 @@ class Menu:
             self._layout(win)
             self._draw_key = item_key
             self.dirty = False
+        self._refresh_live()
         glDisable(GL_DEPTH_TEST)
         glEnable(GL_BLEND)
         glBlendEquation(GL_FUNC_ADD)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         self._batch.draw()
+        for entry in self._live:
+            entry[1].draw()
+
+    def _refresh_live(self):
+        """The live rows' values, read again: only a value that changed
+        gets its label redone (0.3 ms), never the whole page (20 ms for
+        Animations), and only then is it fitted to its room (fit_value
+        measures with a label of its own: every frame, it cost 0.7 ms).
+        The arrows' click areas follow the new width."""
+        for entry in self._live:
+            v, label, room, dim, i, s, last = entry
+            raw = v.value_text()
+            if raw == last:
+                continue
+            entry[6] = raw
+            text = fit_value(raw, room, dim) if room is not None else raw
+            if text == label.text:
+                continue
+            label.text = text
+            if text.startswith("‹"):
+                left = label.x - label.content_width
+                self._value_middles[i] = (left - round(8 * s), left + label.content_width / 2)
 
     def _layout(self, win):
         entry_name, menu_items, cursor = self.stack[-1]
@@ -666,6 +694,8 @@ class Menu:
         # would change height with the visible lines
         content_height = space_avail if sum(row_heights) > space_avail else sum(row_heights[start_line:end_line])
         panel_height = header + content_height + desc_height + round(10 * s)
+        # where the page is drawn: the export's panel keeps clear of it
+        self.drawn_rect = (x0, y_top - panel_height, width_units, panel_height)
         drawables.append(pyglet.shapes.Rectangle(x0, y_top - panel_height, width_units, panel_height,
                                            color=BACKGROUND_COLOR, batch=batch, group=beneath))
         # title
@@ -686,6 +716,7 @@ class Menu:
                                          color=SECTION_COLOR, batch=batch, group=above))
         self._areas, self._areas_list = [], menu_items
         self._value_middles = {}
+        self._live = []          # [item, its value's label, room, font size, row, scale, last value read] of the live rows drawn
         for i in range(start_line, end_line):
             v = menu_items[i]
             h = row_heights[i]
@@ -716,6 +747,7 @@ class Menu:
                     drawables.append(note_label)
                     value_right -= note_label.content_width + round(8 * s)
                     text_space -= note_label.content_width + round(8 * s)
+                value_room = None
                 if value_text:
                     # when there is no room for both, the VALUE gives way, not
                     # the label: a cut label says nothing any more, a cut
@@ -734,11 +766,17 @@ class Menu:
                     value_color = SELECTED_TEXT_COLOR if selected else (INFO_RIGHT_COLOR if isinstance(v, Info) else VALUE_COLOR)
                     if v.disabled:
                         value_color = DISABLED_COLOR
+                    # a live value is drawn on its own, outside the page's
+                    # batch: changing it then does not make pyglet sort the
+                    # whole batch again (half a millisecond a change)
                     value_label = pyglet.text.Label(value_text, font_name=FONT, font_size=dim,
                                                     x=value_right, y=middle, anchor_x="right",
                                                     anchor_y="center", color=value_color,
-                                                    batch=batch, group=above)
+                                                    batch=None if v.live else batch,
+                                                    group=None if v.live else above)
                     drawables.append(value_label)
+                    if v.live:
+                        self._live.append([v, value_label, value_room, dim, i, s, v.value_text()])
                     if value_text.startswith("‹"):
                         left = value_right - value_label.content_width
                         self._value_middles[i] = (left - round(8 * s), left + value_label.content_width / 2)

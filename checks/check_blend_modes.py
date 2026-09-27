@@ -88,7 +88,9 @@ print(f"   the finding reads (120, 104, 8) -> (255, 239, 143) with alpha 90 befo
       f"the gamma, and over (20, 24, 40) the screen shows a pale haze, not a sum")
 
 # how many copies of a texture the disc really asks for
-names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 pairs, textures = set(), set()
 for name in names:
     path = os.path.join(paths.DATA_BZE, name + ".bze")

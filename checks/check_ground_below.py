@@ -94,7 +94,9 @@ probe("outside every block: nothing",
       and collision.ground_below([hole], 10, -5000, 10) is None)
 
 # 2. the visible terrain where slabs are stacked
-name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 n = hits = null_hits = 0
 for entry_name in name_list:
     file_path = os.path.join(paths.DATA_BZE, entry_name + ".bze")

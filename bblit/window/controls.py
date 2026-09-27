@@ -123,7 +123,7 @@ class Controls:
     def level_order(self):
         """The indexes of `level_files` in the order of Load level: the Era
         selector, the eras with their parts and bonus levels, Nowhere, then
-        (Debug only) Extra; a file the level table does not know goes last.
+        Extra; a file the level table does not know goes last.
         Previous / next level walk this order, not the alphabetical one of
         the files (after "What's cookin', Doc? 1" came part 3, not part 2)."""
         cached = getattr(self, "_level_order", None)
@@ -183,6 +183,12 @@ class Controls:
                 and self.pick_enabled and self.current_level is not None):
             self.pick_at(x, y)
             return pyglet.event.EVENT_HANDLED
+        if not self.ui_hidden and button == pyglet.window.mouse.LEFT:
+            # the export's panel is over the menu: its buttons first
+            hit = self.export_panel.click(x, y)
+            if hit is not None:
+                self._export_click(hit)
+                return pyglet.event.EVENT_HANDLED
         if not self.ui_hidden and self.menu.click(x, y, button):
             return
         if button == pyglet.window.mouse.RIGHT:
@@ -302,6 +308,12 @@ def opening_camera(level):
     lo, hi = level.terrain_lo, level.terrain_hi
     radius = max(hi[i] - lo[i] for i in range(3)) or 10.0
     speed = max(8.0, radius / 12.0)
+    # the Extra files without Bugs: a camera chosen for each in the level
+    # table (levels.start_camera), not read from the game
+    chosen = levels.start_camera(level.name)
+    if chosen is not None:
+        x, y, z, yaw, pitch = chosen
+        return Vec3(x, y, z), yaw, pitch, speed
     start = level.start_place()
     if start is None:
         mid = [(a + b) / 2 for a, b in zip(lo, hi)]

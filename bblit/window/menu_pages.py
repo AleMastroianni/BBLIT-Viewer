@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,6 +25,7 @@ import ctypes  # noqa: E402
 from game import geometry as geo  # noqa: E402
 from game import levels  # noqa: E402
 from ui import menu as menumod  # noqa: E402
+from support import export  # noqa: E402
 from support import level_cache  # noqa: E402
 from support import paths  # noqa: E402
 from support import preferences  # noqa: E402
@@ -44,14 +46,12 @@ from ui import settings as settings_mod  # noqa: E402
 from window.scene import resolve_levels_folder  # noqa: E402
 
 try:
-    from support import private_export  # noqa: E402  (private copies only: left out of the public version)
+    from support import local_export  # noqa: E402  (an optional module, not in this repository)
 except ImportError:
-    private_export = None
-if private_export is not None:
-    # its words (its entry, the area boxes' description with its y): lost
-    # when viewer.py was split into modules (c0700ff), so the entry showed
-    # its raw key "camera.copy_ce"
-    texts.TEXTS.update(private_export.TEXTS)
+    local_export = None
+if local_export is not None:
+    # its words (its entry, the area boxes' description with its y) come with it
+    texts.TEXTS.update(local_export.TEXTS)
 
 # The vertical field of view of the PC game, 51,28 degrees (finding 327):
 # 51 in the menu, next to the round values the viewer had before.
@@ -94,7 +94,7 @@ class MenuPages:
                     M.Submenu("menu.video", "video"),
                     M.Submenu("menu.general", "general"),
                     M.Submenu("menu.help", "help"),
-                    M.Action("menu.quit", self.close)]
+                    M.Action("menu.quit", self._quit)]
 
         def per_file():
             # the folder's files by name, case-insensitive (l01c, Merlin)
@@ -122,13 +122,10 @@ class MenuPages:
                 label_text = lambda p=part_label: f"{ti_of()} — {t('load.part', n=p)}"
             if extra.get("label"):
                 label_text = lambda e=extra["label"]: t(e)
-            # the full name in the description: the label may be shortened.
-            # The Debug build adds the level's old note from the LevID
-            # spreadsheet, for now
-            old_note = extra.get("sheet_note") if self.build == "Debug" else None
-            entry_name = lambda p=part_label, e=extra.get("label"), o=old_note: " — ".join(
+            # the full name in the description: the label may be shortened
+            entry_name = lambda p=part_label, e=extra.get("label"): " — ".join(
                 x for x in (ti_of(), t(e) if e else "", t("load.part", n=p) if p is not None else "", note_of())
-                if x) + (f" · {o}" if o else "")
+                if x)
             if levid is None:
                 desc = lambda f=file, nm=entry_name: t("load.desc_variant", entry_name=nm(), file=f)
             else:
@@ -168,11 +165,9 @@ class MenuPages:
             # Nowhere under Dimension X, opened directly
             menu_items += level_list(levels.NOWHERE)
             # Extra (the `_8` variants, and inside it the menu, the credits
-            # and the cutscenes) only in the Debug build: no other copy
-            # lists any of it
-            if self.build == "Debug":
-                menu_items += [M.Section(None, label_text=lambda: ""),
-                         M.Submenu("extra.title", "extra", desc="load.desc_extra")]
+            # and the cutscenes), in every build
+            menu_items += [M.Section(None, label_text=lambda: ""),
+                           M.Submenu("extra.title", "extra", desc="load.desc_extra")]
             # the keys [ and ] in the menu too, in this page's order
             # (Controls.step_level)
             if self.current_level is not None:
@@ -201,11 +196,10 @@ class MenuPages:
                     if not (len(titles) == 1 and titles[0][0] == t(section)):
                         menu_items.append(M.Section(section))
                     menu_items += level_list(titles, every_title=section_list in (levels.EXTRA, levels.HUB))
-                if section_list is levels.EXTRA and self.build == "Debug":
-                    # only in the Debug build, for now
+                if section_list is levels.EXTRA:
                     menu_items += [M.Section(None, label_text=lambda: ""),
-                             M.Submenu("extra.cutscenes", "cutscenes",
-                                         desc="extra.desc_cutscenes")]
+                                   M.Submenu("extra.cutscenes", "cutscenes",
+                                             desc="extra.desc_cutscenes")]
                 return menu_items + [M.Back()]
             return build_items
 
@@ -310,8 +304,11 @@ class MenuPages:
             if self.current_level is None:
                 return [M.Info(lambda: t("level.no_level")), M.Back()]
             marks = self._bookmarks()
-            menu_items = [M.Info(lambda: t("camera.now"), lambda: self._coords_text(self._game_point(self.pos))),
-                          M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(self.pos)),
+            here = M.Info(lambda: t("camera.now"), lambda: self._coords_text(self._game_point(self.pos)))
+            shadow = M.Info(lambda: t("camera.shadow_point"), lambda: self._shadow_text(self.pos))
+            # the camera moves with the menu open: both follow it
+            here.live = shadow.live = True
+            menu_items = [here, shadow,
                           M.YesNo("camera.show_shadow", lambda: self.show_camera_shadow,
                                   lambda v: setattr(self, "show_camera_shadow", v), "desc.show_shadow"),
                           # the camera's base speed (the wheel only scrolls the
@@ -324,9 +321,9 @@ class MenuPages:
                           M.Action("camera.paste", self._go_to_clipboard_point, desc="desc.camera_paste",
                                    right_text=lambda: self._paste_words()),
                           M.Action("camera.add", self._add_bookmark, desc="desc.camera_add"),
-                          *([copy_item("camera.copy_ce", "desc.copy_ce",
-                                       lambda: self._point_text("private", self.pos, t("camera.now")))]
-                            if private_export else []),
+                          *([copy_item("camera.copy_local", "desc.copy_local",
+                                       lambda: self._point_text("local", self.pos, t("camera.now")))]
+                            if local_export else []),
                           copy_item("camera.copy_lua", "desc.copy_lua",
                                     lambda: self._point_text("lua", self.pos, t("camera.now"))),
                           copy_item("camera.copy_all_lua", "desc.copy_all_lua", self._all_bookmarks_lua,
@@ -359,8 +356,8 @@ class MenuPages:
                                 self._rename_bookmark, desc="desc.bookmark_name"),
                     M.Action("bookmark.replace", lambda: self._replace_bookmark("bookmark.replace"),
                              right_text=lambda: self._feedback_text("bookmark.replace", "bookmark.replaced")),
-                    *([copy_item("camera.copy_ce", "desc.copy_ce", lambda: self._point_text("private", pos, name))]
-                      if private_export else []),
+                    *([copy_item("camera.copy_local", "desc.copy_local", lambda: self._point_text("local", pos, name))]
+                      if local_export else []),
                     copy_item("camera.copy_lua", "desc.copy_lua", lambda: self._point_text("lua", pos, name)),
                     M.Action(None, self._delete_bookmark, desc="desc.bookmark_delete",
                              label_text=lambda: t("bookmark.confirm_delete" if self._delete_armed
@@ -392,6 +389,7 @@ class MenuPages:
                     "desc.sky_choice")]
             menu_items = [M.Submenu("level.flags", "flags", desc="desc.flags"),
                     M.Submenu("level.camera", "camera", desc="desc.camera"),
+                    M.Submenu("level.export", "export", desc="desc.export"),
                     M.Section("level.rendering"),
                     M.YesNo("level.texture", lambda: self.show_textures,
                            lambda v: setattr(self, "show_textures", v), "desc.texture"),
@@ -434,6 +432,22 @@ class MenuPages:
                                      lambda role, g=entity_group: self._set_group_state(g, role),
                                      "desc.group"))
             menu_items.append(M.Back())
+            return menu_items
+
+        def export_page():
+            """Level options -> Export (support/export.py): the files go to
+            the export folder, one folder per level; one job at a time."""
+            if self.current_level is None:
+                return [M.Info(lambda: t("level.no_level")), M.Back()]
+            busy = self._export_running()
+            menu_items = [M.Info(lambda: t("export.folder"), lambda: export.export_root())]
+            for item_key, job in (("export.textures", "textures"), ("export.all", "all"),
+                                  ("export.obj", "3d")):
+                action = M.Action(item_key, lambda job=job: self._start_export(job), desc="desc." + item_key)
+                action.disabled = busy
+                menu_items.append(action)
+            menu_items += [M.Action("export.open", self._open_export_folder, desc="desc.export.open"),
+                           M.Back()]
             return menu_items
 
         def gates_page():
@@ -522,7 +536,7 @@ class MenuPages:
                              right_text=lambda: t("data.no_bze_short") if self._no_bze_folder() else ""),
                     M.Action("data.retry", self._retry, desc="data.desc_retry"),
                     M.Submenu("menu.general", "general"),
-                    M.Action("menu.quit", self.close)]
+                    M.Action("menu.quit", self._quit)]
 
         def help_items():
             # Help -> Keyboard / Gamepad (drawn pages)
@@ -556,6 +570,12 @@ class MenuPages:
             "walls": M.Page(lambda: t("level.walls"), walls, 440),
             "camera": M.Page(lambda: t("camera.title", level=self.current_level.name if self.current_level else "—"),
                              camera, 600),
+            "export": M.Page(lambda: t("export.title", level=self.current_level.name if self.current_level else "—"),
+                             export_page, 600),
+            "quit": M.Page(self._quit_title,
+                           lambda: [M.Info(lambda: t("quit.stops")), M.Info(lambda: t("quit.ask")),
+                                    M.Action("menu.no", lambda: self.menu.go_back()),
+                                    M.Action("menu.yes", self._close_now)], 600),
             "bookmark": M.Page(bookmark_title, bookmark, 600),
             "pick": M.Page(lambda: t("pick.title"), pick_page, 680),
             "missing_data": M.Page(lambda: t("data.title"), data_items, 640),
@@ -793,6 +813,79 @@ class MenuPages:
             level_cache.to_recycle_bin(files)
         self._stale_cache_files(refresh=True)
         self.menu.rebuild()
+
+    def _export_running(self) -> bool:
+        return self._export_proc is not None and self._export_proc.poll() is None
+
+    def _start_export(self, job):
+        """Level options -> Export: the job in a process of its own
+        (support/export.py), followed by the panel (window/export_panel.py).
+        One at a time: not when another window of the viewer runs one."""
+        if self._export_running() or self.current_level is None:
+            return
+        target = self.folder if job == "all" else self.level_files[self.index]
+        if not target:
+            return
+        self.export_panel_closed = False
+        if export.running_elsewhere(os.getpid()):
+            self.export_status = {"job": job, "state": "busy"}
+            return
+        self._export_proc = export.start(job, target, self.cache)
+        self.export_status = export.read_progress(export.progress_path(self.cache, os.getpid()))
+        pyglet.clock.unschedule(self._poll_export)
+        pyglet.clock.schedule_interval(self._poll_export, 0.5)
+        self.menu.rebuild()
+
+    def _poll_export(self, dt):
+        self.export_status = export.read_progress(export.progress_path(self.cache, os.getpid()))
+        if not self._export_running():
+            pyglet.clock.unschedule(self._poll_export)
+            self._export_proc = None
+            self.export_status = export.read_progress(export.progress_path(self.cache, os.getpid()))
+            if self.menu.is_open:
+                self.menu.rebuild()
+
+    def _export_click(self, what):
+        """A click on the panel's buttons."""
+        if what == "open":
+            self._open_export_folder((self.export_status or {}).get("folder"))
+        if what in ("open", "close"):
+            self.export_panel_closed = True
+
+    def _open_export_folder(self, folder=None):
+        """`folder`, or the open level's export folder if it has one, or
+        the export folder of all of them."""
+        if folder is None and self.current_level is not None:
+            folder = export.level_folder(self.level_files[self.index])
+        if folder is None or not os.path.isdir(folder):
+            folder = export.export_root()
+        os.makedirs(folder, exist_ok=True)
+        try:
+            os.startfile(folder)
+        except (AttributeError, OSError):
+            pass
+
+    def _quit(self):
+        """Quit, from the menu or the window's close button: during an
+        export, first the question (the page "quit"), No selected."""
+        if self._export_running():
+            if not self.menu.is_open:
+                self.menu.show("main")
+            self.menu.open_page("quit")
+            return
+        self._close_now()
+
+    def _close_now(self):
+        self._save_enlarged()
+        self._save_settings()
+        self.close()
+
+    def _quit_title(self):
+        status = self.export_status or {}
+        if status.get("job") == "all":
+            return t("quit.export_all", n=min(status.get("phase_done", 0) + 1, status.get("phase_total", 0) or 1),
+                     total=status.get("phase_total", 0))
+        return t("quit.export_one", level=status.get("level", ""))
 
     def _open_folder_in_use(self):
         """General options: opens in Explorer the folder the levels are read

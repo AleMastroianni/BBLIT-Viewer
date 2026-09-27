@@ -36,7 +36,8 @@ changed.
 
 ## What it does
 
-- **The viewer**: every level of the game, era by era. Terrain, props in
+- **The viewer**: every level of the game, era by era, and the Extra files:
+  the menu, the credits, the cutscenes and the `_8` variants. Terrain, props in
   their starting pose, animations at the game's speed, animated textures,
   the sky dome, semi-transparent blends and the template clones the level's
   rules spawn. Free camera; menus in English and Italian.
@@ -45,11 +46,18 @@ changed.
   itself has two (Video options → Texture coordinates): with an **AMD card**
   the game cuts the outer strip of every texture and the viewer can do the
   same. See [docs/VIEWER.md](docs/VIEWER.md).
-- **Command-line tools** in `tools/`, usable on their own:
-  - `bze.py`: unpacks and decompresses the `.bze` container;
-  - `export_obj.py`: exports a level's terrain and props to OBJ + MTL, with
-    textures, for Blender and similar;
-  - `tim.py`: exports the TIM textures to PNG.
+- **Export** (Level options → Export): the textures of the open level as
+  PNG, the textures of the whole disc in the background (the levels, the
+  Extra files, the loading screens), and the open level in 3D: OBJ + MTL
+  with its textures, the sky apart and the collision heightmap as the file
+  has it. One folder per level, in `Documents\BBLIT Viewer\Export`
+  (`userdata\Export` in a portable copy).
+  See [docs/VIEWER.md](docs/VIEWER.md).
+- **Command-line tools**, usable on their own from the source code:
+  - `bblit/game/bze.py`: unpacks and decompresses the `.bze` container;
+  - `bblit/game/tim.py`: exports a level's TIM textures to PNG;
+  - `tools/obj_export.py`: exports a level's terrain and props to OBJ + MTL,
+    with textures, for Blender and similar.
 
 ## Controls
 
@@ -107,9 +115,9 @@ turns them off and leaves the colours and outlines.
   <img src="docs/images/wireframe_L02A1.png" alt="Wireframe of L02A1" width="49%">
 </p>
 
-The findings behind the flags up to 288 are in
-[docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md) (282-288); the later ones are not
-published yet.
+The findings behind the flags are published in
+[BBLIT Findings](https://github.com/AleMastroianni/BBLIT-Findings), findings
+256 to 374.
 
 ## Building
 
@@ -117,14 +125,15 @@ Python 3.10 or newer, on Windows (the viewer uses OpenGL 3.3):
 
 - [pyglet](https://pyglet.org/) — the window and OpenGL: enough to run
   `python bblit/viewer.py`;
-- [Pillow](https://python-pillow.org/) — only for the scripts in `branding/`;
+- [Pillow](https://python-pillow.org/) — the words of the flags, the `sheet.png` of Export and the
+  scripts in `branding/`; it is inside the executable;
 - [PyInstaller](https://pyinstaller.org/) — for the executable.
 
 ```
 python -m venv .venv
 .venv\Scripts\pip install pyglet pillow pyinstaller
-.venv\Scripts\python tools\build_exe.py
-.venv\Scripts\python tools\make_release.py
+.venv\Scripts\python packaging\build_exe.py
+.venv\Scripts\python packaging\make_release.py
 ```
 
 `build_exe.py` writes `BBLIT Viewer.exe` and `_internal\` in the project
@@ -136,9 +145,10 @@ its settings stay in `userdata\` next to it. A level's pieces are cached in
 
 ## Notes on the format
 
-[docs/FORMAT_NOTES.md](docs/FORMAT_NOTES.md) collects what this project found
-about the data (findings 256-288), each with the test that could have proved
-it wrong. They continue the numbering of
+What this project found about the data is published in
+[BBLIT Findings](https://github.com/AleMastroianni/BBLIT-Findings): findings
+256 to 374, each with the test that could have proved it wrong. They
+continue the numbering of
 [Ombelll's reverse-engineering documentation](https://github.com/Ombelll/Bugs-bunny-lost-in-time-reverse-engineered),
 which this viewer is built on; where a finding corrects it, it says so.
 
@@ -153,8 +163,8 @@ the issues. Please never attach game files.
 ## Community
 
 The *Bugs Bunny: Lost in Time* speedrun community is on Discord:
-**https://discord.gg/PThM9ucHmu**. Thanks to everyone there for their help
-over the years.
+**https://discord.gg/PThM9ucHmu**. Much of what this viewer shows started
+from its members' observations.
 
 ## Credits
 
@@ -163,8 +173,8 @@ over the years.
 - **quantumdude836** — [BugsDecomp](https://github.com/quantumdude836/BugsDecomp),
   the decompilation, used for reference.
 - **DCxDemo** — the CTR viewer of [CTR-tools](https://github.com/CTR-tools/CTR-tools):
-  a program I have used for years and never stopped admiring. Its interface
-  (menus, options, portable settings) inspired this one. Thank you.
+  a program I have used for years and never stopped admiring. It inspired
+  this one. Thank you.
 - Logo font: [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)
   by Astigmatic (Apache 2.0). Logo, icon and background are drawn by the
   scripts in `branding/`.

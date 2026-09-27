@@ -160,8 +160,7 @@ TEXTS: dict[str, tuple[str, str]] = {
     "extra.overview": ("Vista d'insieme", "Overview"),
     "extra.films": ("Filmati", "Cutscenes"),
     "extra.cutscenes": ("Filmati", "Cutscenes"),
-    "extra.desc_cutscenes": ("Menu, crediti e filmati. Solo nella build Debug.",
-                             "Menus, credits and cutscenes. Debug build only."),
+    "extra.desc_cutscenes": ("Menu, crediti e filmati.", "Menus, credits and cutscenes."),
     "extra.variants": ("Varianti _8 (renderer a 8 bit)", "_8 variants (8-bit renderer)"),
 
     # level options
@@ -452,9 +451,9 @@ TEXTS: dict[str, tuple[str, str]] = {
                        "The level after this one, in this page's order (as the key [[level_next]])."),
     "camera.reset": ("Torna al punto di partenza", "Back to the starting point"),
     "camera.paste": ("Vai al punto negli appunti", "Go to the point in the clipboard"),
-    "desc.camera_paste": ("La camera 1,6 m sopra un punto copiato dal viewer o dagli script Lua "
+    "desc.camera_paste": ("La camera 1,6 m sopra un punto copiato dal viewer o da uno script Lua "
                           "(una riga con X = … Y = … Z = …, in unità del gioco), guardando dove guarda adesso.",
-                          "The camera 1.6 m above a point copied by the viewer or by the Lua scripts "
+                          "The camera 1.6 m above a point copied by the viewer or by a Lua script "
                           "(a line with X = … Y = … Z = …, in game units), looking where it looks now."),
     "camera.paste.none": ("niente punto negli appunti", "no point in the clipboard"),
     "camera.paste.other": ("il punto è di {n}", "the point is of {n}"),
@@ -831,6 +830,68 @@ TEXTS: dict[str, tuple[str, str]] = {
     "pad.right_stick_does": ("Guarda. Pressione: nessuna funzione", "Look around. Press: no function"),
     "pad.nothing": ("Nessuna funzione", "No function"),
 
+    # Export
+    "level.export": ("Esporta", "Export"),
+    "desc.export": ("Le texture e il 3D di questo livello, o le texture di tutto il gioco, "
+                    "in una cartella per livello.",
+                    "The textures and the 3D of this level, or the textures of the whole game, "
+                    "in a folder per level."),
+    "export.title": ("Esporta — {level}", "Export — {level}"),
+    "export.folder": ("Cartella", "Folder"),
+    "export.textures": ("Esporta le texture di questo livello", "Export the textures of this level"),
+    "desc.export.textures": ("Un PNG per texture coi colori del disco, il foglio con tutte e "
+                             "l'indice. Pochi secondi.",
+                             "One PNG per texture with the disc's colours, the sheet with all of "
+                             "them and the index. A few seconds."),
+    "export.all": ("Esporta le texture di tutto il gioco", "Export the textures of the whole game"),
+    "desc.export.all": ("Tutto il disco: i 52 livelli, gli Extra e le schermate di caricamento, "
+                        "in sottofondo. Il viewer resta usabile, il riquadro in alto dice a che "
+                        "punto e'. Chiudendo il viewer si ferma, i livelli finiti restano.",
+                        "The whole disc: the 52 levels, the Extra files and the loading screens, in "
+                        "the background. The viewer stays usable, the panel at the top shows the "
+                        "progress. Closing the viewer stops it, the finished levels stay."),
+    "export.obj": ("Esporta questo livello in 3D (OBJ)", "Export this level in 3D (OBJ)"),
+    "desc.export.obj": ("Il livello come lo apre il gioco, senza flag ne' opzioni: terreno, "
+                        "oggetti e Bugs nella posa di partenza, il cielo a parte, la collisione "
+                        "com'e' nel file.",
+                        "The level as the game opens it, no flag, no option: terrain, objects "
+                        "and Bugs in their starting pose, the sky apart, the collision as the "
+                        "file has it."),
+    "export.open": ("Apri la cartella dell'export", "Open the export folder"),
+    # the panel (window/export_panel.py)
+    "export.panel.levels": ("Texture: livello {n} di {total}{eta}.", "Textures: level {n} of {total}{eta}."),
+    "export.panel.extra": ("Texture degli Extra: {n} di {total}{eta}.", "Textures of the Extra files: {n} of {total}{eta}."),
+    "export.panel.loading": ("Schermate di caricamento: {n} di {total}{eta}.",
+                             "Loading screens: {n} of {total}{eta}."),
+    "export.panel.eta": (", circa {t} rimasti", ", about {t} left"),
+    "export.panel.one": ("Esportazione di {level}…", "Exporting {level}…"),
+    "export.panel.keep": ("Puoi continuare a usare il viewer. Non chiuderlo: l'export si fermerebbe.",
+                          "You can keep using the viewer. Do not close it: the export would stop."),
+    "export.panel.from": ("da: {folder}", "from: {folder}"),
+    "export.done.one": ("Export finito: {level}.", "Export done: {level}."),
+    "export.done.all": ("Export finito: {n} livelli.", "Export done: {n} levels."),
+    "export.done.some": ("Export finito: {n} livelli su {total}. Quelli saltati sono elencati in info.txt.",
+                         "Export done: {n} levels of {total}. The ones skipped are listed in info.txt."),
+    "export.done.except": ("Export finito, tranne {file}: è aperto in un altro programma.",
+                           "Export done, except {file}: it is open in another program."),
+    "export.done.except_many": ("Export finito, tranne {n} file: sono aperti in un altro programma.",
+                                "Export done, except {n} files: they are open in another program."),
+    "export.fail.disk": ("Export non riuscito: spazio su disco esaurito.", "Export failed: the disk is full."),
+    "export.fail.folder": ("Export non riuscito: non si può scrivere in {folder}.",
+                           "Export failed: cannot write in {folder}."),
+    "export.fail.other": ("Export non riuscito (dettagli in errors.txt).", "Export failed (details in errors.txt)."),
+    "export.busy": ("Un export è già in corso in un'altra finestra del viewer.",
+                    "An export is already running in another window of the viewer."),
+    "export.open_folder": ("Apri la cartella", "Open the folder"),
+    "export.close": ("Chiudi", "Close"),
+    # closing the viewer during an export
+    "quit.export_all": ("Export in corso (livello {n} di {total})", "Export running (level {n} of {total})"),
+    "quit.export_one": ("Export in corso ({level})", "Export running ({level})"),
+    "quit.stops": ("Chiudendo si ferma: i livelli finiti restano.", "Closing stops it: the finished levels stay."),
+    "quit.ask": ("Chiudere?", "Close?"),
+    "desc.export.open": ("Quella di questo livello se c'e' gia', altrimenti quella di tutti.",
+                         "This level's if it exists already, otherwise the one of all levels."),
+
     # Camera and points
     "level.camera": ("Camera e punti", "Camera and points"),
     "desc.camera": ("Segnalibri di camera di questo livello e il punto ombra da copiare.",
@@ -859,10 +920,10 @@ TEXTS: dict[str, tuple[str, str]] = {
                         "questo livello.",
                         "Saves the camera's position and direction in the settings, for this level."),
     "camera.copy_lua": ("Copia il punto per BizHawk (Lua)", "Copy the point for BizHawk (Lua)"),
-    "desc.copy_lua": ("Negli appunti una voce di tabella Lua { X = …, Y = …, Z = … }, come i "
-                      "waypoint di BBLIT_Tasing.lua.",
-                      "Puts a Lua table entry { X = …, Y = …, Z = … } on the clipboard, like the "
-                      "waypoints of BBLIT_Tasing.lua."),
+    "desc.copy_lua": ("Negli appunti una voce di tabella Lua { X = …, Y = …, Z = … }, per uno "
+                      "script di BizHawk.",
+                      "Puts a Lua table entry { X = …, Y = …, Z = … } on the clipboard, for a "
+                      "BizHawk script."),
     "camera.copy_all_lua": ("Copia tutti i segnalibri per BizHawk", "Copy every bookmark for BizHawk"),
     "desc.copy_all_lua": ("Negli appunti una tabella Lua con il punto ombra di ogni segnalibro "
                           "di questo livello.",

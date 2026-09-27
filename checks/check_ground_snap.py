@@ -5,7 +5,7 @@ put them where the game does?
 
 A type 14 object whose starting step has neither 0x1 nor 0x80000000 in its
 control dword stands on the collision ground of its area at every tick; its
-file height means nothing. The reverse engineering project's survey (the
+file height means nothing. A survey of the disc (finding 340; the
 cutscenes and the `_8` files left out) found 158 such objects, 24 of them more than 30 units from their ground.
 
 This opens every level as the viewer does (`scene.Level`, which calls
@@ -15,7 +15,7 @@ no other object moved.
 
 Bar fixed before the change: 0 settling objects more
 than 30 units from their ground, and 0 other objects moved. Before the
-change: 24 of them (the reverse's list). Exits with 1 otherwise.
+change: 24 of them (the list of finding 340). Exits with 1 otherwise.
 """
 import os
 import sys

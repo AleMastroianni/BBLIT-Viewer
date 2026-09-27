@@ -10,7 +10,7 @@ Sets, not lists: a run on the edge two stacked blocks share is now one
 piece per block, floor to ceiling (the pieces pile up with their true
 limits), where the old code drew one panel from the ground.
 
-Result: old code at 02a4307, new code with the walls on the game's faces,
+Result: the old code against the new one with the walls on the game's faces,
 79 levels, 0 with a difference; 29 365 invisible
 hard-wall runs and 70 240 step runs on both sides.
 """

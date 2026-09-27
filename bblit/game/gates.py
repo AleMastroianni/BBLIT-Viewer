@@ -10,12 +10,10 @@ and "opening" it means playing the state where its box goes away or shrinks.
 **Who opens it** comes from the rules: a rule that moves the object to that
 state waits on a level byte (`0x4b2260[i]`) or on a save byte
 (`config+0x10040[i]`), and another object's rule writes that byte (finding
-316). The reverse project's `keys.md` walks the same chain up to three steps;
-here one step is enough to say "gate 37 is opened by object 78", which is what
-the viewer writes on the box and draws a line for.
+316). Here one step of that chain is enough to say "gate 37 is opened by
+object 78", which is what the viewer writes on the box and draws a line for.
 
-Read from the data, the same way the reverse engineering project reads its
-list of keys.
+Read from the data.
 """
 
 from __future__ import annotations
@@ -28,16 +26,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from game import hazards  # noqa: E402
 
 # Which condition codes read a byte and which action codes write one, and what
-# each of them means: the whole vocabulary of the disc, as the reverse project
-# read it in the code (finding 331). The viewer used to know two of the
+# each of them means: the whole vocabulary of the disc, as read in the code
+# (finding 331). The viewer used to know two of the
 # thirteen actions that write a level byte, and then missed, for example, the
 # switch of *The Planet X File! 5* (`L05A5`), which writes byte 206 with
 # action 0x03.
 LEVEL_BYTE_TESTS = {0x01, 0x25, 0x03, 0x05, 0x07, 0x09, 0x46, 0x47, 0x1E, 0x27,
                     0x0F, 0x3D, 0x3F, 0x41, 0x43}
 SAVE_BYTE_TESTS = {0x02, 0x26, 0x04, 0x06, 0x08, 0x0A, 0x59, 0x1F, 0x28, 0x10, 0x3E, 0x40}
-# a test between two bytes says nothing about a single writer: left out, as the
-# reverse project's list does
+# a test between two bytes says nothing about a single writer: left out
 BYTE_TO_BYTE = {0x0F, 0x3D, 0x3F, 0x41, 0x43, 0x10, 0x3E, 0x40}
 LEVEL_BYTE_WRITES = {0x03, 0x05, 0x07, 0x0B, 0x0D, 0x12, 0x0F, 0x14, 0x16, 0x1C, 0x24,
                      0x27, 0x2D}
@@ -57,8 +54,7 @@ BIT_TESTS_CLEAR = {0x27, 0x28}
 
 def passes(test, operand, value) -> bool:
     """Does the byte `value` pass condition `test` with operand `operand`?
-    (The unsigned forms; the signed ones are taken as unsigned, as the reverse
-    project's list does.)"""
+    (The unsigned forms; the signed ones are taken as unsigned.)"""
     if test in (0x01, 0x02):
         return value == operand
     if test in (0x25, 0x26):
@@ -137,8 +133,8 @@ def writers(lvl) -> dict[tuple[str, int], list[tuple[int, int, int]]]:
 
 
 def _fits(test, operand, code, written) -> bool:
-    """Can this write make that test true? (The reverse project's `fits`,
-    finding 331.) Writing a value is checked against the test; an OR can only
+    """Can this write make that test true? (Finding 331.)
+    Writing a value is checked against the test; an OR can only
     set bits and an AND can only clear them; increments, copies and random
     values always fit, because what they leave behind is not known here."""
     if code in WRITES_VALUE:
@@ -237,8 +233,7 @@ def gates_of(lvl) -> list[dict]:
     moves the gate INTO that state waits on -- one step, the last one. A gate
     that opens in two steps (*Follow the Red Pirate Road* (`L03D1`) object 35
     goes from 1 to 314 on a level byte and only then to 172) has the writers of
-    its last step here, and the reverse project's `keys.md` is where the whole
-    chain is written out.
+    its last step here; the steps before it are not followed.
     """
     who = writers(lvl)
     found = []
@@ -367,7 +362,7 @@ def open_and_closed(sec4, res, gate, cache=None) -> tuple[int | None, int | None
 
 def groups_of(lvl, found=None) -> dict[int, list[int]]:
     """{switch object number: [gate numbers]}: the gates that the same object
-    opens, which is the grouping the reverse project's `keys.md` shows. A gate
+    opens. A gate
     nothing opens, or one whose switch opens only it, is not in a group: the
     level's own entry covers it.
     """

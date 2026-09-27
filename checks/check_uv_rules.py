@@ -62,7 +62,9 @@ def drawn(rule, measure, u, v):
 
 
 # the texture sizes really on the disc, from the levels asked for
-names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 sizes = set()
 for name in names:
     path = os.path.join(paths.DATA_BZE, name + ".bze")

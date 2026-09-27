@@ -61,7 +61,7 @@ def start_step(obj: dict | None) -> dict | None:
 def playlist(obj: dict | None, state_number: int) -> tuple[list[int], bool]:
     """The roles a state plays one after the other (its slots, in order), and
     whether the last one holds on its last frame (play word 0x802, "once and
-    hold": the reverse's N74, the step never ends). ([], False) when the
+    hold": finding 367, the step never ends). ([], False) when the
     object has no such state."""
     if obj is None:
         return [], False

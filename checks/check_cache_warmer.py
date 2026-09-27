@@ -5,7 +5,7 @@
 In a temporary cache:
 1. with a parent that no longer exists it builds nothing;
 2. launched as the viewer launches it (its own process, low priority), it
-   saves every menu level of the folder (or the ones given) and exits;
+   saves the 52 levels you play (or the files given) and exits;
 3. every level rebuilt from those files is identical, group by group, to
    the same level built from scratch with the flags off (as the viewer opens
    it), with the fingerprint of check_level_cache.py;
@@ -21,7 +21,6 @@ import time
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "bblit"))
 os.chdir(PROJECT_DIR)
-from ui import settings as settings_mod  # noqa: E402
 from support import cache_warmer  # noqa: E402
 from support import level_cache  # noqa: E402
 from support import paths  # noqa: E402
@@ -39,25 +38,24 @@ def fingerprint(built_level):
 
 errors = 0
 wanted = {n.upper() for n in sys.argv[1:]}
-# what the warmer builds in this kind of copy: the Extra files only in Debug,
-# where the menu lists them (cache_warmer.run)
-EXTRA = settings_mod.build() == "Debug"
-all_files = cache_warmer.order(paths.DATA_BZE, extra=EXTRA)
+# the 52 levels you play, or the files named: the warmer builds the Extra
+# files too, after the levels, but they never enter a round over all the
+# levels; the warmer does the same work on any file, so it runs on a folder
+# that holds only these
+all_files = cache_warmer.order(paths.DATA_BZE, extra=bool(wanted))
 files = [f for f in all_files if not wanted or os.path.splitext(os.path.basename(f))[0].upper() in wanted]
 with tempfile.TemporaryDirectory() as tmp:
-    folder = paths.DATA_BZE
-    if wanted:
-        # a folder with only the chosen levels (hard links, or copies)
-        folder = os.path.join(tmp, "bze")
-        os.makedirs(folder)
-        for f in files:
-            target = os.path.join(folder, os.path.basename(f))
-            try:
-                os.link(f, target)
-            except OSError:
-                import shutil
-                shutil.copy2(f, target)
-        files = cache_warmer.order(folder, extra=EXTRA)
+    # a folder with only those files (hard links, or copies)
+    folder = os.path.join(tmp, "bze")
+    os.makedirs(folder)
+    for f in files:
+        target = os.path.join(folder, os.path.basename(f))
+        try:
+            os.link(f, target)
+        except OSError:
+            import shutil
+            shutil.copy2(f, target)
+    files = cache_warmer.order(folder, extra=True)
     cache = os.path.join(tmp, "cache")
 
     # 1. a dead parent: nothing is built

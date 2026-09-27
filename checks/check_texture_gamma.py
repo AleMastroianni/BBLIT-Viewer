@@ -5,7 +5,7 @@
 
 The game runs every colour of every texture through
 c' = int(256 * (c/256) ** (1/1.2)) when it loads it, and leaves the vertex
-colours alone. That the game really does it was measured by the reverse on
+colours alone. That the game really does it was measured on
 screenshots of the PC game (finding 310: on the galleon's hull the exponent
 comes out 0.856, against 1.011 on the same measurement of the viewer
 without the gamma). This check is about the viewer doing it right:
@@ -57,7 +57,9 @@ probe("no colour is ever darkened, and the dark ones are lifted the most",
       and tim.GAMMA_TABLE[32] - 32 > tim.GAMMA_TABLE[200] - 200)
 
 # ------------------------------------------------- every texture on the disc
-names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 n_textures = 0
 alpha_kept = True
 sum_before = sum_after = 0.0

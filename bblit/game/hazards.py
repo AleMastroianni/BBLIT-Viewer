@@ -2,10 +2,10 @@
 
 Being dangerous is a property of the step an object is in, not of the object:
 the control dword of a step (opcode `0x30`, payload +12) says how it hurts,
-and the word +22 says by how much. The same reading as the reverse
-engineering project's list of hazards (its note N17): 346 placed objects on the
-disc have a dangerous step, only 98 in the state they start in (pirates and
-crabs hurt while they attack, not while they patrol).
+and the word +22 says by how much. The same reading as finding 318:
+346 placed objects on the disc have a dangerous step, only 98 in the state
+they start in (pirates and crabs hurt while they attack, not while they
+patrol).
 
 The viewer uses it for the red outline of the flag Collision boxes: bright red
 when the object is dangerous in the state that is being shown, dark red when it

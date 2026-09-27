@@ -38,7 +38,7 @@ from ui.texts import t  # noqa: E402
 
 FLOATS = 8          # floats per vertex in a group's buffer
 SAME_PIXEL = 6      # clicking within this many pixels means "the same spot"
-# how high Bugs gets from standing (the reverse's figure): a rise he can
+# how high Bugs gets from standing (finding 364): a rise he can
 # clear is a step, one he cannot is a wall
 JUMP = collision.JUMP_HEIGHT
 

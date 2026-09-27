@@ -1,6 +1,6 @@
 """Camera and points: where the camera is in game
 units, where Bugs would land under it (the shadow point), the bookmarks of
-a level and the lines copied for memory tools and BizHawk.
+a level and the lines copied for BizHawk.
 
 `Points` is that part of the viewer window (`app.Viewer` inherits it).
 """
@@ -22,9 +22,9 @@ from pyglet.math import Vec3  # noqa: E402
 from ui.texts import t  # noqa: E402
 
 try:
-    from support import private_export  # noqa: E402  (private copies only: left out of the public version)
+    from support import local_export  # noqa: E402  (an optional module, not in this repository)
 except ImportError:
-    private_export = None
+    local_export = None
 
 
 class Points:
@@ -148,7 +148,7 @@ class Points:
 
     def _go_to_clipboard_point(self):
         """Camera and points -> Go to the point in the clipboard: the camera
-        1.6 m above a point copied by the viewer (or by the Lua scripts),
+        1.6 m above a point copied by the viewer (or by a Lua script),
         looking the same way. A point of another level is said, not used."""
         try:
             text = self.get_clipboard_text() or ""
@@ -189,15 +189,15 @@ class Points:
         self.menu.rebuild()
 
     def _point_text(self, kind, pos, label):
-        """One point for the clipboard. `kind` "lua": a table entry like the
-        waypoints of BBLIT_Tasing.lua; "private": the line of private_export.
+        """One point for the clipboard. `kind` "lua": a Lua table entry
+        { X = …, Y = …, Z = … }; "local": the line of the optional module.
         The shadow point in game units; with nothing under the camera, the
         camera point, said in the comment."""
         (x, y, z), grid_block = self._shadow_of(pos)
         note = t("export.shadow") if grid_block is not None else t("export.camera_no_ground")
         level = self.current_level.name
-        if kind == "private":
-            return private_export.line(level, (x, y, z), label, note)
+        if kind == "local":
+            return local_export.line(level, (x, y, z), label, note)
         return f"{{ X = {x}, Y = {y}, Z = {z} }}, -- BBLIT {level}, {label}, {note}"
 
     def _all_bookmarks_lua(self):

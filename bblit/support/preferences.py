@@ -88,7 +88,13 @@ PREFERENCES = {
 }
 
 
+def none() -> dict:
+    """No choice at all: every object in the role the game starts it in
+    (the export, support/export.py)."""
+    return {"pose": {}, "always_cloned": set(), "table1": {}, "entity_groups": [], "sky": None}
+
+
 def for_level(name: str) -> dict:
-    pref = {"pose": {}, "always_cloned": set(), "table1": {}, "entity_groups": [], "sky": None}
+    pref = none()
     pref.update(PREFERENCES.get(name.upper(), {}))
     return pref

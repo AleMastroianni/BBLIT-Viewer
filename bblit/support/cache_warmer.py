@@ -24,10 +24,9 @@ from game import levels
 
 
 def order(folder: str, extra: bool = True) -> list[str]:
-    """The .bze files of the folder that the menu opens, in menu order.
-    Without `extra` the Extra files (cutscenes, menu, credits, `_8`
-    variants) are left out: only the Debug build's menu lists them, and the
-    other copies would build and save 24 files nobody opens."""
+    """The .bze files of the folder that the menu opens, in menu order:
+    the 52 levels first, the Extra files (cutscenes, menu, credits, `_8`
+    variants) after them. Without `extra` those are left out."""
     try:
         on_disc = {os.path.splitext(f)[0].upper(): os.path.join(folder, f)
                    for f in os.listdir(folder) if f.lower().endswith(".bze")}
@@ -66,9 +65,9 @@ def parent_alive(pid: int | None) -> bool:
 
 def run(folder: str, cache: str, parent_pid: int | None = None) -> None:
     from game import textures as texmod
-    from ui import settings as settings_mod
     from viewer import Level
-    for file_path in order(folder, extra=settings_mod.build() == "Debug"):
+    # every build lists the Extra files: they are built too, after the levels
+    for file_path in order(folder, extra=True):
         if not parent_alive(parent_pid):
             return
         name = os.path.splitext(os.path.basename(file_path))[0]

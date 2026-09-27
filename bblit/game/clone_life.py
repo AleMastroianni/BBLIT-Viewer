@@ -3,8 +3,8 @@
 A template (block 0x08) becomes a live object when a rule of a live object
 clones it (effect 0x100 or 0x40000, the template's id in field +28: Ombelll's
 finding 194; 274 and 279). Whether that rule ever fires by itself is what
-this module reads, the way the engine walks the rules (the reverse's notes
-N10-N13, N20, N30):
+this module reads, the way the engine walks the rules (findings 308-315,
+321 and 329):
 
 * a **type 14** object walks, every tick, the rules of the group of the step
   it is in; it starts in state 2 (else 1), a state is a playlist of up to five
@@ -16,19 +16,19 @@ N10-N13, N20, N30):
 * a **type 16** trigger (and the other small handlers that carry rules) walks
   its whole list every tick; when a rule's condition is false, its word +6 is
   a skip label: 0 goes to the next rule, else the walk jumps forward to the
-  first rule whose key is that word (the reverse's N73 section 3; bit 4 of
+  first rule whose key is that word (finding 366; bit 4 of
   the second static flag word, "within 2000 of Bugs", does not gate the
   rules);
 * effect 0x10000 (third parameter not 1) deletes the object that fired; a step
   with control bit 4 deletes it at its end; types 31 (bullet) and 32 (text)
-  always end by themselves (N13a), a type 4 sprite with an 0x10000 rule after
+  always end by themselves (finding 315), a type 4 sprite with an 0x10000 rule after
   one cycle.
 
 What runs **by itself** is read without Bugs doing anything: Bugs stands where
 the level starts him, in his first series (the first slot of his start state:
-4 in the main levels, N74), nobody touches, hits, carries or presses
+4 in the main levels, finding 367), nobody touches, hits, carries or presses
 anything, the level bytes start at zero and the save bytes at a new game's
-(byte 0 = 3, 1 = 6, 2 = 6, 14 = 56: N74), and they take every value that the
+(byte 0 = 3, 1 = 6, 2 = 6, 14 = 56: finding 367), and they take every value that the
 rules able to fire by themselves write into them (a fixed point: the ride of Mine or
 mine? 3 is a trigger that writes byte 49 = 40 at its first tick, and each
 stretch writes the next number at the end of its animation). Time passes, so
@@ -72,7 +72,7 @@ HIT_BY_ID, SIDE_TEST = 0x2000, 0x20
 END_MARKER = 0xFFF0
 LOOP, ONCE_HOLD = 0x1, 0x802
 DELETED_AT_END = 0x4             # step control bit
-# the save bytes of a new game that are not 0 (the reverse's N74: the save
+# the save bytes of a new game that are not 0 (finding 367: the save
 # service's defaults; byte 16, the language, is left at 0)
 NEW_GAME = {0: 3, 1: 6, 2: 6, 14: 56}
 
@@ -114,7 +114,7 @@ _SAVE_WRITES = {0x04, 0x17, 0x06, 0x08, 0x0C, 0x0E, 0x13, 0x10, 0x15, 0x1B, 0x25
 _WORD_VALUE = {0x0F, 0x10, 0x14, 0x15, 0x16, 0x1B, 0x1C}
 # the actions that step a byte up or down: they can fire again and again
 _STEPS = {0x03, 0x05, 0x04, 0x17, 0x06, 0x16, 0x24, 0x25, 0x27, 0x28}
-# types whose handler ends the object by itself (N13a)
+# types whose handler ends the object by itself (finding 315)
 _SHORT_LIVED = {31, 32}
 
 
@@ -167,7 +167,7 @@ class Reading:
         self.bugs = tuple(player["position"]) if player else None
         self.bugs_area = player.get("area") if player else None
         # Bugs's series at the first tick: the key of the first slot of his
-        # start state (N74: 4 in the main levels); conditions 0x0c and 0x4e
+        # start state (finding 367: 4 in the main levels); conditions 0x0c and 0x4e
         self.bugs_series = _first_slot(player) if player else None
         self.tables = {"level": {}, "save": {i: {v} for i, v in NEW_GAME.items()}}
         # a template read as if cloned changes nothing (_actor_for)
@@ -299,8 +299,8 @@ class Reading:
 
     def _walk_list(self, actor, rules) -> bool:
         """A trigger's walk (and the other small handlers'): the whole list,
-        and when a rule's condition is false its word +6 is a skip label (N73
-        section 3). Read over every way through the list: a rule that may
+        and when a rule's condition is false its word +6 is a skip label
+        (finding 366). Read over every way through the list: a rule that may
         fail leads to its label (or the next rule), a rule that fires goes on
         only with 0x8000, and dies with 0x10000."""
         changed = False
@@ -339,7 +339,7 @@ class Reading:
         """The state a fired rule sends its object to, or None when it stays:
         with 0x8000 or 0x10 the state does not change (a "next" with 0x8000 is
         never applied), a rule that deletes its object ends there, and a
-        "next" of 0 is the first state stored in the object (N73 section 1)."""
+        "next" of 0 is the first state stored in the object (finding 366)."""
         effect = rule["effect"]
         if not actor.walker or effect & (GO_ON | STAYS | SIDE_TEST):
             return None
@@ -547,7 +547,7 @@ class Reading:
         if obj.get("category") in _SHORT_LIVED:
             actor.stays = False
         elif obj.get("category") == 14 and not actor.walker:
-            actor.stays = False           # no step left: deleted at its start (N13a)
+            actor.stays = False           # no step left: deleted at its start (finding 315)
         elif not actor.walker:
             actor.stays = self._rules_survive(actor, list(enumerate(obj.get("rules", ()))),
                                               None, set()) is not False

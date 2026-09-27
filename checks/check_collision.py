@@ -1,4 +1,4 @@
-"""The collision heightmap reader (tools/collision.py) against two things
+"""The collision heightmap reader (bblit/game/collision.py) against two things
 that share nothing with it.
 
     .venv/Scripts/python checks/check_collision.py [L03A ...]
@@ -45,7 +45,9 @@ def upward_face_center(vertices, vl, shift):
 
 
 rnd = random.Random(1)
-name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 record = shape_ok = 0
 diff, null_diffs = [], []
 n_outside_block = n_without_ground = 0

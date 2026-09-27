@@ -1,6 +1,6 @@
 """What is alive when a level has just loaded: the first tick of the level,
-run the way the engine runs it (the reverse's N73 and N74, its recipe of
-N74 section 3).
+run the way the engine runs it (findings 366 and 367, the recipe of
+367).
 
 - **The tables:** the 256 level bytes are zero; the save bytes are a new
   game's (byte 0 = 3, 1 = 6, 2 = 6, 14 = 56, the rest 0), or a save given
@@ -9,8 +9,8 @@ N74 section 3).
   first tick, in the order of the file; a type 14 starts in state 2 if it
   has one, else 1, in the first slot. The pass walks them in that order, and
   a clone born during the pass is appended to its end and runs its own first
-  tick in the same pass (N73 section 4).
-- **A type 14** walks the rules of its step's group in order (N73 section 2):
+  tick in the same pass (finding 366).
+- **A type 14** walks the rules of its step's group in order (finding 366):
   the masks (nothing has touched anything yet: a mask fails), the gates of
   the effect word (frame 0 has just begun: effect 0x40 passes when its frame
   is 0, the end of the animation 0x4 does not; a random draw is not taken
@@ -20,7 +20,7 @@ N74 section 3).
   effects (off its parent, a clone, a hanging on Bugs, a delete by id, its
   own death), then
   0x8000 goes on, 0x10 stops, anything else changes the state and stops.
-- **A type 16** walks its whole list, with the skip labels (N73 section 3).
+- **A type 16** walks its whole list, with the skip labels (finding 366).
 - **What is not done here:** the culling (every object runs, as they all do
   sooner or later under a free camera; the triggers run from tick 1 anyway),
   the handlers of the other types (4, 9, 31, 32, 34, 36: none of them clones
@@ -43,9 +43,9 @@ NEW_GAME = cl.NEW_GAME
 
 # the conditions on the tables, read on concrete values
 _LEVEL_TESTS, _SAVE_TESTS, _PAIR_TESTS = cl._LEVEL_TESTS, cl._SAVE_TESTS, cl._PAIR_TESTS
-# at the first tick: true whatever the tables (N74's table)
+# at the first tick: true whatever the tables (the table of finding 367)
 _TRUE = {0x00, 0x0B, 0x30, 0x4D, 0x35, 0x36, 0x0D, 0x45, 0x51, 0x5B}
-TARGETED = 0x400000 | 0x18000000 | 0x40000000   # the rule needs its target (N73 section 2.5)
+TARGETED = 0x400000 | 0x18000000 | 0x40000000   # the rule needs its target (finding 366)
 TAKES = 0x20000000
 DIES_TOO = 0x2000000
 DETACH = 0x8
@@ -137,7 +137,7 @@ class Startup:
         now = table[index]
         if act in (0x03, 0x04, 0x17):
             new = now + 1
-            if act == 0x17:             # also one on save byte [value] (N77)
+            if act == 0x17:             # also one on save byte [value] (finding 370)
                 self.save[value & 0xFF] = (self.save[value & 0xFF] + 1) & 0xFF
         elif act in (0x05, 0x06):
             new = now - 1
@@ -213,7 +213,7 @@ class Startup:
         object died."""
         effect = rule["effect"]
         self._act(live, rule)
-        if effect & DETACH:             # first of the effects: off its parent (N73 section 2.7)
+        if effect & DETACH:             # first of the effects: off its parent (finding 366)
             live.on_bugs = False
         if effect & cl.SENDS and target not in (None, "bugs"):
             target.state = rule["field24"]
@@ -226,7 +226,7 @@ class Startup:
                 clone.on_bugs = bool(effect & 0x80 and effect & 0x1000)
                 self.chain.append(clone)
         elif effect & 0x1000 and not effect & TAKES:
-            live.on_bugs = True         # the object itself hangs from Bugs (N76), at his root
+            live.on_bugs = True         # the object itself hangs from Bugs (finding 369), at his root
             if self.bugs is not None:
                 live.place, live.area = self.bugs, self.bugs_area
         if effect & cl.DELETES_ID:

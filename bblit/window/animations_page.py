@@ -165,7 +165,7 @@ class AnimationsPage:
         self.load_level(path, camera=False)
 
     def _anim_choose_in_set(self) -> bool:
-        """Where the game keeps one alive at a time (N75: Nowhere's helpers),
+        """Where the game keeps one alive at a time (finding 368: Nowhere's helpers),
         choosing an exemplar is choosing which one is alive: it is shown,
         the others of its set are not built. True when that changed."""
         e = self._anim_exemplar()
@@ -474,6 +474,7 @@ class AnimationsPage:
         items.append(flow)
         frames = _Which("anim.frame", lambda: self._anim_frame_now(e) + 1,
                         lambda k: self._anim_set_frame(e, k), self._anim_frames(e), desc="desc.anim_frame")
+        frames.live = True          # it moves while the animation plays
         items.append(frames)
         return items
 

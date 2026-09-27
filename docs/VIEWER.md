@@ -123,8 +123,8 @@ what they do.
 
 | page | what it is for |
 |---|---|
-| Load level | choosing a level: by era, then by title and part (the full name, the LevID and the file are in the description), Nowhere on its own, and under **Extra** the Era selector (`LS01`) and the `_8` variants that are on the disc but not in the game's level table |
-| Level options | what the open level shows and how: textures, objects, sky and animations, the objects the game adds or moves, the overlays of **Flags** (below), the bookmarks and the points to copy of **Camera and points**, and the gates or group states where the level has them |
+| Load level | choosing a level: under **Eras** the Era selector (`LS01`), then by era, by title and part (the full name, the LevID and the file are in the description), Nowhere on its own, and under **Extra** what the game has but you do not play: the menu, the credits, the 16 cutscenes, and the nine `_8` variants (the 256-colour versions of nine levels, on the disc but not in the game's level table). The Extra files without Bugs open from a camera chosen to see the scene well, not the film's camera |
+| Level options | what the open level shows and how: textures, objects, sky and animations, the objects the game adds or moves, the overlays of **Flags** (below), the bookmarks and the points to copy of **Camera and points**, the files of **Export** (below), and the gates or group states where the level has them |
 | Video options | how the picture is made, in three groups: the screen, the textures, and the choices that imitate the game (among them **Texture coordinates**, below) |
 | General options | the language, where the levels are read from, the cache, the gamepad and its drawn controls |
 | Help | the keys and the gamepad drawn, and the version |
@@ -162,6 +162,64 @@ alternatives (`entity_groups`); at present only `L03A` has them: drawbridges
 (raised, one third, two thirds, lowered), barrels in the water (rising,
 floating) and green crates (falling, on the ground). A state chosen in the
 menu rebuilds the level and lasts for the session only.
+
+**Export** (Level options → Export). Four entries: the textures of this
+level; the textures of the whole disc; this level in 3D; the export folder.
+One export at a time, also across two windows of the viewer; while it runs
+the three exports are grey, and a panel at the top of the window, over the
+menu, shows the progress with the time left and says that closing the
+viewer would stop it; the viewer stays usable. At the end the panel says
+what was done, with **Open the folder** and **Close** (mouse only). Closing
+the viewer during an export asks first (No selected); closed, the export
+stops between two files and what is finished stays.
+
+Everything goes to `Export\` next to the settings file (see Settings and
+cache), in four folders; the names inside are in English:
+
+| folder | what it holds |
+|---|---|
+| `Levels\<era>\<level>\3D_and_tex\` | the 52 levels, by era as in Load level (the Era selector under `Eras`) |
+| `Extra\Cutscenes\`, `Extra\Menu and credits\`, `Extra\256-colour versions\` | the files of the Extra page, one folder each as a level |
+| `Loading screens\<group>\`, `Loading screens\Other\` | one PNG per loading-screen file, named after it; the six versions of a screen (`_0` to `_5`) carry its title in six languages |
+| `Whole game\` | `unique\` (every different image once), `index.csv` (every texture, with the file it comes from) and `info.txt` (what was exported, missing, unreadable) |
+
+One folder per level, so moving it never breaks the links between the
+model and its images:
+
+| file | what it is |
+|---|---|
+| `t<id>.png` | one per texture slot of the level: the disc's colours straight from the TIM, the see-through texels kept as transparency; an animated texture comes out as its slots |
+| `sky_textures\` | a copy of the textures the level's sky draws |
+| `sheet.png` | every texture small with its number under it, the sky's marked SKY |
+| `index.csv` | id, size, see-through texels, sky |
+| `level.obj`, `level.mtl` | the level as the game opens it (below); the MTL points at the PNGs in the same folder |
+| `sky.obj`, `sky.mtl` | the sky the level starts with (in the game it follows the camera) |
+| `collision.obj` | the collision heightmap as the file has it (below) |
+| `info.txt` | the level, the viewer's version, the date, what is included |
+
+The 3D export is the same whatever is on screen: it follows no flag, no
+option and no state chosen in the menu. It is the level as the game opens
+it: the terrain (`terrain_<n>`) and the objects the file places
+(`obj<number>`, with the name of the Animations page when it has one), each
+in the role and pose the game starts it in, the gates in the game's starting
+state, Bugs as the group `Bugs` at his starting point; no cloned template
+but the sky, which many levels clone. Where two skies take turns and
+neither is there at the start (The Carrot-henge Mystery 3), there is no
+`sky.obj`. Vertex colours kept, metres, Y up. `collision.obj` has one flat
+square per 40-unit sub-cell with ground, at its height, none where the game
+says "no ground" (`0x7E`, `0x7F`), one group per block (`block_<n>`), no
+class of wall or step. A file that would be empty is not written.
+
+Exporting again first deletes the files the export writes in that folder
+(and only those: a file of yours stays), then writes them again. A file
+another program holds open is skipped and named at the end. A full disk, a
+folder that cannot be written or a path too long stop the export with their
+own sentence; any other error is written to `errors.txt`. Fifteen loading
+screens (`L_Pload_*`, `L_Thall_*`, `Screen1`-`Screen3`) are a few bytes
+shorter on the disc than their picture: their last pixels (1 to 10) come
+out see-through, and `info.txt` lists them. Not exported for now: the
+objects' collision boxes, the zones, the upscaled textures of Texture
+scale.
 
 **Status bar** (bottom): level, position in game units and in metres (these
 are the `x,y,z` of `--camera`), camera speed, triangles drawn, animation state
@@ -312,6 +370,8 @@ release, raise it there.
 | `tim.py` | PlayStation TIM textures -> PNG |
 | `textures.py` | the texture table: registered slots and animated slots (finding 275) |
 | `obj_export.py` | terrain and props -> OBJ + MTL, in metres and Y up |
+| `obj_writer.py` | writes the OBJ + MTL files, for `obj_export.py` and for Export |
+| `export.py` | Level options → Export: the textures and the 3D of a level, in a process of its own |
 | `render_obj.py` | renders an OBJ to PNG with no graphics engine, to check the data |
 | `model_sheet.py` | contact sheet of a level's models |
 | `rig.py` | `0x50` streams: rig, poses, parent chain (finding 261) |
@@ -327,7 +387,8 @@ release, raise it there.
 | `cache_warmer.py` | fills the piece cache in the background at launch |
 | `menu.py`, `texts.py`, `settings.py`, `paths.py` | menu engine, interface texts (English and Italian), saved settings, data folders |
 
-All tools write PNG files by hand with `zlib`: no image library is needed.
+The command-line tools write PNG files by hand with `zlib`: no image library
+is needed.
 Tools that take a `--data` option default to `BBLIT_DATA`; their cache is
 `extracted` in the current directory.
 
@@ -337,7 +398,7 @@ Tools that take a `--data` option default to `BBLIT_DATA`; their cache is
 python bblit/game/bze.py "C:/Games/Lost in Time/Datas/bze/L03A.bze" -o extracted/L03A
 python bblit/game/loadscript.py extracted/L03A/L03A_id01.bin --json extracted/L03A/l03a.json
 python bblit/game/tim.py extracted/L03A/L03A_id03.bin extracted/L03A/l03a.json -o out/L03A/textures
-python bblit/game/geometry.py extracted/L03A/L03A_id04.bin extracted/L03A/l03a.json --section3 extracted/L03A/L03A_id03.bin -o out/L03A/L03A.obj
+python tools/obj_export.py extracted/L03A/L03A_id04.bin extracted/L03A/l03a.json --section3 extracted/L03A/L03A_id03.bin -o out/L03A/L03A.obj
 python tools/render_obj.py out/L03A/L03A.obj -o out/L03A/check.png --textures out/L03A/textures
 python tools/model_sheet.py extracted/L03A -o out/L03A/models.png --assemble
 ```
@@ -393,8 +454,9 @@ converted system; the "game" values are the original units.
 
 ## What is verified, and with what proof
 
-Findings 256-288 are in [FORMAT_NOTES.md](FORMAT_NOTES.md). Lower numbers and
-the format documents are Ombelll's:
+Findings 256-374 are in
+[BBLIT Findings](https://github.com/AleMastroianni/BBLIT-Findings). Lower
+numbers and the format documents are Ombelll's:
 <https://github.com/Ombelll/Bugs-bunny-lost-in-time-reverse-engineered>.
 Figures are for `L03A` unless stated.
 

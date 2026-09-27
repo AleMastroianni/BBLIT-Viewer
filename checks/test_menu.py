@@ -9,6 +9,7 @@ era, Extra and Era selector, drawing of every page. Does not call app.run.
 """
 import os
 import sys
+import time
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_DIR, "bblit"))
@@ -22,11 +23,12 @@ from ui import settings as settings_mod
 from ui import menu as menumod
 from ui import texts
 import viewer
+from game import levels  # noqa: E402
 
 try:
-    from support import private_export
+    from support import local_export
 except ImportError:
-    private_export = None
+    local_export = None
 
 k = pyglet.window.key
 file_paths = [os.path.join(paths.DATA_BZE, f) for f in ("L03A.bze", "L03A2.bze", "CC3A.bze", "LS01.bze")]
@@ -248,12 +250,10 @@ press(k.ESCAPE)
 v.menu.stack[-1][2] = 1
 press(k.ENTER)
 era_labels = [x.label() for x in v.menu.stack[-1][1]]
-# Extra (the cutscenes, the `_8` variants) is in the Debug build only: the
-# other copies hide it on purpose, and there the Extra probes are skipped
-debug_build = v.build == "Debug"
-probe("Load level: Ere first, the five eras, Nowhere below Dimensione X, then Extra (Debug build only)",
+# Extra (the cutscenes, the menu, the credits, the `_8` variants) is in every build
+probe("Load level: Ere first, the five eras, Nowhere below Dimensione X, then Extra",
       era_labels[:7] == ["Ere", "Età della pietra", "Medioevo", "Pirati", "Anni '30", "Dimensione X", "Nowhere"]
-      and ("Extra" in era_labels) == debug_build)
+      and "Extra" in era_labels)
 v.menu.stack[-1][2] = era_labels.index("Pirati")
 press(k.ENTER)
 menu_items = v.menu.stack[-1][1]
@@ -269,25 +269,34 @@ press(k.ESCAPE)
 probe("Esc closes it", not v.menu.is_open)
 press(k.ESCAPE)
 probe("Esc reopens where it was left (the main page)", v.menu.is_open and [x[0] for x in v.menu.stack] == ["main"])
-if debug_build:
-    v.menu.open_page("load")
-    v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
-    press(k.ENTER)
-    menu_items = v.menu.stack[-1][1]
-    page_labels = [x.label() for x in menu_items]
-    probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere (Debug build)",
-          "Nowhere" not in page_labels and "Era selector" not in page_labels
-          and "Vista d'insieme" not in page_labels and
-          "Filmati" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
-          and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
-    v.menu.stack[-1][2] = page_labels.index("Filmati")
-    press(k.ENTER)
-    menu_items = v.menu.stack[-1][1]
-    v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items)
-                               if x.selectable and x.value_text().startswith("CC3A"))
-    press(k.ENTER)
-    probe("Extra -> Cutscenes -> CC3A cutscene loaded, the menu on its main page",
-          v.current_level.name.upper() == "CC3A" and [x[0] for x in v.menu.stack] == ["main"])
+v.menu.open_page("load")
+v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Extra")
+press(k.ENTER)
+menu_items = v.menu.stack[-1][1]
+page_labels = [x.label() for x in menu_items]
+probe("Extra: _8 variants and Cutscenes, no Era selector and no Nowhere",
+      "Nowhere" not in page_labels and "Era selector" not in page_labels
+      and "Vista d'insieme" not in page_labels and
+      "Filmati" in page_labels and any((x.value_text() or "").startswith("L03A_8") for x in menu_items)
+      and not any(x.selectable and (x.value_text() or "")[:2] in ("CC", "TI", "CR") for x in menu_items))
+v.menu.stack[-1][2] = page_labels.index("Filmati")
+press(k.ENTER)
+menu_items = v.menu.stack[-1][1]
+v.menu.stack[-1][2] = next(i for i, x in enumerate(menu_items)
+                           if x.selectable and x.value_text().startswith("CC3A"))
+press(k.ENTER)
+probe("Extra -> Cutscenes -> CC3A cutscene loaded, the menu on its main page",
+      v.current_level.name.upper() == "CC3A" and [x[0] for x in v.menu.stack] == ["main"])
+# the public build too: the viewer told it is the Development copy
+build_now = v.build
+v.build = "Development"
+v.menu.show("main"); v.menu.open_page("load")
+public_labels = [x.label() for x in v.menu.stack[-1][1]]
+v.menu.open_page("extra")
+public_extra = [x.label() for x in v.menu.stack[-1][1]]
+probe("public build: Extra in Load level, Filmati in Extra",
+      "Extra" in public_labels and "Filmati" in public_extra)
+v.build = build_now
 v.menu.open_page("load")
 v.menu.stack[-1][2] = [x.label() for x in v.menu.stack[-1][1]].index("Ere")
 press(k.ENTER)
@@ -326,8 +335,8 @@ probe("Ere -> Medioevo with LS01 already open: only moves the camera",
 build = v.build
 v.build = "Portable"
 v.menu.show("main"); v.menu.open_page("extra")
-probe("in another build Extra does not show Cutscenes but keeps the _8 variants",
-      "Filmati" not in [x.label() for x in v.menu.stack[-1][1]]
+probe("in another build Extra shows Cutscenes and the _8 variants, as in Debug",
+      "Filmati" in [x.label() for x in v.menu.stack[-1][1]]
       and any((x.value_text() or "").startswith("L03A_8") for x in v.menu.stack[-1][1]))
 v.build = build
 
@@ -357,14 +366,14 @@ probe("Camera e punti: camera, shadow point, shadow off, no bookmarks yet",
       and not v.show_camera_shadow and "Nessun segnalibro" in labels)
 probe("the shadow point is the ground of the block under the camera",
       v._shadow_of(v.pos) == ((gx, g, gz), b) and menu_items[1].value_text().startswith(f"{gx}, {g}, {gz}"))
-if private_export is not None:      # the private copies only
-    v.menu.stack[-1][2] = labels.index(texts.t("camera.copy_ce"))
+if local_export is not None:      # only where the optional module is there
+    v.menu.stack[-1][2] = labels.index(texts.t("camera.copy_local"))
     press(k.ENTER)
     m = re.match(r"BBLIT L03A x=(-?\d+) y=(-?\d+) z=(-?\d+)", clipboard[-1] if clipboard else "")
-    probe("private copy: the line of private_export, with the shadow point",
+    probe("with the optional module: its line, with the shadow point",
           m is not None and tuple(int(w) for w in m.groups()) == (gx, g, gz))
 else:
-    probe("public copy: no private entry", texts.t("camera.copy_ce") == "camera.copy_ce")
+    probe("without the optional module: no such entry", texts.t("camera.copy_local") == "camera.copy_local")
 v.menu.stack[-1][2] = labels.index("Copia il punto per BizHawk (Lua)")
 press(k.ENTER)
 probe("copy for BizHawk: a Lua table entry, and 'copiato'",
@@ -452,6 +461,101 @@ except Exception as e:  # noqa: BLE001
     ok = False
 probe("the shadow circle draws", ok)
 v.show_camera_shadow = False
+
+# live rows: Camera and Shadow point follow the camera with nobody touching
+# the menu, and only their labels are redone (the page is not laid out again)
+v.menu.show("main"); v.menu.open_page("level"); v.menu.open_page("camera")
+v.on_draw()
+live = {x[0].label(): x for x in v.menu._live}
+batch = v.menu._batch
+before = live["Camera"][1].text
+v.pos = Vec3(v.pos.x + 3.0, v.pos.y, v.pos.z)
+v.on_draw()
+probe("Camera and Shadow point are live and follow the camera, the page not laid out again",
+      set(live) == {"Camera", "Punto ombra"} and live["Camera"][1].text != before
+      and live["Camera"][1].text == live["Camera"][0].value_text()
+      and live["Punto ombra"][1].text == live["Punto ombra"][0].value_text()
+      and v.menu._batch is batch)
+v.pos = Vec3(v.pos.x - 3.0, v.pos.y, v.pos.z)
+
+# Level options -> Export: the page, the panel and the question before
+# closing; no job started (a job would write to the user's Documents): the
+# process is a stand-in that says it is running
+v.menu.show("main"); v.menu.open_page("level")
+probe("Esporta is the third entry of Level options", v.menu.stack[-1][1][2].label() == "Esporta")
+v.menu.stack[-1][2] = 2
+press(k.ENTER)
+labels = [x.label() for x in v.menu.stack[-1][1]]
+probe("Esporta: folder, the three exports, open the folder, back",
+      v.menu.stack[-1][0] == "export" and labels == [
+          "Cartella", "Esporta le texture di questo livello", "Esporta le texture di tutto il gioco",
+          "Esporta questo livello in 3D (OBJ)", "Apri la cartella dell'export", "Indietro"])
+probe("nothing running: the exports can be chosen, no panel",
+      not any(x.disabled for x in v.menu.stack[-1][1][1:4]) and v.export_panel.content(v) is None)
+
+
+class Running:
+    def poll(self):
+        return None
+
+
+v._export_proc = Running()
+v.export_panel_closed = False
+v.export_status = {"job": "all", "state": "running", "phase": "level", "phase_done": 11, "phase_total": 52,
+                   "done": 11, "total": 251, "eta": 100, "source": v.folder}
+v.menu.rebuild()
+lines, fraction, finished = v.export_panel.content(v)
+probe("whole disc running: 'Texture: livello 12 di 52, circa 1 min 40 rimasti.' and the warning",
+      lines == ["Texture: livello 12 di 52, circa 1 min 40 rimasti.",
+                "Puoi continuare a usare il viewer. Non chiuderlo: l'export si fermerebbe."]
+      and abs(fraction - 11 / 251) < 1e-9 and not finished)
+v.menu.show("main"); v.menu.open_page("level"); v.menu.open_page("export")
+probe("while it runs the three exports are grey", all(x.disabled for x in v.menu.stack[-1][1][1:4]))
+v.on_draw()
+px, py, pw, ph = v.export_panel.rect
+mx, my, mw, mh = v.menu.drawn_rect
+probe("the panel is drawn and keeps clear of the menu", px >= mx + mw or py + ph <= my)
+v.export_status = dict(v.export_status, source=r"E:\other levels")
+probe("levels folder changed meanwhile: 'da: <folder>'",
+      v.export_panel.content(v)[0][1] == r"da: E:\other levels")
+v.menu.hide()
+v.on_close()
+probe("closing during the export asks first, No selected",
+      v.menu.is_open and v.menu.stack[-1][0] == "quit"
+      and v.menu.stack[-1][1][v.menu.stack[-1][2]].label() == "No"
+      and v.menu.pages["quit"].title_text() == "Export in corso (livello 12 di 52)")
+press(k.ENTER)
+probe("No: back, the window open", v.menu.stack[-1][0] != "quit" and not v.has_exit)
+v._export_proc = None
+v.export_status = {"job": "all", "state": "done", "counts": {"level": 52, "extra": 27, "loading": 172},
+                   "totals": {"level": 52, "extra": 27, "loading": 172}, "missing": {"level": 0, "extra": 0},
+                   "unreadable": 0, "folder": "x"}
+lines, fraction, finished = v.export_panel.content(v)
+probe("finished: 'Export finito: 52 livelli.', with its buttons", lines == ["Export finito: 52 livelli."] and finished)
+v.export_status["counts"]["level"] = 40
+v.export_status["missing"]["level"] = 12
+probe("some missing: 'Export finito: 40 livelli su 52. ...'",
+      v.export_panel.content(v)[0] == ["Export finito: 40 livelli su 52. Quelli saltati sono elencati in info.txt."])
+v.export_status = {"job": "3d", "state": "done", "level": "Hey... What's up, Dock? 1",
+                   "skipped": ["Levels/Pirate Years/x/3D_and_tex/level.obj"]}
+probe("a file open elsewhere: 'Export finito, tranne level.obj: ...'",
+      v.export_panel.content(v)[0] == ["Export finito, tranne level.obj: è aperto in un altro programma."])
+v.export_status["skipped"] = []
+probe("one level: its name, whatever level is open now",
+      v.export_panel.content(v)[0] == ["Export finito: Hey... What's up, Dock? 1."])
+for error, words in (("disk_full", "Export non riuscito: spazio su disco esaurito."),
+                     ("not_writable", r"Export non riuscito: non si può scrivere in E:\x."),
+                     ("other", "Export non riuscito (dettagli in errors.txt).")):
+    v.export_status = {"job": "3d", "state": "failed", "error": error, "where": r"E:\x"}
+    probe(f"failed ({error}): '{words}'", v.export_panel.content(v)[0] == [words])
+v.export_status = {"job": "all", "state": "busy"}
+probe("another window exporting: said", v.export_panel.content(v)[0] ==
+      ["Un export è già in corso in un'altra finestra del viewer."])
+v.on_draw()
+x0, y0, x1, y1, what = v.export_panel.buttons[1]
+v.on_mouse_press((x0 + x1) // 2, (y0 + y1) // 2, pyglet.window.mouse.LEFT, 0)
+probe("the panel's Chiudi closes it", what == "close" and v.export_panel.content(v) is None)
+v.export_status, v.export_panel_closed = None, False
 
 # Keys and gamepad: Help -> Keyboard / Gamepad
 from ui import keybinds  # noqa: E402
@@ -800,12 +904,12 @@ e = v._anim_exemplar()
 target = Vec3(*geo._transform((0, 0, 0), pos=catalogmod.place_of(cat, e))) + Vec3(0.0, 1.0, 0.0)
 probe("the selected thing is framed: the camera 6 m from the first helper's place, 1 m up",
       abs((v.pos - target).length() - 6.0) < 0.01)
-probe("a helper is not there at the start, and the why goes back to Merlin's sign (#58, zone 3: N75)",
+probe("a helper is not there at the start, and the why goes back to Merlin's sign (#58, zone 3: finding 368)",
       not e["at_start"] and "#58" in v._anim_why(e) and "zona 3" in v._anim_why(e))
-# step 3: where the game keeps one alive at a time (N75, trigger 101's
+# step 3: where the game keeps one alive at a time (finding 368, trigger 101's
 # helpers) choosing an exemplar shows it and hides the other two
 sets = catalogmod.one_at_a_time(cat)
-probe("Nowhere: one 'one at a time' set, trigger 101's three helpers (N75)",
+probe("Nowhere: one 'one at a time' set, trigger 101's three helpers (finding 368)",
       len(sets) == 1 and {r[0][0][1] for r in sets[0]} == {101} and len(sets[0]) == 3)
 second = next(i for i, x in enumerate(catalogmod.menu_families(cat, "characters")[helpers][1])
               if x["route"] == ((("placed", 101), 6),)) + 1
@@ -824,6 +928,19 @@ v._anim_set_frame(e, 10)
 probe("Frame 10: the helper is held on frame index 9", v.anim_holds.get(v._anim_key(e)) == 9)
 v._anim_set_flow(e, "loop")
 probe("How it runs -> loop: the hold goes", v._anim_key(e) not in v.anim_holds)
+# a live row: Frame moves while the animation plays, with nobody touching the
+# menu (it used to wait for the mouse), and only its label is redone
+v.fixed_tick = None
+v.menu.rebuild()
+v.on_draw()
+frame_row = next((x for x in v.menu._live if x[0].item_key == "anim.frame"), None)
+batch = v.menu._batch
+before = frame_row[1].text if frame_row else None
+v.anim_time += 3 / v.tps
+v.on_draw()
+probe("Frame follows the animation by itself, the page not laid out again",
+      frame_row is not None and frame_row[1].text != before
+      and frame_row[1].text == frame_row[0].value_text() and v.menu._batch is batch)
 v.anim_sel = {"category": "characters", "family": helpers, "which": 1}
 v.menu.rebuild()
 pos_before = Vec3(*v.pos)
@@ -907,6 +1024,8 @@ v.close()
 
 # startup with no level requested: no level, main menu over space
 w = viewer.Viewer(None, "extracted", screenshot="nessuna.png")
+probe("the levels found in the folder include the 27 Extra files, whatever the build",
+      len([p for p in w.level_files if levels.is_extra(os.path.basename(p))]) == 27)
 w.signature_drawn = False
 w.on_draw()
 probe("startup without a level: nothing loaded, main menu and signature",

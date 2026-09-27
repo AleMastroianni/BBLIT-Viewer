@@ -29,9 +29,8 @@ collision staircase -- 40-unit runs alternating between x-planes and
 z-planes. Seen along one of the two axes the perpendicular half of that
 staircase is edge on, a sliver one or two pixels wide right on the joint
 between two panels, and since a flag's fill writes no depth its alpha adds
-to the panel behind: a bright line every 40 units (`reference/changes/
-29_wall_stripes`). Colouring the slanted face the game really draws
-removes the staircase and the lines with it.
+to the panel behind: a bright line every 40 units. Colouring the slanted
+face the game really draws removes the staircase and the lines with it.
 
 A face that is not parallel is kept with the distance from the plane at
 each of its corners (the third number of a point here, `(along, y, d)`),

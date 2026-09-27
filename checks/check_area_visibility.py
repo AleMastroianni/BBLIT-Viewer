@@ -10,8 +10,9 @@
    selector has one sky per era, and the game shows one at a time); any
    other group split there fails.
 2. The portals (the 0x1000 quads, finding 293): the area each one leads to
-   must be the area of another terrain piece of the same level. On the menu
-   levels there are 1527 of them, and 1527 name another piece.
+   must be the area of another terrain piece of the same level. On the 52
+   levels there are 1416 of them, and 1416 name another piece (the 27 Extra
+   files add 111, all named too: 1527 on the 79 files of the menu).
 3. `LS01` (finding 295): six terrain pieces, no portals, and the collision
    block at the centre of each one gives that same area, so from an island
    only its own piece and its own sky are drawn.
@@ -41,7 +42,9 @@ def triangles(group):
 
 def main():
     whole_disc = not sys.argv[1:]
-    names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+    # the 52 levels you play: the Extra files never enter a round over all the
+    # levels (they are named on the command line when the work is on them)
+    names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
     results = []
     portals_total = portals_named = 0
     same_triangles = different = 0
@@ -86,7 +89,7 @@ def main():
     results.append(("with the option off only the skies keep an area", not area_leaks))
     results.append(("every portal names an area of the level", portals_named == portals_total))
     if whole_disc:
-        results.append(("the 1527 portals of the disc are all there", portals_total == 1527))
+        results.append(("the 1416 portals of the 52 levels are all there", portals_total == 1416))
     print(f"portals: {portals_total}, naming an area of the same level: {portals_named}")
 
     if "LS01" in names:

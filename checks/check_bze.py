@@ -1,6 +1,11 @@
 """The fast decompressor (slice copies) against the old one (one byte at a
 time), on every compressed section of every `.bze` on the disc: same bytes.
 
+An exception to the rule that the Extra files stay out of the rounds over
+all the levels: this is the decompressor's safety check, and every file on
+the disc goes through it (the Extra page opens the cutscenes, the menu, the
+credits and the `_8` variants, the export reads the loading screens).
+
     .venv/Scripts/python checks/check_bze.py
 
 Exits with 1 if a section differs.

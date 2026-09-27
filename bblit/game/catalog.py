@@ -3,7 +3,7 @@ categories, families inside them and the exemplars of each family, built
 from the data.
 
 Every object of the level ends up in exactly one category, the first of
-these that fits, each read from the engine as the reverse project read it:
+these that fits, each as the engine's code decides it:
 
 1. **characters**, "whoever has a head", before everything else (a
    character whose box changes as it steps aside, or an enemy a touch
@@ -17,11 +17,11 @@ these that fits, each read from the engine as the reverse project read it:
    the helpers of Nowhere (28), Merlin (31) and Bugs (38);
 2. **collectables**: a touch by Bugs (rule mask 0x8000) deletes it, directly
    or by sending it to a state that ends deleted, or adds to a counter of the
-   save (byte 3 carrots, 5 clocks, 7 and 252 golden carrots: the reverse's
-   N35);
-3. **carried**: type 5 (the pushable crate, N16), the first static flag word's
-   bit 0x800 (Bugs can pick it up, N19) or rules waiting on being held, let go
-   or put down (masks 0x800, 0x1000, 0x80000);
+   save (byte 3 carrots, 5 clocks, 7 and 252 golden carrots: finding
+   335);
+3. **carried**: type 5 (the pushable crate, finding 317), the first static
+   flag word's bit 0x800 (Bugs can pick it up, finding 320) or rules waiting
+   on being held, let go or put down (masks 0x800, 0x1000, 0x80000);
 4. **opening**: its box changes with its state (finding 323,
    `gates.gates_of`): gates, doors, boulders. An invisible thing that opens
    (a gate with no model) stays here; any other thing with neither a model
@@ -32,7 +32,7 @@ these that fits, each read from the engine as the reverse project read it:
 6. **staged**: a type 14 with more than one state that none of the above
    took (bridges, barrels, what walks without a skeleton), and the platforms
    of types 12 to 29 but 14 and 16 (trampolines, lifts, see-saws, conveyors:
-   the reverse's N25);
+   finding 324);
 7. **rest**: what none of these took, in two families of families: scenery
    (anything with a model: type 0, the skies, the one-state type 14 pieces
    such as the rails of the mines) and invisible logic (no model: triggers,
@@ -66,9 +66,9 @@ SCENERY, LOGIC = "scenery", "logic"
 
 TOUCH = 0x8000
 HELD_MASKS = 0x800 | 0x1000 | 0x80000
-CAN_BE_PICKED_UP = 0x800            # first static flag word (N19)
+CAN_BE_PICKED_UP = 0x800            # first static flag word (finding 320)
 RESTART_POINT = 0x100000            # rule effect: Bugs's place becomes his restart point
-COUNTERS = {3, 5, 7, 252}           # save bytes: carrots, clocks, golden carrots (N35)
+COUNTERS = {3, 5, 7, 252}           # save bytes: carrots, clocks, golden carrots (finding 335)
 COUNTER_STEPS = {0x04, 0x17, 0x25}  # actions that add to a save byte
 HELD = 0x80                         # a clone held at the parent's attachment marker
 TO_BUGS = 0x1000                    # a clone that hangs from Bugs
@@ -77,14 +77,14 @@ HEAD_PARTS = 11                     # a skeleton of this many parts or more
 
 PLACED, PARKED, CLONED, HELD_AT_BONE, NEVER_MADE = (
     "placed", "parked", "cloned", "held", "never_made")
-# what the placed objects at the origin really are (the reverse's N76 for
+# what the placed objects at the origin really are (finding 369 for
 # Nowhere's twelve): none of them stands at the origin in the game
 PAUSE_PAGE, SCRIPT, SKY, ON_BUGS, TEXTURE = "pause_page", "script", "sky", "on_bugs", "texture"
 # types 2 and 20 fill a texture slot of the level at every frame (finding
 # 275): they have sprite frames but are never drawn as a thing, and no place
 TEXTURE_ANIMATORS = (2, 20)
-PAUSE_BIT = 0x40000000             # second static flag word: runs while paused (N39)
-FOLLOWS_CAMERA = 0x20000000        # the same word: carried to the camera (N39)
+PAUSE_BIT = 0x40000000             # second static flag word: runs while paused (finding 339)
+FOLLOWS_CAMERA = 0x20000000        # the same word: carried to the camera (finding 339)
 
 
 def _steps_of(obj, number):
@@ -179,7 +179,7 @@ class Catalogue:
     None), `route` (the chain of (key, rule) that makes it, empty for a
     placed object), `kind` (clone_life's answer for the last rule of the
     route, or None for a placed object), `at_start` (alive after the first
-    tick of a new game, `game/startup.py`: the reverse's recipe of N74) and
+    tick of a new game, `game/startup.py`: the recipe of finding 367) and
     `in_level` (it comes by itself, sooner or later, with Bugs doing nothing:
     placed, or every rule of the route LEVEL in `clone_life`)."""
 
@@ -246,7 +246,7 @@ class Catalogue:
             self.families[c].sort(key=lambda f: (-len(f["exemplars"]), f["objects"][0]))
 
     def _provenance(self, n, o, res):
-        """What the data says about where a placed object is (N76): on Bugs
+        """What the data says about where a placed object is (finding 369): on Bugs
         from the first tick, a sky at the camera, a page of the pause menu,
         and at the origin a script without a model; else placed by the file,
         or parked at the origin when nothing of these explains it."""
@@ -367,7 +367,7 @@ class _Reasons:
             return self._event(n, rule)
         return ("by_itself", {})
 
-    # ---- how far back the reason goes (the reverse's N75: the helpers of
+    # ---- how far back the reason goes (finding 368: the helpers of
     # Nowhere come from Merlin's sign, through a zone and three bytes)
 
     def _writers_index(self):
@@ -536,7 +536,7 @@ def menu_families(cat, category):
 
 def one_at_a_time(cat):
     """The sets of clones of which the game keeps one alive at a time, read
-    from the level's script as the reverse's N75 reads Nowhere's helpers: a
+    from the level's script as finding 368 reads Nowhere's helpers: a
     type 16 trigger with a "stop" rule on a bit of a level byte (condition
     0x1E, no 0x8000), a rule that sets that bit and goes on (action 0x0B,
     0x8000), and two or more clone rules that end the walk (no 0x8000): it

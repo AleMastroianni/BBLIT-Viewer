@@ -20,6 +20,7 @@ import pyglet  # noqa: E402
 pyglet.options["debug_gl"] = False
 
 from support import cache_warmer  # noqa: E402
+from window import export_panel  # noqa: E402
 from game import collision  # noqa: E402
 from game import geometry as geo  # noqa: E402
 from game import levels  # noqa: E402
@@ -105,9 +106,8 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         if level_files is None:
             self.folder = paths.find_levels_folder(data or user_settings["levels_folder"] or None)
             # Extra (the cutscenes, the menu, the credits, the `_8` variants)
-            # is in the Debug build only: the other copies do not even list
-            # those files
-            level_files = levels_in(self.folder, extra=self.build == "Debug")
+            # is in every build: anyone can open, look at and export them
+            level_files = levels_in(self.folder, extra=True)
             names = [os.path.splitext(os.path.basename(p))[0].lower() for p in level_files]
             # without a requested level (or if it is missing) no level: start
             # from the main menu over the background
@@ -122,6 +122,11 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         self._warmer = None
         # the process building this level's flag families (cache_warmer.run_flags)
         self._flag_warmer = None
+        # Level options -> Export: its process, what it last wrote, the panel
+        self._export_proc = None
+        self.export_status = None
+        self.export_panel_closed = False
+        self.export_panel = export_panel.ExportPanel()
         self.current_level = None
         self._blend_sorter = None       # the still semi-transparent faces, back to front
         self._sky_sorter = None         # the same, for the sky (finding 346)
@@ -291,7 +296,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         self.folder = folder
         current = (os.path.basename(self.level_files[self.index]).lower()
                    if self.current_level is not None and self.level_files else None)
-        self.level_files = levels_in(folder, extra=self.build == "Debug")
+        self.level_files = levels_in(folder, extra=True)
         self.start_warmer()
         names = [os.path.basename(p).lower() for p in self.level_files]
         if current in names:
@@ -347,6 +352,10 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
         return super().on_resize(width, height)
 
     def on_close(self):
+        if self._export_running():
+            # the question first (menu_pages._quit): the window stays open
+            self._quit()
+            return pyglet.event.EVENT_HANDLED
         self._save_enlarged()           # the texture scale's enlargements not yet written
         self._save_settings()
         super().on_close()
@@ -559,7 +568,7 @@ class Viewer(Drawing, Controls, Points, MenuPages, AnimationsPage, pyglet.window
     def sky_area(self):
         """The area the game would say the camera is in: the one of the
         collision block it is in, the last one when it is in none, the placed
-        player's at the start (N2 of the reverse). Kept up to date every
+        player's at the start (note N2 of BBLIT Findings). Kept up to date every
         frame, with Visibility by area on or off: it also chooses which sky
         to draw where a level has one per area (Era selector)."""
         level = self.current_level

@@ -3,7 +3,7 @@ they must give the same bytes on every texture of the given levels.
 
     .venv/Scripts/python checks/check_tim.py [L03A L01A ...]
 
-Without arguments it tests every level the menu opens. Exits with 1 if a
+Without arguments it tests the 52 levels you play. Exits with 1 if a
 texture differs.
 """
 import os
@@ -55,7 +55,9 @@ def read_tim_slow(data, offset):
     return image_width, image_height, bytes(rgba)
 
 
-name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 n_identical = n_mismatched = errors = 0
 mode_counts = {}
 t_slow = t_fast = 0.0

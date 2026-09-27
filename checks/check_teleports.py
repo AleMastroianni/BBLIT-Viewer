@@ -22,8 +22,8 @@ leads to or comes from, so all of it has to be right:
 
 * every level of the table must have a name to write, and every entrance
   must find the level it comes from;
-* the addressee of a zone rule (finding 337) must count out as the reverse
-  project read it: of the 2397 rules of the disc, 1847 speak to Bugs, 548 to
+* the addressee of a zone rule (finding 337) must count out as finding 337
+  gives it: of the 2397 rules of the disc, 1847 speak to Bugs, 548 to
   another object and **2 are dead**, with an addressee (100000) no object can
   have. Those two are the starting zones of *Hey... What's up, Dock?* parts 1
   and 2; the viewer draws them grey, with DEAD in the name. Counted over the
@@ -69,7 +69,9 @@ def nearest(points, p):
     return min(math.dist(q, p) for q in points) if points else float("inf")
 
 
-names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 placed, found = {}, []
 rule_count = to_bugs = to_object = dead_rules = 0
 dead_where = []
@@ -107,7 +109,7 @@ print(f"{len(placed)} levels; destinations {counts}; level changes {len(changes)
 print(f"zone rules: {rule_count} in all, to Bugs {to_bugs}, to another object "
       f"{to_object}, dead {dead_rules} {dead_where}")
 if not sys.argv[1:]:
-    probe("the addressees count out as the reverse project read them (finding 337)",
+    probe("the addressees count out as finding 337 gives them",
           (rule_count, to_bugs, to_object, dead_rules) == (2397, 1847, 548, 2))
 
 probe("the disc has destinations and level changes to check",

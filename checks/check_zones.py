@@ -1,4 +1,4 @@
-"""The zone shapes (tools/zones.py) against the game's own test.
+"""The zone shapes (bblit/game/zones.py) against the game's own test.
 
     .venv/Scripts/python checks/check_zones.py [L02A4 ...]
 
@@ -62,7 +62,9 @@ def shape_test(shape):
 
 
 def main():
-    names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+    # the 52 levels you play: the Extra files never enter a round over all the
+    # levels (they are named on the command line when the work is on them)
+    names = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
     rng = random.Random(1)
     n_zones = n_rotated = total = disagree = wrapped = 0
     null_total = null_disagree = 0

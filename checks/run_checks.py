@@ -41,8 +41,6 @@ LOGS = os.path.join(BASELINE, "logs")
 # fast ones first). Not here: the tools in tools/ (counts and one-off
 # measures, nothing to pass) and OUTSIDE_THE_ROUND below.
 CHECKS = [
-    "check_twins",
-    "check_manual_names",
     "check_levels",
     "check_official_names",
     "check_section_cache",
@@ -52,17 +50,14 @@ CHECKS = [
     "check_texture_gamma",
     "check_blend_modes",
     "check_area_visibility",
-    "check_hazards",
-    "check_movers",
     "check_part_meshes",
     "check_ground_snap",
-    "check_gates",
     "check_catalog",
-    "check_sky",
     "check_collision",
     "check_ground_below",
     "check_tim",
     "check_bze",
+    "check_export",
     "test_menu",
     "test_level_change",
     "check_level_cache",
@@ -71,15 +66,13 @@ CHECKS = [
 ]
 
 # checks that exist but stay out of the round; `--only` runs them, with their log:
-# - check_startup: compares with the reverse's first tick, one difference left
-#   (the animation rows): it goes in when it reaches 0;
-# - check_sky_depth: a measure against the reverse's sky layers, not a pass/fail
-#   of the viewer;
 # - check_start_camera: fails on purpose on one level of 79 (the opening camera
 #   the game does not give), kept to see that number.
-OUTSIDE_THE_ROUND = ["check_startup", "check_sky_depth", "check_start_camera"]
+OUTSIDE_THE_ROUND = [
+    "check_start_camera",
+]
 
-# the longest check takes about 20 minutes (check_sky): past an hour a check
+# the longest check takes about 20 minutes: past an hour a check
 # is stuck, a photo past five minutes
 CHECK_TIMEOUT, PHOTO_TIMEOUT = 3600, 300
 SUMMARY = os.path.join(LOGS, "_summary.log")
@@ -141,9 +134,8 @@ def run_checks(names):
     results = []
     for name in names:
         if not os.path.exists(os.path.join(CHECKS_DIR, name + ".py")):
-            # the checks that read the reverse engineering project's lists
-            # stay out of the public copy (packaging/make_development.py)
-            print(f"--   {name:22s}   not in this copy", flush=True)
+            # a check of the list with no file in this folder is said and skipped
+            print(f"--   {name:22s}   not in this folder", flush=True)
             continue
         start = time.time()
         try:

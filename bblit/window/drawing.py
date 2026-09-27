@@ -170,7 +170,7 @@ void main() {
     if (has_texture == 1 && show_textures == 1) {
         vec4 t = texture(tex_sampler, v_uv);
         if (alpha_test == 1 && t.a < 0.5) discard;
-        // the sprites: the game's glAlphaFunc(GL_GREATER, 0) (N69)
+        // the sprites: the game's glAlphaFunc(GL_GREATER, 0) (note N69 of BBLIT Findings)
         if (alpha_test == 2 && t.a <= 0.0) discard;
         // the alpha the renderer built into the texture when it loaded it
         // (finding 305): one blend function for every mode
@@ -575,6 +575,7 @@ class Drawing:
                 self.menu.show(self._start_page())
             self._draw_signature()
             self.menu.draw_menu(self)
+            self.export_panel.draw(self)
             return
         self.clear()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -833,7 +834,8 @@ class Drawing:
 
         # then the semi-transparent ones: the still ones back to front
         # (BlendSorter), then the moving ones and the overlays; the sprites
-        # come last of all, as the game's flush draws them (N69)
+        # come last of all, as the game's flush draws them (note N69 of BBLIT
+        # Findings)
         # the walls' fills are drawn apart, one pass per kind with the
         # stencil (STENCIL_CLASSES): here they are taken out of the ordinary
         # passes and the rest goes on as before
@@ -915,7 +917,7 @@ class Drawing:
             self._draw_pick_highlight()
 
         # the sprites (torch flames, glows) last, as the game's last pass
-        # (N69): unsorted, in the level's order, depth written, and the alpha
+        # (note N69 of BBLIT Findings): unsorted, in the level's order, depth written, and the alpha
         # test GL_GREATER 0 so a transparent texel writes nothing. Nothing of
         # the game's comes after them, so a sprite cannot cut a hole in it;
         # the viewer's own names and shadow are drawn before them for the
@@ -945,6 +947,8 @@ class Drawing:
             if self.menu.is_open and self.menu.stack and self.menu.stack[-1][0] == "main":
                 self._draw_signature()
             self.menu.draw_menu(self)
+            # the export's panel over the menu: it says why its entries are grey
+            self.export_panel.draw(self)
         glEnable(GL_DEPTH_TEST)
 
     @staticmethod
@@ -1142,7 +1146,8 @@ class Drawing:
 
     def _sprites_in_view(self, forward):
         """The sprites (torch flames, ...) drawn this frame, in the level's
-        order (the game draws them by texture bucket, never sorted: N69).
+        order (the game draws them by texture bucket, never sorted: note N69 of BBLIT
+        Findings).
         The game does not draw a sprite nearer than 150 units to the camera
         (finding 305, the projection at 0x4383f0), measured along the view
         direction as the projection does.
@@ -1165,7 +1170,8 @@ class Drawing:
 
     def _draw_sprite(self, sp, forward, set_blend):
         """One sprite as a square facing the camera: depth written, alpha
-        test GL_GREATER 0, as the game's last pass (N69)."""
+        test GL_GREATER 0, as the game's last pass (note N69 of BBLIT
+        Findings)."""
         self._make_sprite_buffer()
         right_vec = forward.cross(Vec3(0.0, 1.0, 0.0)).normalize()
         op = right_vec.cross(forward).normalize()

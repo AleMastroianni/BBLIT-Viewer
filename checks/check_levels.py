@@ -1,31 +1,24 @@
-"""Check of bblit/game/levels.py against its two sources and against the disc.
+"""Check of bblit/game/levels.py against the executable's level table and
+against the disc.
 
     .venv/Scripts/python checks/check_levels.py
 
 1. every LevID points, in the bugs.exe table (111 entries of 24 bytes from
    `..\\BZE\\TITLE.BZE;1`), to the file levels.py assigns to it;
-2. in the LevID spreadsheet, if there is one (`LEVEL_ID_SHEET` in the working
-   copy's `local_data.py`), row LevID - 1 contains the title and the note;
-3. every file on the disc with a 3D environment (terrain in the load script)
+2. every file on the disc with a 3D environment (terrain in the load script)
    is in the menu, and every file in the menu exists on the disc.
-
-The spreadsheet is read as a zip (xlsx = XML), with no extra libraries.
 """
 
 from __future__ import annotations
 
 import os
 import sys
-import xml.etree.ElementTree as ET
-import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bblit"))
 from game import levels  # noqa: E402
 from game import loadscript  # noqa: E402
 from support import paths  # noqa: E402
 from viewer import sections  # noqa: E402
-
-SPREADSHEET = getattr(paths.LOCAL, "LEVEL_ID_SHEET", None)
 
 
 def exe_level_table():
@@ -38,47 +31,18 @@ def exe_level_table():
     return output
 
 
-def sheet_rows():
-    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-    z = zipfile.ZipFile(SPREADSHEET)
-    shared_strings = ["".join(t.text or "" for t in si.iter(ns + "t"))
-                 for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(ns + "si")]
-    lines = []
-    for row in ET.fromstring(z.read("xl/worksheets/sheet1.xml")).iter(ns + "row"):
-        texts = []
-        for c in row.findall(ns + "c"):
-            v = c.find(ns + "v")
-            if c.get("t") == "s" and v is not None:
-                texts.append(shared_strings[int(v.text)])
-        lines.append(" ".join(texts))
-    return lines
-
-
 def main():
     errors = 0
     exe = exe_level_table() if paths.GAME_EXE and os.path.exists(paths.GAME_EXE) else None
-    lines = sheet_rows() if SPREADSHEET and os.path.exists(SPREADSHEET) else None
     menu_items = list(levels.all_entries())
     for levid, file, _era, title_text, _part, note, extra in menu_items:
-        title_text = extra.get("sheet_name", title_text)
-        note = extra.get("sheet_note", note)
         if levid is None:
             continue
         if exe is not None and exe[levid] != file.upper():
             print(f"LevID {levid}: levels.py says {file}, the executable {exe[levid]}")
             errors += 1
-        if lines is not None:
-            row = lines[levid - 1].lower() if levid >= 1 else lines[0].lower()
-            words = [title_text] if levid >= 1 else ["main menu"]
-            if note and isinstance(note, str):     # a game name with no spreadsheet note: nothing to compare
-                words.append(note)
-            for p in words:
-                if p.lower() not in row:
-                    print(f"LevID {levid}: '{p}' is not in the spreadsheet row: {lines[levid - 1]}")
-                    errors += 1
-    print(f"1-2. {sum(1 for v in menu_items if v[0] is not None)} entries with LevID checked"
-          + ("" if exe is not None else " (bugs.exe not found: BBLIT_DATA is not a game folder)")
-          + ("" if lines is not None else " (no spreadsheet: executable only)"))
+    print(f"1. {sum(1 for v in menu_items if v[0] is not None)} entries with LevID checked"
+          + ("" if exe is not None else " (bugs.exe not found: BBLIT_DATA is not a game folder)"))
 
     in_menu = {v[1].upper() for v in menu_items}
     on_disc = {}
@@ -99,7 +63,7 @@ def main():
             errors += 1
         else:
             outside += 1
-    print(f"3. {len(in_menu)} files in the menu; {outside} files without a 3D environment stay out")
+    print(f"2. {len(in_menu)} files in the menu; {outside} files without a 3D environment stay out")
     print("all consistent" if not errors else f"{errors} inconsistencies")
     return errors
 

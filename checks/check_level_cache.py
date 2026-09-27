@@ -7,7 +7,7 @@ folder, reads them back and rebuilds the level from there. The two levels
 must have the same groups with the same bytes (triangles and frames), the
 same faces (how many triangles each one became: the sorted list is ordered
 per face), the same counters, bounds and sprites. Then a different signature must make the
-file be ignored. Without arguments it tests every level the menu opens.
+file be ignored. Without arguments it tests the 52 levels you play.
 Exits with 1 if anything differs.
 """
 import os
@@ -40,7 +40,9 @@ def fingerprint(built_level):
             sorted(built_level.clone_kinds.items()))
 
 
-name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries()})
+# the 52 levels you play: the Extra files never enter a round over all the
+# levels (they are named on the command line when the work is on them)
+name_list = sys.argv[1:] or sorted({v[1] for v in levels.all_entries() if not levels.is_extra(v[1])})
 n_identical, different_levels, broken = 0, [], []
 t_scratch = t_cache = 0.0
 with tempfile.TemporaryDirectory() as tmp:

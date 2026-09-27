@@ -196,7 +196,7 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
                 # opcode 0x1D: how the object turns towards its target (317)
                 "turn_rate": 0,
                 # opcode 0x1E: the height an object carried by the camera
-                # keeps above it (the reverse's note N39: its position is the
+                # keeps above it (finding 339: its position is the
                 # camera's at every tick, Y plus this word). None when the
                 # file has no 0x1E
                 "camera_y": None,
@@ -247,7 +247,7 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
                         "next_state": _u16(p, 2),
                         "mask": struct.unpack_from("<I", p, 4)[0],
                         # the mask on the second flag word (+0x18): an edge
-                        # ahead, it hurt or killed Bugs (the reverse's N20)
+                        # ahead, it hurt or killed Bugs (finding 321)
                         "mask2": struct.unpack_from("<I", p, 8)[0],
                         "condition": [p[12], p[13], p[14]],
                         # code, value (byte), index, and the value as s16:
@@ -337,7 +337,7 @@ def export_level(blocks: list[ScriptBlock]) -> dict:
 
         elif block.category == 0x36:
             # collision heightmap (finding 110): (offset, size) of a
-            # block in section 4; read by tools/collision.py
+            # block in section 4; read by game/collision.py
             for op, p in block.ops:
                 if op == 0x37:
                     offset, measure = struct.unpack("<II", p)

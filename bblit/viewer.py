@@ -38,6 +38,7 @@ import pyglet  # noqa: E402
 pyglet.options["debug_gl"] = False
 
 from support import cache_warmer  # noqa: E402
+from support import export  # noqa: E402
 from support import paths  # noqa: E402
 from ui import texts  # noqa: E402
 from pyglet.math import Vec3  # noqa: E402
@@ -113,8 +114,17 @@ def main() -> None:
                                   "general, help, extra): for verification screenshots")
     p.add_argument("--warm-cache", metavar="FOLDER", help=argparse.SUPPRESS)
     p.add_argument("--warm-flags", metavar="FILE", help=argparse.SUPPRESS)
+    p.add_argument("--export", nargs=2, metavar=("JOB", "TARGET"), help=argparse.SUPPRESS)
     p.add_argument("--parent", type=int, help=argparse.SUPPRESS)
     args = p.parse_args()
+    if args.export:
+        # Level options -> Export, in the background (support/export.py):
+        # no window, its outcome goes to the progress file
+        try:
+            export.run(args.export[0], args.export[1], args.cache, args.parent)
+        except Exception:  # noqa: BLE001
+            pass
+        return
     if args.warm_flags:
         # the flag families of one level, in the background (cache_warmer.py)
         try:

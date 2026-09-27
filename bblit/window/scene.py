@@ -53,8 +53,7 @@ RULE_PASSES_PER_TICK = 2
 # Bit of the second static flag word (object+0xc) that puts a TYPE 14 object
 # wherever the camera is, at every tick. Together with type 9, which is
 # always placed that way, this is how the game draws the sky and the sea:
-# read in its code by the reverse engineering project (its note N39), 97
-# such objects on the disc.
+# read in its code (finding 339), 97 such objects on the disc.
 FOLLOWS_CAMERA = 0x20000000
 # a rule effect: the object takes the object whose id is field +28 as its
 # child (finding 330: the vehicles that carry Bugs); Bugs is object id 1
@@ -63,7 +62,7 @@ TAKES_CHILD, BUGS_ID = 0x20000000, 1
 
 def carried_by_camera(obj) -> bool:
     """The game's own test for an object it puts wherever the camera is, at
-    every tick (the reverse's note N39): type 9, or type 14 with bit
+    every tick (finding 339): type 9, or type 14 with bit
     0x20000000 in the second dword of opcode 0x16. That is the sky and the
     sea, and a few small things that ride along with the camera. Its place
     in the file is overwritten on the first tick and means nothing; only
@@ -192,7 +191,7 @@ class Level(OverlayBuilder):
     def __init__(self, bze_path: str, cache: str, table=None, session_poses=None, pieces=None,
                  families=tuple(FAMILIES), split_areas=False, movers=False,
                  gate_state="open", gate_choices=None, gate_links="off", sky_choice=None,
-                 exceptions=None):
+                 exceptions=None, use_preferences=True):
         self.families = frozenset(families)
         # "Visibility by area as in the game": the terrain pieces and the
         # objects cut by area go into groups of their own, one per area, so
@@ -284,8 +283,10 @@ class Level(OverlayBuilder):
         # a held child's name moves with its bone: {(template, parent): entry}
         self._label_frames: dict = {}
         # the chosen level state (bridges, barrels, torches: preferences.py);
-        # `session_poses` holds those changed from the menu, session only
-        self.pref = preferences.for_level(self.name)
+        # `session_poses` holds those changed from the menu, session only.
+        # Without `use_preferences` (the export) nothing is chosen: every
+        # object starts in the role the game starts it in
+        self.pref = preferences.for_level(self.name) if use_preferences else preferences.none()
         self.pref["pose"] = {**self.pref["pose"], **(session_poses or {})}
         # a pose can also be a whole state, ("state", number): its roles are
         # played one after the other (the anchors' fall: the shadow grows,
@@ -718,7 +719,7 @@ class Level(OverlayBuilder):
         # viewer used to guess it by size ("as large as the whole level"),
         # which in When Sam met Bunny, 56 m across, dragged three ordinary
         # objects around with the camera and left the real sky 154 m off in
-        # "Witch" way to Albuquerque? 1 (checks/check_sky.py)
+        # "Witch" way to Albuquerque? 1
         if carried_by_camera(o):
             category, place = "sky_dome", camera_place(o)
         else:

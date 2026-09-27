@@ -6,10 +6,9 @@ and from the game folder given by the `BBLIT_DATA` environment variable (a
 game folder or its `Datas\\bze`). The command-line tools use the same
 folder by default (`DATA_BZE`).
 
-A working copy can add its own copy of the game with a `local_data.py` next
-to this file, outside the public repository: `game_dir(app_dir)` returns the
-game folder (or None), and any other name it defines is available as
-`paths.LOCAL`.
+An optional `local_data.py` next to this file (not in the repository) can
+name a game folder: `game_dir(app_dir)` returns it (or None), and any other
+name it defines is available as `paths.LOCAL`.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ import os
 import sys
 
 try:
-    from support import local_data as LOCAL        # only in a working copy, never published
+    from support import local_data as LOCAL        # optional, not in the repository
 except ImportError:
     LOCAL = None
 

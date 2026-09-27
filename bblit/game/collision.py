@@ -27,7 +27,8 @@ import struct
 CELL_UNITS = 320
 SUBCELL = 40
 NO_GROUND = (0x7E, 0x7F)
-# How high Bugs gets from standing (the reverse's figure). Together with the
+# How high Bugs gets from standing (finding 364: the plain jump's step
+# word). Together with the
 # 100 units the sweep already lets him walk up (findings 298, 309) it draws
 # the line between the two classes: a rise of 101 to 383 units is a STEP, he
 # clears it with a jump; over 383 it is a WALL, it just stops him.
@@ -320,8 +321,8 @@ def settles(obj) -> bool:
 def settle_objects(lvl: dict, grid_blocks) -> list[tuple]:
     """Puts on the ground the placed objects the game keeps there, as the
     game has them after their first ticks: their file height is not where
-    they stand (24 on the disc more than 30 units off, the list of
-    `check_ground_snap.py` of the reverse). Changes `position[1]` in place, so
+    they stand (24 on the disc more than 30 units off:
+    finding 340). Changes `position[1]` in place, so
     everything that follows the object (its box, its name, its clones) goes
     with it, and keeps the file's in `file_position`. Returns (index, file
     Y, ground Y) for every object moved."""
